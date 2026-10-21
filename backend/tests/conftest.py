@@ -53,6 +53,14 @@ def _create_test_db() -> None:
 
 
 @pytest.fixture(autouse=True)
+def _checkout_payments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Most tests exercise the Wave Checkout flow; the Wave QR test switches mode explicitly."""
+    from app.services import settings as settings_service
+
+    monkeypatch.setitem(settings_service.DEFAULTS, "payment_mode", "wave_checkout")
+
+
+@pytest.fixture(autouse=True)
 async def _clean() -> AsyncIterator[None]:
     tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
     async with engine.begin() as c:

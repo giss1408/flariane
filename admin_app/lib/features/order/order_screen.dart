@@ -415,7 +415,23 @@ class _PrimaryAction extends ConsumerWidget {
           edit,
         ]);
       case 'AWAITING_PAYMENT':
-        return WhatsAppButton(label: 'Relancer le paiement sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'quote'));
+        final manual = order.payments.where((p) => p.awaitsManualConfirmation).firstOrNull;
+        final relance = WhatsAppButton(label: 'Relancer le paiement sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'quote'));
+        if (manual == null) return relance;
+        return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (manual.declared) ...[
+            const WarningBox('La cliente dit avoir payé. Vérifie dans ton app Wave (montant + référence), puis confirme.'),
+            const SizedBox(height: 8),
+          ] else ...[
+            relance,
+            const SizedBox(height: 8),
+          ],
+          FilledButton.icon(
+            icon: const Icon(Icons.verified_rounded),
+            onPressed: () => _confirmPayment(context, ref, manual.amountXof),
+            label: Text('Confirmer le paiement reçu (${fcfa(manual.amountXof)})'),
+          ),
+        ]);
       case 'PAID':
         return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           WhatsAppButton(label: 'Confirmer le paiement sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'payment')),
@@ -474,6 +490,33 @@ class _PrimaryAction extends ConsumerWidget {
         ]);
       default:
         return const SizedBox.shrink();
+    }
+  }
+
+  Future<void> _confirmPayment(BuildContext context, WidgetRef ref, int amount) async {
+    final txn = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Paiement reçu sur Wave ?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Confirme seulement si tu vois ${fcfa(amount)} pour ${order.publicRef} dans ton app Wave.'),
+          const SizedBox(height: 12),
+          TextField(controller: txn, decoration: const InputDecoration(labelText: 'N° de transaction Wave (optionnel)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirmer')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(adminApiProvider).confirmPayment(order.id, transactionRef: txn.text.trim().isEmpty ? null : txn.text.trim());
+      ref.invalidate(orderProvider(order.id));
+      if (context.mounted) await sendWhatsApp(context, ref, order.id, 'payment');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
     }
   }
 

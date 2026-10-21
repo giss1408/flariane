@@ -1,12 +1,13 @@
+import base64
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
-from app.enums import OrderStatus, QuoteStatus
+from app.enums import OrderStatus, PaymentStatus, QuoteStatus
 from app.errors import BadRequest, Conflict, NotFound
 from app.integrations import storage
 from app.models import (
@@ -45,7 +46,7 @@ from app.services import location as loc
 from app.services.links import extract_shein_urls, pick_cart_url, store_of
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
-from app.services.payments import start_checkout
+from app.services.payments import start_checkout, transition_payment
 
 router = APIRouter(tags=["customer"])
 authed = Depends(customer_limited)
@@ -148,9 +149,22 @@ async def delete_me(request: Request, customer: Customer = authed, db: AsyncSess
 
 @router.get("/public/info")
 async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
-    """Shown on the customer home screen. No auth: nothing private here."""
+    """Shown in the customer app. No auth: nothing private here."""
     settings = await get_settings_map(db)
-    return {"next_departure_date": settings.get("next_departure_date")}
+    return {
+        "next_departure_date": settings.get("next_departure_date"),
+        "payment_mode": settings["payment_mode"],
+        "wave_phone": settings.get("wave_phone"),
+        "has_wave_qr": bool(settings.get("wave_qr_image")),
+    }
+
+
+@router.get("/public/wave-qr")
+async def wave_qr(db: AsyncSession = Depends(get_session)) -> Response:
+    img = (await get_settings_map(db)).get("wave_qr_image")
+    if not img:
+        raise NotFound()
+    return Response(base64.b64decode(img["data_b64"]), media_type=img["content_type"], headers={"Cache-Control": "public, max-age=300"})
 
 
 @router.get("/pickup-points", response_model=list[PickupPointOut])
@@ -206,7 +220,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         pickup_point=PickupPointOut.model_validate(point) if point else None,
         delivery_location=_location_out(order.delivery_commune, order.delivery_location_enc),
         quote=_quote_out(quote, await _quote_shot(db, quote.id)) if quote else None,
-        payment=PaymentOut(status=payment.status, amount_xof=payment.amount_xof, launch_url=payment.launch_url) if payment else None,
+        payment=PaymentOut.of(payment) if payment else None,
         history=[StatusEventOut.model_validate(h) for h in history],
         attachments=attachments,
         can_cancel=await quotes.can_cancel(db, order),
@@ -291,16 +305,45 @@ async def upload_attachment(ref: str, file: UploadFile = File(...), customer: Cu
 async def accept(ref: str, version: int, data: AcceptQuoteIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> PaymentOut:
     payment = await quotes.accept_quote(db, customer.id, ref, version, data.sizes_confirmed, client_ip(request))
     await db.commit()
-    payment = await start_checkout(db, payment.id, ref)
-    return PaymentOut(status=payment.status, amount_xof=payment.amount_xof, launch_url=payment.launch_url)
+    return await _start_payment(db, payment, ref)
 
 
 @router.post("/orders/{ref}/payment", response_model=PaymentOut)
 async def retry_payment(ref: str, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> PaymentOut:
     payment = await quotes.retry_payment(db, customer.id, ref)
     await db.commit()
+    return await _start_payment(db, payment, ref)
+
+
+async def _start_payment(db: AsyncSession, payment: Payment, ref: str) -> PaymentOut:
+    """Wave Checkout (business account) or manual Wave QR, depending on the payment_mode setting."""
+    settings = await get_settings_map(db)
+    if settings["payment_mode"] == "wave_qr":
+        if payment.status == PaymentStatus.INITIATED:
+            payment.provider = "WAVE_QR"
+            await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
+            await db.commit()
+        return PaymentOut.of(payment, launch=False)
     payment = await start_checkout(db, payment.id, ref)
-    return PaymentOut(status=payment.status, amount_xof=payment.amount_xof, launch_url=payment.launch_url)
+    return PaymentOut.of(payment)
+
+
+@router.post("/orders/{ref}/payment/declare", response_model=PaymentOut)
+async def declare_payment(ref: str, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> PaymentOut:
+    """Wave QR: she says she paid; an admin checks their Wave app and confirms."""
+    order = await _order_for(db, customer, ref)
+    payment = await db.scalar(
+        select(Payment).where(Payment.order_id == order.id, Payment.provider == "WAVE_QR", Payment.status == PaymentStatus.PENDING)
+        .order_by(Payment.id.desc()).limit(1)
+    )
+    if payment is None:
+        raise Conflict("no_pending_payment")
+    if payment.status_reason != "declared":
+        payment.status_reason = "declared"
+        await audit(db, actor_type="customer", actor_id=customer.id, action="payment.declared", entity="payment", entity_id=payment.id, ip=client_ip(request))
+        notify.admins(db, "payment_declared", order)
+        await db.commit()
+    return PaymentOut.of(payment, launch=False)
 
 
 @router.post("/orders/{ref}/quotes/{version}/change-request", status_code=201)

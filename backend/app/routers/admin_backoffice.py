@@ -5,7 +5,7 @@ import io
 from datetime import UTC, date, datetime, time, timedelta
 
 import pyotp
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -198,14 +198,34 @@ async def deactivate_user(user_id: int, request: Request, admin: AdminContext = 
 # ---------------------------------------------------------------- settings & pickup points
 
 
+def _public_settings(settings: dict) -> dict:
+    out = {k: v for k, v in settings.items() if k != "wave_qr_image"}
+    out["has_wave_qr"] = bool(settings.get("wave_qr_image"))
+    return out
+
+
 @router.get("/settings")
 async def get_settings(_: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> dict:
-    return await get_settings_map(db)
+    return _public_settings(await get_settings_map(db))
+
+
+@router.post("/settings/wave-qr")
+async def upload_wave_qr(request: Request, file: UploadFile = File(...), admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
+    """Your personal Wave QR (screenshot from the Wave app). Stored in the database."""
+    import base64
+
+    from app.integrations import storage
+
+    data, content_type, _ = storage.sanitize_image(await file.read(5 * 1024 * 1024 + 1))
+    await set_setting(db, "wave_qr_image", {"content_type": content_type, "data_b64": base64.b64encode(data).decode()}, admin.id)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="settings.wave_qr", ip=client_ip(request))
+    await db.commit()
+    return _public_settings(await get_settings_map(db))
 
 
 @router.put("/settings")
 async def update_settings(data: SettingsIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
-    before = await get_settings_map(db)
+    before = _public_settings(await get_settings_map(db))
     changes = data.model_dump(exclude_none=True, mode="json")
     if "fx_rates" in changes:
         changes["fx_rates"] = {**before["fx_rates"], **{k: str(v) for k, v in changes["fx_rates"].items()}, "XOF": "1"}
@@ -213,7 +233,7 @@ async def update_settings(data: SettingsIn, request: Request, admin: AdminContex
         await set_setting(db, key, value, admin.id)
     await audit(db, actor_type="admin", actor_id=admin.id, action="settings.updated", before={k: before[k] for k in changes}, after=changes, ip=client_ip(request))
     await db.commit()
-    return await get_settings_map(db)
+    return _public_settings(await get_settings_map(db))
 
 
 @router.get("/pickup-points", response_model=list[PickupPointOut])

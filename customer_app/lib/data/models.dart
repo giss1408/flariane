@@ -139,17 +139,23 @@ class Quote {
 }
 
 class Payment {
-  Payment({required this.status, required this.amountXof, required this.launchUrl});
+  Payment({required this.status, required this.amountXof, required this.launchUrl, this.provider = 'WAVE', this.declared = false});
 
   factory Payment.fromJson(Map<String, dynamic> j) => Payment(
         status: j['status'] as String,
         amountXof: _int(j['amount_xof'])!,
         launchUrl: j['launch_url'] as String?,
+        provider: j['provider'] as String? ?? 'WAVE',
+        declared: j['declared'] as bool? ?? false,
       );
 
   final String status;
   final int amountXof;
   final String? launchUrl;
+  final String provider; // WAVE (checkout link) | WAVE_QR (personal QR, confirmed by Flariane)
+  final bool declared;
+
+  bool get isQr => provider == 'WAVE_QR';
 }
 
 class Order {
@@ -198,5 +204,7 @@ class Order {
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 
-  bool get paymentPending => status == 'AWAITING_PAYMENT' && (payment?.status == 'PENDING' || payment?.status == 'INITIATED');
+  // Automatic (checkout) payments only: QR payments wait for a human confirmation.
+  bool get paymentPending =>
+      status == 'AWAITING_PAYMENT' && payment?.isQr != true && (payment?.status == 'PENDING' || payment?.status == 'INITIATED');
 }

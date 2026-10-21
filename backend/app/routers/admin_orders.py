@@ -52,6 +52,7 @@ from app.security.deps import AdminContext, client_ip, require_role
 from app.services import location as loc
 from app.services import wa_messages as wa
 from app.services import operations, quotes
+from app.services import payments as payments_service
 from app.services.audit import audit
 from app.services.settings import get_settings_map
 
@@ -169,7 +170,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         quotes=[admin_quote_out(q, min_fee, await _shot_url(db, q.id)) for q in all_quotes],
         change_requests=[ChangeRequestOut.model_validate(c) for c in changes],
         attachments=[AttachmentOut(id=a.id, url=storage.signed_url(a.storage_key), content_type=a.content_type) for a in attachments],
-        payments=[PaymentOut(status=p.status, amount_xof=p.amount_xof, launch_url=None) for p in payments],
+        payments=[PaymentOut.of(p, launch=False) for p in payments],
         purchase=StorePurchaseOut.model_validate(purchase) if purchase else None,
         history=[StatusEventOut.model_validate(h) for h in history],
         shipment_id=shipment_id,
@@ -242,6 +243,18 @@ async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Reque
     code = await operations.mark_ready_for_pickup(db, order_id, data.pickup_point_id, admin.id, client_ip(request))
     await db.commit()
     return {"code": code}
+
+
+class ConfirmPaymentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    transaction_ref: Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)] | None = None
+
+
+@router.post("/{order_id}/confirm-payment", status_code=204)
+async def confirm_payment(order_id: int, data: ConfirmPaymentIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
+    """Wave QR: the admin saw the money in their Wave app. Marks the payment received and the order paid."""
+    await payments_service.confirm_manual_payment(db, order_id, data.transaction_ref, admin.id, client_ip(request))
+    await db.commit()
 
 
 class WhatsAppMessageIn(BaseModel):

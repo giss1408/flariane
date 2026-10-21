@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
@@ -314,6 +315,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _c = <String, TextEditingController>{};
   bool _loaded = false;
   DateTime? _departure;
+  String _paymentMode = 'wave_qr';
+  bool _hasWaveQr = false;
 
   static const intFields = {
     'freight_default_xof': 'Transport par défaut d’un devis (FCFA)',
@@ -336,6 +339,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final fx = (s['fx_rates'] as Map).cast<String, dynamic>();
       _c['EUR'] = TextEditingController(text: '${fx['EUR'] ?? ''}');
       _c['USD'] = TextEditingController(text: '${fx['USD'] ?? ''}');
+      _paymentMode = s['payment_mode'] as String? ?? 'wave_qr';
+      _hasWaveQr = s['has_wave_qr'] == true;
+      _c['wave_phone'] = TextEditingController(text: s['wave_phone'] as String? ?? '');
       final d = s['next_departure_date'] as String?;
       _departure = d == null ? null : DateTime.parse(d);
       setState(() => _loaded = true);
@@ -350,6 +356,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       for (final k in numFields.keys) k: double.tryParse(_c[k]!.text.trim().replaceAll(',', '.')),
       if (_departure != null)
         'next_departure_date': '${_departure!.year}-${_departure!.month.toString().padLeft(2, '0')}-${_departure!.day.toString().padLeft(2, '0')}',
+      'payment_mode': _paymentMode,
+      if (_c['wave_phone']!.text.trim().isNotEmpty) 'wave_phone': _c['wave_phone']!.text.trim(),
       'fx_rates': {'EUR': _c['EUR']!.text.trim().replaceAll(',', '.'), 'USD': _c['USD']!.text.trim().replaceAll(',', '.')},
     }..removeWhere((_, v) => v == null);
     try {
@@ -387,6 +395,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       try {
                         await ref.read(adminApiProvider).updateSettings({'next_departure_date': iso});
                         if (context.mounted) showInfo(context, 'Prochain départ enregistré.');
+                      } catch (e) {
+                        if (context.mounted) showError(context, e);
+                      }
+                    },
+                  ),
+                ),
+                const SectionTitle('Paiement Wave'),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'wave_qr', label: Text('QR Wave perso')),
+                    ButtonSegment(value: 'wave_checkout', label: Text('Wave Business')),
+                  ],
+                  selected: {_paymentMode},
+                  onSelectionChanged: (s) => setState(() => _paymentMode = s.first),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _paymentMode == 'wave_qr'
+                      ? 'La cliente scanne ton QR, paie, puis tu confirmes le paiement dans chaque commande.'
+                      : 'Paiement automatique via l’API Wave Business (clé API requise sur le serveur).',
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: _c['wave_phone'], decoration: const InputDecoration(labelText: 'Ton numéro Wave'), keyboardType: TextInputType.phone),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: Icon(_hasWaveQr ? Icons.qr_code_2_rounded : Icons.qr_code_scanner_rounded),
+                    title: Text(_hasWaveQr ? 'QR Wave enregistré' : 'Ajouter ton QR Wave'),
+                    subtitle: const Text('Capture d’écran de ton QR dans l’app Wave'),
+                    trailing: const Icon(Icons.upload_rounded),
+                    onTap: () async {
+                      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+                      if (file == null) return;
+                      try {
+                        await ref.read(adminApiProvider).uploadWaveQr(file.path);
+                        setState(() => _hasWaveQr = true);
+                        if (context.mounted) showInfo(context, 'QR Wave enregistré.');
                       } catch (e) {
                         if (context.mounted) showError(context, e);
                       }

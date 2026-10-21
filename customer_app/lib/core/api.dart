@@ -158,11 +158,18 @@ class CustomerApi {
 
   Future<void> deleteMe() => _call(() => dio.delete('/me'), (_) {});
 
-  /// Public info (no auth): next shipment departure date, or null.
-  Future<DateTime?> nextDeparture() => _call(() => dio.get('/public/info'), (j) {
-        final v = (j as Map)['next_departure_date'] as String?;
-        return v == null ? null : DateTime.parse(v);
-      });
+  /// Public info (no auth): next departure, payment mode, Wave number.
+  Future<Map<String, dynamic>> publicInfo() => _call(() => dio.get('/public/info'), (j) => j as Map<String, dynamic>);
+
+  Future<DateTime?> nextDeparture() async {
+    final v = (await publicInfo())['next_departure_date'] as String?;
+    return v == null ? null : DateTime.parse(v);
+  }
+
+  String get waveQrUrl => '${dio.options.baseUrl}/public/wave-qr';
+
+  Future<Payment> declarePayment(String ref) =>
+      _call(() => dio.post('/orders/$ref/payment/declare'), (j) => Payment.fromJson(j as Map<String, dynamic>));
 
   // ---- orders
 

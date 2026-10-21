@@ -214,6 +214,17 @@ class AdminApi {
   Future<void> deactivateAdminUser(int id) => client.call((d) => d.post('/admin/users/$id/deactivate'), (_) {});
 
   /// VIEWER+
+  /// Wave QR payments: the admin saw the money arrive in their Wave app.
+  Future<void> confirmPayment(int orderId, {String? transactionRef}) => client.call(
+        (d) => d.post('/admin/orders/$orderId/confirm-payment', data: {'transaction_ref': transactionRef}),
+        (_) {},
+      );
+
+  Future<Map<String, dynamic>> uploadWaveQr(String path) => client.call(
+        (d) async => d.post('/admin/settings/wave-qr', data: FormData.fromMap({'file': await MultipartFile.fromFile(path)})),
+        (j) => j as Map<String, dynamic>,
+      );
+
   Future<Map<String, dynamic>> reportSummary() =>
       client.call((d) => d.get('/admin/reports/summary'), (j) => j as Map<String, dynamic>);
 }

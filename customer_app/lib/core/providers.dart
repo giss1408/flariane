@@ -49,6 +49,7 @@ final ordersProvider = FutureProvider.autoDispose<List<OrderSummary>>((ref) => r
 final orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, r) => ref.watch(apiProvider).order(r));
 final pickupPointsProvider = FutureProvider.autoDispose<List<PickupPoint>>((ref) => ref.watch(apiProvider).pickupPoints());
 final nextDepartureProvider = FutureProvider.autoDispose<DateTime?>((ref) => ref.watch(apiProvider).nextDeparture());
+final publicInfoProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(apiProvider).publicInfo());
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 
 /// Text shared into the app from SHEIN (Partager → Flariane), waiting to prefill a new order.

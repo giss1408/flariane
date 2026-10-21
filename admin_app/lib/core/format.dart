@@ -72,5 +72,7 @@ const errorMessages = {
   'whatsapp_failed': 'Échec de l’envoi WhatsApp.',
   'pickup_not_ready': 'Choisissez d’abord le point de retrait.',
   'no_quote': 'Aucun devis envoyé.',
+  'no_pending_payment': 'Aucun paiement Wave en attente.',
+  'not_awaiting_payment': 'La commande n’attend plus de paiement.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

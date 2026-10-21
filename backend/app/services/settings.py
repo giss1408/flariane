@@ -16,6 +16,11 @@ DEFAULTS: dict[str, Any] = {
     "quote_validity_hours": 48,
     "price_increase_buffer_percent": 5,
     "store_currency_default": "EUR",
+    # wave_qr: customer pays your personal Wave QR / number, admin confirms by hand.
+    # wave_checkout: Wave Business Checkout API (automatic confirmation).
+    "payment_mode": "wave_qr",
+    "wave_phone": None,
+    "wave_qr_image": None,  # {"content_type": ..., "data_b64": ...}: kept in the DB, survives redeploys
     # Transport pre-filled on cart-mode quotes.
     "freight_default_xof": 5000,
     # Next weekly shipment leaving for Abidjan (ISO date), shown to customers. None hides the card.

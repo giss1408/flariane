@@ -242,13 +242,21 @@ class Attachment {
 }
 
 class PaymentInfo {
-  PaymentInfo({required this.status, required this.amountXof});
+  PaymentInfo({required this.status, required this.amountXof, this.provider = 'WAVE', this.declared = false});
 
-  factory PaymentInfo.fromJson(Map<String, dynamic> j) =>
-      PaymentInfo(status: j['status'] as String, amountXof: _int(j['amount_xof'])!);
+  factory PaymentInfo.fromJson(Map<String, dynamic> j) => PaymentInfo(
+        status: j['status'] as String,
+        amountXof: _int(j['amount_xof'])!,
+        provider: j['provider'] as String? ?? 'WAVE',
+        declared: j['declared'] as bool? ?? false,
+      );
 
   final String status;
   final int amountXof;
+  final String provider; // WAVE | WAVE_QR
+  final bool declared;
+
+  bool get awaitsManualConfirmation => provider == 'WAVE_QR' && status == 'PENDING';
 }
 
 class StatusEvent {
