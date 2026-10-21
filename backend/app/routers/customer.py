@@ -171,9 +171,11 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
     urls = extract_shein_urls(data.share_text)
     if not urls:
         raise BadRequest("no_shein_link", "Collez le lien de partage de votre panier SHEIN")
-    point = await db.get(PickupPoint, data.pickup_point_id)
-    if point is None or not point.active:
-        raise BadRequest("invalid_pickup_point")
+    point = None
+    if data.pickup_point_id is not None:
+        point = await db.get(PickupPoint, data.pickup_point_id)
+        if point is None or not point.active:
+            raise BadRequest("invalid_pickup_point")
     cart_url = next((u for u in urls if "onelink.shein.com" in u), urls[0])
 
     # The same cart sent twice within 24 h returns the existing open order.
@@ -195,7 +197,7 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
         submitted_links=[u for u in urls if u != cart_url],
         customer_note=data.note,
         status=OrderStatus.QUOTE_REQUESTED,
-        pickup_point_id=point.id,
+        pickup_point_id=point.id if point else None,
     )
     db.add(order)
     await db.flush()

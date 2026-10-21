@@ -168,7 +168,7 @@ class CustomerApi {
 
   Future<Order> order(String ref) => _call(() => dio.get('/orders/$ref'), (j) => Order.fromJson(j as Map<String, dynamic>));
 
-  Future<Order> createOrder({required String shareText, required int pickupPointId, String? note}) => _call(
+  Future<Order> createOrder({required String shareText, int? pickupPointId, String? note}) => _call(
       () => dio.post('/orders', data: {'share_text': shareText, 'pickup_point_id': pickupPointId, 'note': note}),
       (j) => Order.fromJson(j as Map<String, dynamic>));
 

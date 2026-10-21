@@ -231,3 +231,10 @@ async def test_cancel_rules(client: AsyncClient, customer: dict, admin: AdminFix
     # After a failed payment the customer may cancel.
     assert await pay(client, launch, outcome="failed") == 200
     assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 204
+
+
+async def test_order_without_pickup_point(client: AsyncClient, customer: dict) -> None:
+    from tests.conftest import CART_SHARE
+
+    r = await client.post("/orders", json={"share_text": CART_SHARE}, headers=customer)
+    assert r.status_code == 201 and r.json()["pickup_point"] is None

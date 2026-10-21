@@ -119,7 +119,7 @@ class PickupPointOut(Out):
 
 class OrderCreateIn(In):
     share_text: Annotated[str, StringConstraints(max_length=5000)]
-    pickup_point_id: int
+    pickup_point_id: int | None = None  # optional for now; the admin sets it at "ready for pickup"
     note: Note = None
 
 
