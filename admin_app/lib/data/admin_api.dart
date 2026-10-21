@@ -65,6 +65,22 @@ class AdminApi {
     }
   }
 
+  /// DEV ONLY: pre-approved super-admin session (endpoint absent in production).
+  Future<LoginResult> devLogin() async {
+    try {
+      final j = (await _authDio.post('/dev/admin-login')).data as Map<String, dynamic>;
+      return LoginResult(
+        status: 'ok',
+        deviceId: j['device_id'] as int,
+        deviceSecret: j['device_secret'] as String,
+        accessToken: j['access_token'] as String,
+        refreshToken: j['refresh_token'] as String,
+      );
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
+
   Future<Tokens> refresh({required String refreshToken, required int deviceId, required String deviceSecret}) async {
     try {
       final res = await _authDio.post('/admin/auth/refresh', data: {

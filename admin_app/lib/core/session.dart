@@ -68,6 +68,7 @@ class SessionController extends Notifier<SessionState> {
   }
 
   Future<void> init() async {
+    if (AppConfig.devBypassAuth && await _devSession()) return;
     final email = await _store.read(Keys.email);
     final refreshToken = await _store.read(Keys.refreshToken);
     if (refreshToken == null) {
@@ -137,6 +138,7 @@ class SessionController extends Notifier<SessionState> {
   }
 
   void lock() {
+    if (AppConfig.devBypassAuth) return;
     if (state.status == SessionStatus.loggedIn) {
       state = SessionState(SessionStatus.locked, me: state.me, email: state.email);
     }
@@ -150,6 +152,24 @@ class SessionController extends Notifier<SessionState> {
       await _api.logout(refreshToken: refreshToken, deviceId: deviceId, deviceSecret: secret);
     }
     await _expire(null);
+  }
+
+  Future<bool> _devSession() async {
+    try {
+      if (await _store.read(Keys.refreshToken) != null && await _refresh() == RefreshOutcome.ok) {
+        await _loadMe();
+        return true;
+      }
+      final r = await _api.devLogin();
+      await _store.write(Keys.deviceId, '${r.deviceId}');
+      await _store.write(Keys.deviceSecret, r.deviceSecret);
+      await _store.write(Keys.refreshToken, r.refreshToken);
+      _client.accessToken = r.accessToken;
+      await _loadMe();
+      return true;
+    } catch (_) {
+      return false; // dev endpoint unavailable: normal login
+    }
   }
 
   Future<void> _loadMe() async {
