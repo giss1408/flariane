@@ -19,7 +19,7 @@ final pickupPointsProvider = FutureProvider.autoDispose<List<PickupPoint>>(
   (ref) => ref.watch(adminApiProvider).pickupPoints(),
 );
 
-/// Opens a SHEIN share link outside the app, so the installed SHEIN app handles it.
+/// Opens a SHEIN/Temu share link outside the app, so the installed store app handles it.
 Future<void> openInShein(BuildContext context, String url) async {
   final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   if (!ok && context.mounted) showInfo(context, 'Impossible d’ouvrir le lien.');
@@ -225,12 +225,12 @@ class _CartSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Panier SHEIN'),
+        SectionTitle('Panier ${order.storeName}'),
         if (order.sourceCartUrl != null)
           FilledButton.icon(
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
             icon: const Icon(Icons.open_in_new_rounded),
-            label: const Text('Ouvrir dans SHEIN'),
+            label: Text('Ouvrir dans ${order.storeName}'),
             onPressed: () => openInShein(context, order.sourceCartUrl!),
           ),
         for (final (i, link) in order.submittedLinks.indexed)
@@ -300,7 +300,7 @@ class _QuoteSummary extends StatelessWidget {
                 ]),
               ),
             const Divider(),
-            AmountRow(q.isCartMode ? 'Panier SHEIN' : 'Articles', q.itemsXof),
+            AmountRow(q.isCartMode ? 'Panier ${order.storeName}' : 'Articles', q.itemsXof),
             AmountRow('Transport', q.freightXof),
             if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
             if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
@@ -321,11 +321,11 @@ class _PurchaseSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Achat SHEIN'),
+        SectionTitle('Achat ${order.storeName}'),
         Card(
           child: ListTile(
             leading: const Icon(Icons.receipt_long_rounded),
-            title: Text('Commande SHEIN ${order.purchase!.storeOrderRef}'),
+            title: Text('Commande ${order.storeName} ${order.purchase!.storeOrderRef}'),
             subtitle: Text('Payé ${fcfa(order.purchase!.paidXof)}'
                 '${order.purchase!.decision == null ? '' : ' · hausse : ${order.purchase!.decision == 'ABSORB' ? 'absorbée' : 'client contacté'}'}'),
           ),
@@ -356,13 +356,13 @@ class _ItemsSection extends ConsumerWidget {
                 if (i.size != null) i.size!,
                 if (i.color != null) i.color!,
                 '${i.sourcePrice} ${i.sourceCurrency}',
-                if (i.itemStatus == 'CANCELLED_BY_STORE') '· annulé par SHEIN',
+                if (i.itemStatus == 'CANCELLED_BY_STORE') '· annulé par le magasin',
               ].join(' ')),
               trailing: canCancel && i.itemStatus == 'OK'
                   ? PopupMenuButton<String>(
                       onSelected: (_) async {
                         final ok = await confirm(context,
-                            title: 'Article annulé par SHEIN ?',
+                            title: 'Article annulé par ${order.storeName} ?',
                             body: 'Le client sera remboursé de cet article et prévenu sur WhatsApp.',
                             ok: 'Annuler l’article');
                         if (!ok) return;
@@ -373,7 +373,7 @@ class _ItemsSection extends ConsumerWidget {
                           if (context.mounted) showError(context, e);
                         }
                       },
-                      itemBuilder: (_) => const [PopupMenuItem(value: 'cancel', child: Text('Annulé par SHEIN'))],
+                      itemBuilder: (_) => [PopupMenuItem(value: 'cancel', child: Text('Annulé par ${order.storeName}'))],
                     )
                   : null,
             ),
@@ -412,7 +412,7 @@ class _PrimaryAction extends ConsumerWidget {
             await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PurchaseScreen(order: order)));
             refresh();
           },
-          child: const Text('Acheter sur SHEIN'),
+          child: Text('Acheter sur ${order.storeName}'),
         );
       case 'ARRIVED':
         return FilledButton(onPressed: () => _readyForPickup(context, ref), child: const Text('Prête au retrait'));

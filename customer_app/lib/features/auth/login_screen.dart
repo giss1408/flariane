@@ -58,7 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     const Center(child: FlarianeLogo(size: 84, withWordmark: true)),
                     const SizedBox(height: 6),
-                    const Text('Vos paniers SHEIN livrés à Abidjan', textAlign: TextAlign.center),
+                    const Text('Tes paniers SHEIN et Temu livrés à Abidjan', textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     SegmentedButton<bool>(
                       segments: const [

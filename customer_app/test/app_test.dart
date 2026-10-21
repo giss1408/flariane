@@ -62,6 +62,7 @@ void main() {
     expect(looksLikeSheinLink('https://m.shein.com/fr/robe-p-1.html'), isTrue);
     expect(looksLikeSheinLink('https://shein.com.evil.com/x'), isFalse);
     expect(looksLikeSheinLink('pas de lien'), isFalse);
+    expect(looksLikeSheinLink('Mon panier https://share.temu.com/abc'), isTrue);
   });
 
   test('change request only sends what changed', () {

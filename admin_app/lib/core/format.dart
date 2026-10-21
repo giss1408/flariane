@@ -59,7 +59,7 @@ const errorMessages = {
   'fee_below_minimum': 'Frais de service sous le minimum.',
   'missing_fx_rate': 'Taux de change manquant pour cette devise.',
   'checklist_incomplete': 'Cochez ou refusez chaque article.',
-  'price_increase_decision_required': 'Le prix SHEIN a augmenté.',
+  'price_increase_decision_required': 'Le prix du magasin a augmenté.',
   'order_not_paid': 'La commande n’est pas payée.',
   'wrong_pickup_code': 'Code de retrait incorrect.',
   'pickup_code_locked': 'Trop d’essais : renvoyez un nouveau code au client.',
@@ -67,7 +67,7 @@ const errorMessages = {
   'shipment_not_open': 'Cette expédition est déjà partie.',
   'order_not_purchased': 'Seules les commandes achetées peuvent être expédiées.',
   'order_already_in_shipment': 'Commande déjà dans une expédition.',
-  'cart_quote_incomplete': 'Ajoute la capture du panier et le prix SHEIN.',
+  'cart_quote_incomplete': 'Ajoute la capture du panier et son prix.',
   'no_draft': 'Enregistre d’abord le devis.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

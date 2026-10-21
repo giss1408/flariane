@@ -1,4 +1,4 @@
-"""SHEIN share links. The server never fetches them: OneLink pages redirect with JavaScript,
+"""SHEIN and Temu share links. The server never fetches them: OneLink pages redirect with JavaScript,
 and fetching user-supplied URLs would open SSRF risk. Validate, store as shared, let the admin open them."""
 
 import re
@@ -28,7 +28,23 @@ def extract_shein_urls(text: str) -> list[str]:
                 urls.append(raw)
         elif host == "shein.com" or host.endswith(".shein.com"):
             urls.append(raw)
+        elif host == "temu.com" or host.endswith(".temu.com"):
+            urls.append(raw)
     return list(dict.fromkeys(urls))  # dedupe, keep order
+
+
+def store_of(url: str | None) -> str:
+    host = (urlsplit(url).hostname or "").lower() if url else ""
+    return "TEMU" if host == "temu.com" or host.endswith(".temu.com") else "SHEIN"
+
+
+def pick_cart_url(urls: list[str]) -> str:
+    """Prefer a cart share link (SHEIN OneLink, Temu share) over product page links."""
+    for u in urls:
+        host = (urlsplit(u).hostname or "").lower()
+        if host == "onelink.shein.com" or host.startswith("share.temu.com") or "/cart" in u:
+            return u
+    return urls[0]
 
 
 def log_safe(url: str | None) -> str:

@@ -20,7 +20,7 @@ class QuoteDraftModel {
   int? freightXof; // null = default transport from settings (5 000 FCFA)
   String? note;
 
-  String? get error => (cartPriceXof ?? 0) <= 0 ? 'Saisis le prix SHEIN du panier' : null;
+  String? get error => (cartPriceXof ?? 0) <= 0 ? 'Saisis le prix du panier' : null;
 
   bool get isValid => error == null;
 

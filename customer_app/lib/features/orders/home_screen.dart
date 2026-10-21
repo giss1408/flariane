@@ -132,7 +132,7 @@ class _WaxHero extends StatelessWidget {
               ),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Ton panier SHEIN,\nlivré à Abidjan', style: display(30, color: Colors.white)),
+              Text('Ton panier SHEIN\nou Temu, livré\nà Abidjan', style: display(30, color: Colors.white)),
               const SizedBox(height: 8),
               const Text('Devis en FCFA, paiement Wave, retrait près de chez toi',
                   style: TextStyle(color: Color(0xFFFFE3EE), fontSize: 14)),
@@ -237,7 +237,7 @@ class _Steps extends StatelessWidget {
   const _Steps();
 
   static const _items = [
-    (Icons.favorite_rounded, 'Remplis ton panier', 'dans l’app SHEIN, comme d’hab'),
+    (Icons.favorite_rounded, 'Remplis ton panier', 'dans l’app SHEIN ou Temu'),
     (Icons.ios_share_rounded, 'Partage-le', 'Panier, Partager, puis Flariane'),
     (Icons.receipt_long_rounded, 'Reçois ton devis', 'en FCFA, sur WhatsApp'),
     (Icons.local_mall_rounded, 'Récupère ton colis', 'payé avec Wave, retiré à Abidjan'),
@@ -346,7 +346,7 @@ class _EmptyOrders extends StatelessWidget {
           SizedBox(height: 8),
           Text('Pas encore de commande', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           SizedBox(height: 4),
-          Text('Partage ton premier panier SHEIN pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
+          Text('Partage ton premier panier SHEIN ou Temu pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
         ]),
       );
 }

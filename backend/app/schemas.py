@@ -192,6 +192,7 @@ class OrderSummaryOut(BaseModel):
 
 
 class OrderDetailOut(OrderSummaryOut):
+    store: str = "SHEIN"
     source_cart_url: str | None
     submitted_links: list[str]
     customer_note: str | None
@@ -319,6 +320,7 @@ class AdminOrderDetailOut(BaseModel):
     customer_id: int
     customer_name: str | None
     customer_phone_masked: str
+    store: str = "SHEIN"
     source_cart_url: str | None
     submitted_links: list[str]
     customer_note: str | None

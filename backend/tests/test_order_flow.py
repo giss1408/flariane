@@ -292,3 +292,10 @@ async def test_cart_mode_quote_with_screenshot(client: AsyncClient, customer: di
     r = await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH9", "paid_amount": "32500", "currency": "XOF"}, headers=admin.headers)
     assert r.status_code == 200 and r.json()["estimated_margin_xof"] == 0
 
+
+
+async def test_temu_order(client: AsyncClient, customer: dict, admin: AdminFixture) -> None:
+    r = await client.post("/orders", json={"share_text": "Mon panier https://share.temu.com/xyZ789"}, headers=customer)
+    assert r.status_code == 201 and r.json()["store"] == "TEMU"
+    detail = (await client.get(f"/admin/orders/{await order_id(r.json()['public_ref'])}", headers=admin.headers)).json()
+    assert detail["store"] == "TEMU"

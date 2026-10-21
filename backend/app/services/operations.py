@@ -123,7 +123,7 @@ async def record_purchase(db: AsyncSession, order_id: int, data: PurchaseIn, adm
     db.add(
         StorePurchase(
             order_id=order.id,
-            store="SHEIN",
+            store=order.store,
             store_order_ref=data.store_order_ref,
             paid_amount=data.paid_amount,
             currency=data.currency,
@@ -154,7 +154,7 @@ async def _record_cart_purchase(db: AsyncSession, order: Order, quote, payment: 
     buffer = Decimal(str(settings["price_increase_buffer_percent"])) / 100
     if paid_xof > quote.items_xof * (1 + buffer) and data.price_increase_decision is None:
         raise Conflict("price_increase_decision_required", f"paid={paid_xof} quoted={quote.items_xof}")
-    db.add(StorePurchase(order_id=order.id, store="SHEIN", store_order_ref=data.store_order_ref, paid_amount=data.paid_amount,
+    db.add(StorePurchase(order_id=order.id, store=order.store, store_order_ref=data.store_order_ref, paid_amount=data.paid_amount,
                          currency=data.currency, paid_xof=paid_xof, price_increase_decision=data.price_increase_decision, purchased_by=admin_id))
     await transition_order(db, order, OrderStatus.PURCHASED, actor=f"admin:{admin_id}", actor_type="admin", actor_id=admin_id, ip=ip)
     await audit(db, actor_type="admin", actor_id=admin_id, action="purchase.recorded", entity="order", entity_id=order.id,

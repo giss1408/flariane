@@ -60,7 +60,7 @@ const errorMessages = {
   'login_locked': 'Trop d’essais. Réessayez dans 15 minutes.',
   'phone_taken': 'Un compte existe déjà avec ce numéro. Connectez-vous.',
   'weak_password': 'Mot de passe trop simple (8 caractères minimum).',
-  'no_shein_link': 'Collez le lien de partage de votre panier SHEIN.',
+  'no_shein_link': 'Colle le lien de partage de ton panier SHEIN ou Temu.',
   'invalid_pickup_point': 'Choisissez un point de retrait.',
   'quote_outdated': 'Le devis a été mis à jour.',
   'quote_expired': 'Ce devis a expiré. Demandez-en un nouveau.',

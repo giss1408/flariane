@@ -156,6 +156,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         customer_id=customer.id,
         customer_name=customer.display_name,
         customer_phone_masked=mask_phone(phone) if phone else "",
+        store=order.store,
         source_cart_url=order.source_cart_url,
         submitted_links=order.submitted_links,
         customer_note=order.customer_note,

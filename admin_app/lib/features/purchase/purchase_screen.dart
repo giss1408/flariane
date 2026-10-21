@@ -72,7 +72,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
     if (!allRefused &&
         (_ref.text.trim().length < 3 || _amount.text.trim().isEmpty)) {
       return showInfo(
-          context, 'Saisissez la référence et le montant payé sur SHEIN.');
+          context, 'Saisissez la référence et le montant payé sur ${widget.order.storeName}.');
     }
     setState(() => _busy = true);
     try {
@@ -112,10 +112,10 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   Future<String?> _askDecision() => showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Le prix SHEIN a augmenté'),
+          title: Text('Le prix ${widget.order.storeName} a augmenté'),
           content: const Text(
               'Le montant payé dépasse le devis au-delà de la marge prévue. '
-              'Arrêtez-vous avant de payer SHEIN si vous voulez d’abord contacter le client.'),
+              'Arrêtez-vous avant de payer si vous voulez d’abord contacter la cliente.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -145,12 +145,12 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
               style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52)),
               icon: const Icon(Icons.open_in_new_rounded),
-              label: const Text('Ouvrir dans SHEIN'),
+              label: Text('Ouvrir dans ${order.storeName}'),
               onPressed: () => openInShein(context, order.sourceCartUrl!),
             ),
           const SizedBox(height: 12),
           const WarningBox(
-              'Comparez le panier SHEIN avec le devis accepté : c’est ce que la cliente a validé.'),
+              'Comparez le panier avec le devis accepté : c’est ce que la cliente a validé.'),
           SectionTitle('Devis accepté n°${_quote.version}',
               trailing: Text(fcfa(_quote.totalXof))),
           if (_quote.isCartMode) ...[
@@ -163,7 +163,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                     alignment: Alignment.topCenter),
               ),
             const SizedBox(height: 8),
-            Text('Panier SHEIN accepté : ${fcfa(_quote.itemsXof)}',
+            Text('Panier ${order.storeName} accepté : ${fcfa(_quote.itemsXof)}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
           ] else ...[
             Card(
@@ -184,11 +184,11 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                   style: TextStyle(color: AppColors.muted, fontSize: 13)),
             ),
           ],
-          const SectionTitle('Commande SHEIN'),
+          SectionTitle('Commande ${order.storeName}'),
           TextField(
             controller: _ref,
             decoration:
-                const InputDecoration(labelText: 'Numéro de commande SHEIN'),
+                InputDecoration(labelText: 'Numéro de commande ${order.storeName}'),
             textCapitalization: TextCapitalization.characters,
           ),
           const SizedBox(height: 10),

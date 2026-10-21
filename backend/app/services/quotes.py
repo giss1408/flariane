@@ -21,7 +21,7 @@ from app.schemas import ChangeRequestIn, QuoteDraftIn
 from app.security.tokens import utcnow
 from app.services import notify
 from app.services.audit import audit
-from app.services.links import extract_shein_urls, product_id_from_url
+from app.services.links import extract_shein_urls, product_id_from_url, store_of
 from app.services.orders import lock_order, transition_order
 from app.services.pricing import LineInput, compute_quote, default_customs, default_freight
 from app.services.settings import get_settings_map
@@ -358,6 +358,7 @@ async def request_change(db: AsyncSession, customer_id: int, ref: str, version: 
         if order.source_cart_url:
             order.submitted_links = [*order.submitted_links, order.source_cart_url]
         order.source_cart_url = new_url
+        order.store = store_of(new_url)
     await transition_order(
         db, order, OrderStatus.QUOTE_REQUESTED, actor=f"customer:{customer_id}", actor_type="customer", actor_id=customer_id, ip=ip
     )

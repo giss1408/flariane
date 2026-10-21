@@ -283,6 +283,7 @@ class OrderDetail {
     required this.customerId,
     required this.customerName,
     required this.customerPhoneMasked,
+    this.store = 'SHEIN',
     required this.sourceCartUrl,
     required this.submittedLinks,
     required this.customerNote,
@@ -305,6 +306,7 @@ class OrderDetail {
         customerId: j['customer_id'] as int,
         customerName: j['customer_name'] as String?,
         customerPhoneMasked: j['customer_phone_masked'] as String? ?? '',
+        store: j['store'] as String? ?? 'SHEIN',
         sourceCartUrl: j['source_cart_url'] as String?,
         submittedLinks: ((j['submitted_links'] as List?) ?? []).cast<String>(),
         customerNote: j['customer_note'] as String?,
@@ -326,6 +328,7 @@ class OrderDetail {
   final int customerId;
   final String? customerName;
   final String customerPhoneMasked;
+  final String store; // SHEIN | TEMU
   final String? sourceCartUrl;
   final List<String> submittedLinks;
   final String? customerNote;
@@ -339,6 +342,8 @@ class OrderDetail {
   final Purchase? purchase;
   final List<StatusEvent> history;
   final int? shipmentId;
+
+  String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 
   Quote? get latestQuote => quotes.isEmpty ? null : quotes.first;
   Quote? get draft => quotes.where((q) => q.status == 'DRAFT').firstOrNull;

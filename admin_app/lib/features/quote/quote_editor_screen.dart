@@ -14,7 +14,7 @@ import '../../widgets/common.dart';
 import '../order/order_screen.dart';
 import 'quote_draft.dart';
 
-/// Quote = screenshot of the SHEIN cart + cart price + transport. The customer sees the screenshot.
+/// Quote = screenshot of the SHEIN/Temu cart + cart price + transport. The customer sees the screenshot.
 class QuoteEditorScreen extends ConsumerStatefulWidget {
   const QuoteEditorScreen({super.key, required this.order});
 
@@ -101,7 +101,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   }
 
   Future<void> _send() async {
-    final error = _model.error ?? (_screenshotUrl == null ? 'Ajoute la capture du panier SHEIN' : null);
+    final error = _model.error ?? (_screenshotUrl == null ? 'Ajoute la capture du panier ${widget.order.storeName}' : null);
     if (error != null) return showInfo(context, error);
     setState(() => _sending = true);
     try {
@@ -141,7 +141,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
           if (order.sourceCartUrl != null)
             OutlinedButton.icon(
               icon: const Icon(Icons.open_in_new_rounded),
-              label: const Text('Ouvrir le panier dans SHEIN'),
+              label: Text('Ouvrir le panier dans ${order.storeName}'),
               onPressed: () => openInShein(context, order.sourceCartUrl!),
             ),
           if (change != null) ...[
@@ -149,11 +149,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             WarningBox('Modification demandée.${change.note == null ? '' : ' « ${change.note} »'}'
                 '${change.newCartUrl == null ? '' : ' Nouveau lien de panier ci-dessus.'}'),
           ],
-          const SectionTitle('Capture du panier SHEIN'),
-          _ScreenshotBox(url: _screenshotUrl, busy: _uploading, onPick: _pickScreenshot),
+          SectionTitle('Capture du panier ${order.storeName}'),
+          _ScreenshotBox(url: _screenshotUrl, busy: _uploading, onPick: _pickScreenshot, store: order.storeName),
           const SectionTitle('Montants'),
           _AmountField(
-            label: 'Prix SHEIN du panier *',
+            label: 'Prix ${order.storeName} du panier *',
             initial: _model.cartPriceXof,
             onChanged: (v) {
               _model.cartPriceXof = v;
@@ -233,11 +233,12 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 }
 
 class _ScreenshotBox extends StatelessWidget {
-  const _ScreenshotBox({required this.url, required this.busy, required this.onPick});
+  const _ScreenshotBox({required this.url, required this.busy, required this.onPick, required this.store});
 
   final String? url;
   final bool busy;
   final VoidCallback onPick;
+  final String store;
 
   @override
   Widget build(BuildContext context) {
@@ -254,11 +255,11 @@ class _ScreenshotBox extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.primary, width: 1.5),
           ),
-          child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.primary),
-            SizedBox(height: 8),
-            Text('Ajouter la capture du panier SHEIN', style: TextStyle(fontWeight: FontWeight.w600)),
-            Text('La cliente la verra avant de payer', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.primary),
+            const SizedBox(height: 8),
+            Text('Ajouter la capture du panier $store', style: const TextStyle(fontWeight: FontWeight.w600)),
+            const Text('La cliente la verra avant de payer', style: TextStyle(color: AppColors.muted, fontSize: 13)),
           ]),
         ),
       );

@@ -237,6 +237,8 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
       ]),
       const SizedBox(height: 8),
       if (q.screenshotUrl != null) ...[
+        const PriceAdvice(),
+        const SizedBox(height: 10),
         CartScreenshot(url: q.screenshotUrl!),
         const SizedBox(height: 10),
       ],
@@ -255,7 +257,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(children: [
-            AmountRow(q.lines.isEmpty ? 'Panier SHEIN' : 'Articles', q.itemsXof),
+            AmountRow(q.lines.isEmpty ? 'Panier ${widget.order.storeName}' : 'Articles', q.itemsXof),
             AmountRow('Transport jusqu’à Abidjan', q.freightXof),
             if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
             if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
@@ -400,7 +402,7 @@ class _ChangeRequestSheetState extends ConsumerState<ChangeRequestSheet> {
             for (final l in widget.quote.lines) _lineEditor(l),
             TextField(
               controller: _link,
-              decoration: const InputDecoration(labelText: 'Nouveau lien de panier SHEIN (optionnel)'),
+              decoration: const InputDecoration(labelText: 'Nouveau lien de panier (optionnel)'),
             ),
             const SizedBox(height: 10),
             TextField(controller: _note, maxLines: 2, decoration: const InputDecoration(labelText: 'Message (optionnel)')),
@@ -464,7 +466,7 @@ class _ChangeRequestSheetState extends ConsumerState<ChangeRequestSheet> {
   }
 }
 
-/// The SHEIN cart exactly as quoted. Tap to zoom.
+/// The cart exactly as quoted. Tap to zoom.
 class CartScreenshot extends StatelessWidget {
   const CartScreenshot({super.key, required this.url});
 
@@ -474,7 +476,7 @@ class CartScreenshot extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('Ton panier SHEIN')),
+            appBar: AppBar(title: const Text('Ton panier')),
             body: InteractiveViewer(maxScale: 5, child: Center(child: Image.network(url))),
           ),
         )),
@@ -502,6 +504,29 @@ class CartScreenshot extends StatelessWidget {
                 SizedBox(width: 4),
                 Text('Voir mon panier', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
               ]),
+            ),
+          ),
+        ]),
+      );
+}
+
+/// Prices shown in the store app in Abidjan can differ from the price when we place the order;
+/// the screenshot is the cart we will actually buy, at the quoted price.
+class PriceAdvice extends StatelessWidget {
+  const PriceAdvice({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(18)),
+        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.info_outline_rounded, color: AppColors.warning),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Les prix affichés dans l’app à Abidjan peuvent différer de ceux au moment de notre commande. '
+              'Vérifie bien la capture du panier ci-dessous avant de payer : c’est exactement ce que nous commandons.',
+              style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600, height: 1.4),
             ),
           ),
         ]),

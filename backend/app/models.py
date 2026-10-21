@@ -105,6 +105,7 @@ class Order(TimestampMixin, Base):
     public_ref: Mapped[str] = mapped_column(String(16), unique=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     source_cart_url: Mapped[str | None] = mapped_column(Text)
+    store: Mapped[str] = mapped_column(String(16), default="SHEIN", server_default="SHEIN")  # SHEIN | TEMU
     submitted_links: Mapped[list[str]] = mapped_column(JSON, default=list)
     customer_note: Mapped[str | None] = mapped_column(Text)
     # Snapshot of the customer's location when the order was created (or last updated before purchase).

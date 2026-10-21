@@ -42,7 +42,7 @@ from app.security.tokens import utcnow
 from app.services import customer_auth, notify, quotes
 from app.services.audit import audit
 from app.services import location as loc
-from app.services.links import extract_shein_urls
+from app.services.links import extract_shein_urls, pick_cart_url, store_of
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
 from app.services.payments import start_checkout
@@ -196,6 +196,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
     return OrderDetailOut(
         public_ref=order.public_ref,
         status=order.status,
+        store=order.store,
         total_xof=order.total_xof,
         created_at=order.created_at,
         status_changed_at=order.status_changed_at,
@@ -217,13 +218,13 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
 async def create_order(data: OrderCreateIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> OrderDetailOut:
     urls = extract_shein_urls(data.share_text)
     if not urls:
-        raise BadRequest("no_shein_link", "Collez le lien de partage de votre panier SHEIN")
+        raise BadRequest("no_shein_link", "Collez le lien de partage de votre panier SHEIN ou Temu")
     point = None
     if data.pickup_point_id is not None:
         point = await db.get(PickupPoint, data.pickup_point_id)
         if point is None or not point.active:
             raise BadRequest("invalid_pickup_point")
-    cart_url = next((u for u in urls if "onelink.shein.com" in u), urls[0])
+    cart_url = pick_cart_url(urls)
 
     # The same cart sent twice within 24 h returns the existing open order.
     recent = await db.scalar(
@@ -241,6 +242,7 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
         public_ref=await unique_public_ref(db),
         customer_id=customer.id,
         source_cart_url=cart_url,
+        store=store_of(cart_url),
         submitted_links=[u for u in urls if u != cart_url],
         customer_note=data.note,
         status=OrderStatus.QUOTE_REQUESTED,

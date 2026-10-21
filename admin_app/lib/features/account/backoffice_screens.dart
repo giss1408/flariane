@@ -322,7 +322,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   };
   static const numFields = {
     'customs_rate_percent': 'Douane (% des articles)',
-    'price_increase_buffer_percent': 'Marge de hausse SHEIN tolérée (%)',
+    'price_increase_buffer_percent': 'Marge de hausse de prix tolérée (%)',
   };
 
   @override

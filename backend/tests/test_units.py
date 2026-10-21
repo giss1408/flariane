@@ -138,3 +138,14 @@ def test_dev_routes_never_in_prod() -> None:
     assert Settings(env="staging", **base).dev_routes_enabled is False
     assert Settings(env="staging", dev_routes=True, **base).dev_routes_enabled is True
     assert Settings(env="dev", **base).dev_routes_enabled is True
+
+
+def test_temu_links() -> None:
+    from app.services.links import pick_cart_url, store_of
+
+    text = "Regarde mon panier Temu https://share.temu.com/abcDEF123 !"
+    urls = extract_shein_urls(text)
+    assert urls == ["https://share.temu.com/abcDEF123"]
+    assert store_of(urls[0]) == "TEMU" and pick_cart_url(urls) == urls[0]
+    assert extract_shein_urls("https://temu.com.evil.io/x") == []
+    assert store_of("https://onelink.shein.com/57/abc") == "SHEIN"

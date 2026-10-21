@@ -156,6 +156,7 @@ class Order {
   Order({
     required this.ref,
     required this.status,
+    this.store = 'SHEIN',
     required this.totalXof,
     required this.createdAt,
     required this.pickupPoint,
@@ -170,6 +171,7 @@ class Order {
   factory Order.fromJson(Map<String, dynamic> j) => Order(
         ref: j['public_ref'] as String,
         status: j['status'] as String,
+        store: j['store'] as String? ?? 'SHEIN',
         totalXof: _int(j['total_xof']),
         createdAt: _date(j['created_at'])!,
         pickupPoint: j['pickup_point'] == null ? null : PickupPoint.fromJson(j['pickup_point'] as Map<String, dynamic>),
@@ -185,6 +187,7 @@ class Order {
   final String status;
   final int? totalXof;
   final DateTime createdAt;
+  final String store; // SHEIN | TEMU
   final PickupPoint? pickupPoint;
   final Location? deliveryLocation;
   final Quote? quote;
@@ -192,6 +195,8 @@ class Order {
   final int attachments;
   final bool canCancel;
   final bool canRequestRequote;
+
+  String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 
   bool get paymentPending => status == 'AWAITING_PAYMENT' && (payment?.status == 'PENDING' || payment?.status == 'INITIATED');
 }

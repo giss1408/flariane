@@ -12,7 +12,7 @@ import 'order_screen.dart';
 
 /// Mirrors the server's check so the customer gets instant feedback; the server re-validates.
 bool looksLikeSheinLink(String text) =>
-    RegExp(r'https://([a-z0-9-]+\.)*shein\.com/\S+', caseSensitive: false)
+    RegExp(r'https://([a-z0-9-]+\.)*(shein|temu)\.com/\S+', caseSensitive: false)
         .hasMatch(text);
 
 class NewOrderScreen extends ConsumerStatefulWidget {
@@ -50,7 +50,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
 
   Future<void> _submit() async {
     if (!looksLikeSheinLink(_link.text)) {
-      return showInfo(context, 'Collez le lien de partage de votre panier SHEIN.');
+      return showInfo(context, 'Colle le lien de partage de ton panier SHEIN ou Temu.');
     }
     setState(() => _busy = true);
     final api = ref.read(apiProvider);
@@ -95,7 +95,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           minLines: 2,
           maxLines: 4,
           decoration: InputDecoration(
-            labelText: 'Lien de votre panier SHEIN',
+            labelText: 'Lien de ton panier SHEIN ou Temu',
             hintText: 'https://onelink.shein.com/…',
             suffixIcon: IconButton(
                 tooltip: 'Coller',
@@ -105,7 +105,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-            'Vérifiez tailles et couleurs dans votre panier SHEIN avant d’envoyer.',
+            'Vérifie tailles et couleurs dans ton panier avant d’envoyer. Les prix affichés à Abidjan peuvent changer au moment de notre commande : ton devis te donnera le prix réel.',
             style: TextStyle(color: AppColors.warning)),
         const SizedBox(height: 16),
         Card(
