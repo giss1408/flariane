@@ -335,7 +335,7 @@ def _pickup_hash(order_id: int, code: str) -> str:
     return keyed_hash(f"{order_id}:{code}", "pickup")
 
 
-async def mark_ready_for_pickup(db: AsyncSession, order_id: int, pickup_point_id: int | None, admin_id: int, ip: str | None) -> None:
+async def mark_ready_for_pickup(db: AsyncSession, order_id: int, pickup_point_id: int | None, admin_id: int, ip: str | None) -> str:
     """Generates a fresh 6-digit pickup code and sends it to the customer on WhatsApp.
     Calling it again on a READY order re-issues the code (lost message)."""
     order = await _locked_order(db, order_id)
@@ -357,6 +357,8 @@ async def mark_ready_for_pickup(db: AsyncSession, order_id: int, pickup_point_id
     customer = await db.get(Customer, order.customer_id)
     assert customer is not None
     notify.ready_for_pickup(db, customer, order, point, code)
+    # Returned once so the admin can send it from their own WhatsApp; only the hash is stored.
+    return code
 
 
 async def confirm_pickup(db: AsyncSession, order_id: int, code: str, admin_id: int, ip: str | None) -> None:

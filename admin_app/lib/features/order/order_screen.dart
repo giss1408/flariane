@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/whatsapp.dart';
 import '../purchase/purchase_screen.dart';
 import '../quote/quote_editor_screen.dart';
 import '../shipments/shipments_screen.dart';
@@ -400,21 +401,33 @@ class _PrimaryAction extends ConsumerWidget {
         final label = order.status == 'QUOTE_REQUESTED'
             ? (order.draft != null ? 'Reprendre le devis' : 'Préparer le devis')
             : 'Corriger le devis (nouvelle version)';
-        return FilledButton(
+        final edit = FilledButton(
           onPressed: () async {
             await Navigator.of(context).push(MaterialPageRoute(builder: (_) => QuoteEditorScreen(order: order)));
             refresh();
           },
           child: Text(label),
         );
+        if (order.status != 'QUOTED') return edit;
+        return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          WhatsAppButton(label: 'Envoyer le devis sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'quote')),
+          const SizedBox(height: 8),
+          edit,
+        ]);
+      case 'AWAITING_PAYMENT':
+        return WhatsAppButton(label: 'Relancer le paiement sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'quote'));
       case 'PAID':
-        return FilledButton(
-          onPressed: () async {
-            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PurchaseScreen(order: order)));
-            refresh();
-          },
-          child: Text('Acheter sur ${order.storeName}'),
-        );
+        return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          WhatsAppButton(label: 'Confirmer le paiement sur WhatsApp', onPressed: () => sendWhatsApp(context, ref, order.id, 'payment')),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PurchaseScreen(order: order)));
+              refresh();
+            },
+            child: Text('Acheter sur ${order.storeName}'),
+          ),
+        ]);
       case 'PURCHASED':
         // Next mandatory step: put the parcel in a shipment.
         return FilledButton.icon(
@@ -441,11 +454,11 @@ class _PrimaryAction extends ConsumerWidget {
             child: OutlinedButton(
               onPressed: () async {
                 final ok = await confirm(context,
-                    title: 'Renvoyer un code ?', body: 'Un nouveau code de retrait sera envoyé au client sur WhatsApp.', ok: 'Renvoyer');
+                    title: 'Renvoyer un code ?', body: 'L’ancien code ne marchera plus. WhatsApp s’ouvre avec le nouveau code à envoyer.', ok: 'Nouveau code');
                 if (!ok) return;
                 try {
-                  await ref.read(adminApiProvider).readyForPickup(order.id);
-                  if (context.mounted) showInfo(context, 'Nouveau code envoyé.');
+                  final code = await ref.read(adminApiProvider).readyForPickup(order.id);
+                  if (context.mounted) await sendWhatsApp(context, ref, order.id, 'pickup', code: code);
                 } catch (e) {
                   if (context.mounted) showError(context, e);
                 }
@@ -519,9 +532,10 @@ class _PrimaryAction extends ConsumerWidget {
     );
     if (selected == null) return;
     try {
-      await ref.read(adminApiProvider).readyForPickup(order.id, pickupPointId: selected);
+      final code = await ref.read(adminApiProvider).readyForPickup(order.id, pickupPointId: selected);
       ref.invalidate(orderProvider(order.id));
-      if (context.mounted) showInfo(context, 'Code de retrait envoyé au client.');
+      // The code exists only now: send it straight away from WhatsApp.
+      if (context.mounted) await sendWhatsApp(context, ref, order.id, 'pickup', code: code);
     } catch (e) {
       if (context.mounted) showError(context, e);
     }

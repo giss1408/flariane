@@ -130,9 +130,16 @@ class AdminApi {
   Future<void> cancelItemByStore(int orderId, int itemId) =>
       client.call((d) => d.post('/admin/orders/$orderId/items/$itemId/cancel-by-store', data: {}), (_) {});
 
-  Future<void> readyForPickup(int orderId, {int? pickupPointId}) => client.call(
+  /// Returns the new 6-digit pickup code (only the hash is kept server-side).
+  Future<String> readyForPickup(int orderId, {int? pickupPointId}) => client.call(
         (d) => d.post('/admin/orders/$orderId/ready-for-pickup', data: {'pickup_point_id': pickupPointId}),
-        (_) {},
+        (j) => (j as Map)['code'] as String,
+      );
+
+  /// wa.me link with a pre-written message, sent from the admin's own WhatsApp.
+  Future<String> whatsappLink(int orderId, String kind, {String? code}) => client.call(
+        (d) => d.post('/admin/orders/$orderId/whatsapp', data: {'kind': kind, 'code': code}),
+        (j) => (j as Map)['url'] as String,
       );
 
   Future<void> confirmPickup(int orderId, String code) =>

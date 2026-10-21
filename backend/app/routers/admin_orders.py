@@ -1,4 +1,6 @@
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import select
@@ -7,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.enums import AdminRole, OrderStatus, QuoteStatus
-from app.errors import NotFound
+from app.errors import Conflict, NotFound
 from app.integrations import storage
 from app.models import (
     Customer,
@@ -48,6 +50,7 @@ from app.schemas import (
 from app.security.crypto import decrypt, mask_phone
 from app.security.deps import AdminContext, client_ip, require_role
 from app.services import location as loc
+from app.services import wa_messages as wa
 from app.services import operations, quotes
 from app.services.audit import audit
 from app.services.settings import get_settings_map
@@ -234,10 +237,36 @@ async def cancel_item(order_id: int, item_id: int, data: CancelItemIn, request: 
     return RefundOut.model_validate(refund)
 
 
-@router.post("/{order_id}/ready-for-pickup", status_code=204)
-async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
-    await operations.mark_ready_for_pickup(db, order_id, data.pickup_point_id, admin.id, client_ip(request))
+@router.post("/{order_id}/ready-for-pickup")
+async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+    code = await operations.mark_ready_for_pickup(db, order_id, data.pickup_point_id, admin.id, client_ip(request))
     await db.commit()
+    return {"code": code}
+
+
+class WhatsAppMessageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["quote", "payment", "pickup"]
+    code: Annotated[str, StringConstraints(pattern=r"^\d{6}$")] | None = None
+
+
+@router.post("/{order_id}/whatsapp")
+async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+    """Pre-written message + wa.me link: the admin sends it from their own WhatsApp."""
+    order = await db.get(Order, order_id)
+    customer = await db.get(Customer, order.customer_id) if order else None
+    if order is None or customer is None or customer.phone_enc is None:
+        raise NotFound()
+    quote = await quotes.latest_non_draft(db, order.id)
+    point = await db.get(PickupPoint, order.pickup_point_id) if order.pickup_point_id else None
+    if data.kind == "quote" and quote is None:
+        raise Conflict("no_quote")
+    if data.kind == "pickup" and (point is None or data.code is None):
+        raise Conflict("pickup_not_ready")
+    text = wa.text_for(data.kind, customer, order, quote, point, data.code)
+    await audit(db, actor_type="admin", actor_id=admin.id, action=f"whatsapp.{data.kind}", entity="order", entity_id=order.id, ip=client_ip(request))
+    await db.commit()
+    return {"url": wa.wa_link(decrypt(customer.phone_enc), text), "text": text}
 
 
 @router.post("/{order_id}/pickup", status_code=204)

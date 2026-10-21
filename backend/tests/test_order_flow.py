@@ -84,10 +84,13 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
 
     # Pickup with the code sent on WhatsApp.
     r = await client.post(f"/admin/orders/{oid}/ready-for-pickup", json={}, headers=admin.headers)
-    assert r.status_code == 204, r.text
-    msg = recorded("send_customer_whatsapp")[-1]
-    assert msg["template"] == "order_ready_pickup"
-    code = msg["params"][4]
+    assert r.status_code == 200, r.text
+    code = r.json()["code"]
+    assert recorded("send_customer_whatsapp")[-1]["params"][4] == code
+    wa = (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "pickup", "code": code}, headers=admin.headers)).json()
+    assert wa["url"].startswith("https://wa.me/2250701020304?text=") and code in wa["text"]
+    wa = (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "quote"}, headers=admin.headers)).json()
+    assert "13 560 FCFA" in wa["text"]
     wrong = "000000" if code != "000000" else "111111"
     r = await client.post(f"/admin/orders/{oid}/pickup", json={"code": wrong}, headers=admin.headers)
     assert r.status_code == 400

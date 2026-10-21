@@ -11,6 +11,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/whatsapp.dart';
 import '../order/order_screen.dart';
 import 'quote_draft.dart';
 
@@ -120,7 +121,9 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       await ref.read(adminApiProvider).sendQuote(widget.order.id, quote.version);
       ref.invalidate(orderProvider(widget.order.id));
       if (!mounted) return;
-      showInfo(context, 'Devis envoyé à la cliente.');
+      // Tell her on WhatsApp right away (message pre-written, sent from this phone).
+      await sendWhatsApp(context, ref, widget.order.id, 'quote');
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) showError(context, e);

@@ -70,5 +70,7 @@ const errorMessages = {
   'cart_quote_incomplete': 'Ajoute la capture du panier et son prix.',
   'no_draft': 'Enregistre d’abord le devis.',
   'whatsapp_failed': 'Échec de l’envoi WhatsApp.',
+  'pickup_not_ready': 'Choisissez d’abord le point de retrait.',
+  'no_quote': 'Aucun devis envoyé.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };
