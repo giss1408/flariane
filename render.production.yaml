@@ -1,0 +1,98 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# Creates the API, a Celery worker (tasks + schedules), Postgres and Key Value (Redis).
+envVarGroups:
+  - name: flariane-secrets
+    envVars:
+      # 32 random bytes, base64 — generated once by Render, shared by API and worker.
+      - key: FLR_JWT_SECRET
+        generateValue: true
+      - key: FLR_FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: FLR_HASH_KEY
+        generateValue: true
+      - key: FLR_WAVE_WEBHOOK_SECRET
+        sync: false # paste the secret from the Wave Business dashboard (any 8+ chars while Wave is fake)
+      - key: FLR_WAVE_API_KEY
+        sync: false
+      - key: FLR_WHATSAPP_TOKEN
+        sync: false
+      - key: FLR_WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: FLR_WHATSAPP_APP_SECRET
+        sync: false
+      - key: FLR_WHATSAPP_VERIFY_TOKEN
+        sync: false
+  - name: flariane-config
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      # staging: fake Wave, logged WhatsApp/push, test login (/dev/customer-login) available.
+      # For real customers: FLR_ENV=prod, FLR_DEV_ROUTES=false, FLR_WAVE_MODE=live, FLR_WHATSAPP_MODE=live.
+      - key: FLR_ENV
+        value: staging
+      - key: FLR_DEV_ROUTES
+        value: "true"
+      - key: FLR_WAVE_MODE
+        value: fake
+      - key: FLR_WHATSAPP_MODE
+        value: log
+      - key: FLR_PUSH_MODE
+        value: log
+      - key: FLR_TASK_MODE
+        value: celery
+      - key: FLR_STORAGE_MODE
+        value: local # ephemeral on Render: switch to s3 (R2/S3 keys) before real use
+
+services:
+  - type: web
+    name: flariane-api
+    runtime: python
+    rootDir: backend
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: flariane-secrets
+      - fromGroup: flariane-config
+      - key: FLR_DATABASE_URL
+        fromDatabase: { name: flariane-db, property: connectionString }
+      - key: FLR_REDIS_URL
+        fromService: { type: keyvalue, name: flariane-redis, property: connectionString }
+      - key: FLR_RATE_LIMIT_STORAGE
+        fromService: { type: keyvalue, name: flariane-redis, property: connectionString }
+      - key: FLR_API_BASE_URL
+        value: https://flariane-api.onrender.com # change if Render assigns another URL / custom domain
+
+  - type: worker
+    name: flariane-worker
+    runtime: python
+    rootDir: backend
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    # -B embeds the scheduler (quote expiry, Wave reconciliation). Run exactly one instance.
+    startCommand: celery -A app.worker worker -B -l info --concurrency 2
+    envVars:
+      - fromGroup: flariane-secrets
+      - fromGroup: flariane-config
+      - key: FLR_DATABASE_URL
+        fromDatabase: { name: flariane-db, property: connectionString }
+      - key: FLR_REDIS_URL
+        fromService: { type: keyvalue, name: flariane-redis, property: connectionString }
+      - key: FLR_API_BASE_URL
+        value: https://flariane-api.onrender.com
+
+  - type: keyvalue
+    name: flariane-redis
+    plan: starter
+    region: frankfurt
+    ipAllowList: [] # internal connections only
+
+databases:
+  - name: flariane-db
+    plan: basic-256mb
+    region: frankfurt
+    databaseName: flariane
+    user: flariane

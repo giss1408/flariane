@@ -1,0 +1,53 @@
+# Render Blueprint — FREE test setup: one free web service + Neon Postgres (free tier).
+# Render → New → Blueprint → this repo. Production setup (paid worker, Render Postgres/Redis):
+# render.production.yaml (select it as the blueprint file when you're ready).
+#
+# Free plan limits, accepted for testing:
+# - the API sleeps after ~15 min idle; the first request then takes ~1 min to wake up
+# - no background worker: notifications run inside the API (FLR_TASK_MODE=inline); the scheduled
+#   quote-expiry and Wave reconciliation jobs don't run (expired quotes are still refused at accept)
+# - rate limits are kept in memory (one instance)
+# - disk is wiped on every deploy/restart: uploaded cart screenshots don't survive
+services:
+  - type: web
+    name: flariane-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      # Neon → your project → Connect → copy the connection string (pooled or direct both work).
+      - key: FLR_DATABASE_URL
+        sync: false
+      # 32 random bytes, base64, generated once by Render. Never change them afterwards.
+      - key: FLR_JWT_SECRET
+        generateValue: true
+      - key: FLR_FIELD_ENCRYPTION_KEY
+        generateValue: true
+      - key: FLR_HASH_KEY
+        generateValue: true
+      - key: FLR_WAVE_WEBHOOK_SECRET
+        generateValue: true
+      - key: FLR_API_BASE_URL
+        value: https://flariane-api.onrender.com # change if Render assigns another URL
+      - key: FLR_ENV
+        value: staging
+      - key: FLR_DEV_ROUTES
+        value: "true" # password-less test login + fake Wave page
+      - key: FLR_WAVE_MODE
+        value: fake
+      - key: FLR_WHATSAPP_MODE
+        value: log
+      - key: FLR_PUSH_MODE
+        value: log
+      - key: FLR_TASK_MODE
+        value: inline
+      - key: FLR_RATE_LIMIT_STORAGE
+        value: memory://
+      - key: FLR_STORAGE_MODE
+        value: local

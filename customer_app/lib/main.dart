@@ -1,0 +1,89 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+
+import 'core/providers.dart';
+import 'core/theme.dart';
+import 'features/auth/login_screen.dart';
+import 'features/orders/home_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr');
+  runApp(const ProviderScope(child: FlarianeApp()));
+}
+
+class FlarianeApp extends ConsumerStatefulWidget {
+  const FlarianeApp({super.key});
+
+  @override
+  ConsumerState<FlarianeApp> createState() => _FlarianeAppState();
+}
+
+class _FlarianeAppState extends ConsumerState<FlarianeApp> {
+  StreamSubscription<List<SharedMediaFile>>? _shares;
+
+  @override
+  void initState() {
+    super.initState();
+    // "Partager → Flariane" from the SHEIN app: the shared text carries the cart link.
+    void take(List<SharedMediaFile> files) {
+      final text = files.where((f) => f.type == SharedMediaType.text || f.type == SharedMediaType.url).map((f) => f.path).join(' ');
+      if (text.isNotEmpty) ref.read(sharedTextProvider.notifier).state = text;
+    }
+
+    try {
+      _shares = ReceiveSharingIntent.instance.getMediaStream().listen(take);
+      ReceiveSharingIntent.instance.getInitialMedia().then((files) {
+        take(files);
+        ReceiveSharingIntent.instance.reset();
+      });
+    } catch (_) {
+      // Platform without share support (tests, desktop).
+    }
+  }
+
+  @override
+  void dispose() {
+    _shares?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(authProvider);
+    return MaterialApp(
+      title: 'Flariane',
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      locale: const Locale('fr'),
+      supportedLocales: const [Locale('fr'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: switch (auth) {
+        AuthStatus.loading => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        AuthStatus.loggedOut => const LoginScreen(),
+        AuthStatus.loggedIn => const _PasswordGate(),
+      },
+    );
+  }
+}
+
+/// After an admin password reset, the customer must set a new password before anything else.
+class _PasswordGate extends ConsumerWidget {
+  const _PasswordGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(meProvider).valueOrNull;
+    return me?.mustChangePassword == true ? const ChangePasswordScreen(forced: true) : const HomeScreen();
+  }
+}
