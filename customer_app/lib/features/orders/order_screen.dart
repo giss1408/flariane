@@ -69,7 +69,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
             if (o.quote != null && (o.status == 'QUOTED' || o.status == 'AWAITING_PAYMENT'))
               _QuoteCard(order: o, quote: o.quote!)
             else if (o.quote != null)
-              _QuoteRecap(quote: o.quote!),
+              _QuoteRecap(order: o, quote: o.quote!),
             if (stepIndex(o.status) >= 0) ...[
               const SizedBox(height: 16),
               Card(child: Padding(padding: const EdgeInsets.all(14), child: OrderStepper(status: o.status))),
@@ -303,23 +303,39 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
   }
 }
 
+/// After acceptance the quote stays visible: the cart screenshot and what she paid.
 class _QuoteRecap extends StatelessWidget {
-  const _QuoteRecap({required this.quote});
+  const _QuoteRecap({required this.order, required this.quote});
 
+  final Order order;
   final Quote quote;
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: Card(
-          child: ExpansionTile(
-            title: Text('Devis n°${quote.version} · ${fcfa(quote.totalXof)}'),
-            children: [
-              for (final l in quote.lines)
-                ListTile(dense: true, title: Text('${l.qty} × ${l.title}'), subtitle: Text(variant(l)), trailing: Text(fcfa(l.lineTotalXof))),
-            ],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Ton panier ${order.storeName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+          const SizedBox(height: 8),
+          if (quote.screenshotUrl != null) ...[
+            CartScreenshot(url: quote.screenshotUrl!),
+            const SizedBox(height: 10),
+          ],
+          for (final l in quote.lines)
+            ListTile(dense: true, title: Text('${l.qty} × ${l.title}'), subtitle: Text(variant(l)), trailing: Text(fcfa(l.lineTotalXof))),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(children: [
+                AmountRow(quote.lines.isEmpty ? 'Panier ${order.storeName}' : 'Articles', quote.itemsXof),
+                AmountRow('Transport jusqu’à Abidjan', quote.freightXof),
+                if (quote.customsXof > 0) AmountRow('Douane', quote.customsXof),
+                if (quote.feeXof > 0) AmountRow('Frais de service', quote.feeXof),
+                const Divider(),
+                AmountRow(order.status == 'QUOTE_REQUESTED' ? 'Ancien devis' : 'Total', quote.totalXof, bold: true),
+              ]),
+            ),
           ),
-        ),
+        ]),
       );
 }
 

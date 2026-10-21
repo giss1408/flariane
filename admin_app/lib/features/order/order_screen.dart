@@ -10,6 +10,7 @@ import '../../data/models.dart';
 import '../../widgets/common.dart';
 import '../purchase/purchase_screen.dart';
 import '../quote/quote_editor_screen.dart';
+import '../shipments/shipments_screen.dart';
 
 final orderProvider = FutureProvider.autoDispose.family<OrderDetail, int>(
   (ref, id) => ref.watch(adminApiProvider).order(id),
@@ -414,6 +415,24 @@ class _PrimaryAction extends ConsumerWidget {
           },
           child: Text('Acheter sur ${order.storeName}'),
         );
+      case 'PURCHASED':
+        // Next mandatory step: put the parcel in a shipment.
+        return FilledButton.icon(
+          icon: const Icon(Icons.local_shipping_rounded),
+          onPressed: () => _addToShipment(context, ref),
+          label: const Text('Ajouter à une expédition'),
+        );
+      case 'IN_TRANSIT':
+        return OutlinedButton.icon(
+          icon: const Icon(Icons.flight_land_rounded),
+          onPressed: order.shipmentId == null
+              ? null
+              : () async {
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShipmentScreen(shipmentId: order.shipmentId!)));
+                  refresh();
+                },
+          label: const Text('Ouvrir l’expédition (marquer l’arrivée)'),
+        );
       case 'ARRIVED':
         return FilledButton(onPressed: () => _readyForPickup(context, ref), child: const Text('Prête au retrait'));
       case 'READY_FOR_PICKUP':
@@ -442,6 +461,41 @@ class _PrimaryAction extends ConsumerWidget {
         ]);
       default:
         return const SizedBox.shrink();
+    }
+  }
+
+  Future<void> _addToShipment(BuildContext context, WidgetRef ref) async {
+    final api = ref.read(adminApiProvider);
+    try {
+      final open = (await api.shipments()).where((s) => s.status == 'OPEN').toList();
+      if (!context.mounted) return;
+      final choice = await showModalBottomSheet<int>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: ListView(shrinkWrap: true, children: [
+            const ListTile(title: Text('Ajouter à une expédition', style: TextStyle(fontWeight: FontWeight.w700))),
+            for (final s in open)
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text(s.label),
+                subtitle: Text('${s.orderRefs.length} commande(s)'),
+                onTap: () => Navigator.pop(ctx, s.id),
+              ),
+            ListTile(
+              leading: const Icon(Icons.add_rounded),
+              title: const Text('Nouvelle expédition'),
+              onTap: () => Navigator.pop(ctx, -1),
+            ),
+          ]),
+        ),
+      );
+      if (choice == null) return;
+      final id = choice == -1 ? (await api.createShipment('Expédition du ${dateTime(DateTime.now()).split(' ').first}')).id : choice;
+      await api.addToShipment(id, [order.id]);
+      ref.invalidate(orderProvider(order.id));
+      if (context.mounted) showInfo(context, 'Commande ajoutée. Marquez l’expédition comme partie au départ.');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
     }
   }
 

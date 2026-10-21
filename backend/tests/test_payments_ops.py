@@ -214,3 +214,11 @@ async def test_next_departure_date(client: AsyncClient, admin: AdminFixture) -> 
     r = await client.put("/admin/settings", json={"next_departure_date": "2026-12-15"}, headers=admin.headers)
     assert r.status_code == 200, r.text
     assert (await client.get("/public/info")).json() == {"next_departure_date": "2026-12-15"}
+
+
+async def test_whatsapp_test_endpoint(client: AsyncClient, admin: AdminFixture) -> None:
+    from app.integrations import whatsapp
+
+    r = await client.post("/admin/whatsapp/test", json={"phone": "0701020304"}, headers=admin.headers)
+    assert r.status_code == 200 and r.json()["mode"] == "log" and r.json()["sent"] is False
+    assert whatsapp.SENT_LOG[-1]["template"] == "hello_world" and whatsapp.SENT_LOG[-1]["lang"] == "en_US"

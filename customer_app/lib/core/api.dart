@@ -113,9 +113,6 @@ class CustomerApi {
   Future<void> register(String phone, String password, {String? name}) =>
       _session('/auth/register', {'phone': phone, 'password': password, 'display_name': name});
 
-  /// DEV ONLY: test customer, no credentials (endpoint absent in production).
-  Future<void> devLogin() => _session('/dev/customer-login', {});
-
   Future<void> login(String phone, String password) => _session('/auth/login', {'phone': phone, 'password': password});
 
   Future<RefreshOutcome> refresh() => _inflight ??= _doRefresh().whenComplete(() => _inflight = null);

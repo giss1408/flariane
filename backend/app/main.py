@@ -17,7 +17,6 @@ from app.routers import (
     auth_customer,
     customer,
     dev,
-    dev_auth,
     files,
     payment_return,
     webhooks,
@@ -85,10 +84,8 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
     for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return):
         app.include_router(module.router)
-    if s.dev_routes_enabled:
-        if s.wave_mode == "fake":
-            app.include_router(dev.router)
-        app.include_router(dev_auth.router)  # credential-free test login
+    if s.dev_routes_enabled and s.wave_mode == "fake":
+        app.include_router(dev.router)  # simulated Wave checkout page
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:

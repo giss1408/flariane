@@ -69,5 +69,6 @@ const errorMessages = {
   'order_already_in_shipment': 'Commande déjà dans une expédition.',
   'cart_quote_incomplete': 'Ajoute la capture du panier et son prix.',
   'no_draft': 'Enregistre d’abord le devis.',
+  'whatsapp_failed': 'Échec de l’envoi WhatsApp.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

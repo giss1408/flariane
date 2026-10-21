@@ -29,6 +29,15 @@ final inboxProvider = FutureProvider.autoDispose.family<List<OrderSummary>, Stri
   (ref, tab) => ref.watch(adminApiProvider).inbox(tab),
 );
 
+/// What must happen next for orders in each tab: every step is explicit.
+const _tabNotices = {
+  'to_quote': 'Ouvrez chaque commande et envoyez le devis (capture du panier + prix).',
+  'to_buy': 'Payées : achetez le panier sur SHEIN/Temu puis enregistrez l’achat.',
+  'to_ship': 'Achetées : ajoutez chaque commande à une expédition (bouton « Ajouter à une expédition »), puis marquez l’expédition comme partie.',
+  'in_transit': 'En route : à l’arrivée, ouvrez l’expédition et touchez « Arrivée à Abidjan ».',
+  'pickups': 'Arrivées : marquez « Prête au retrait » pour envoyer le code, puis validez le retrait avec le code.',
+};
+
 /// Quote requests older than this during opening hours are highlighted.
 const overdueAfter = Duration(hours: 2);
 
@@ -79,12 +88,14 @@ class _OrderList extends ConsumerWidget {
                 SizedBox(height: 120),
                 Center(child: Text('Rien ici pour le moment.')),
               ])
-            : ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) => OrderTile(order: list[i], onReturn: () => ref.invalidate(inboxProvider(tab))),
-              ),
+            : ListView(padding: const EdgeInsets.all(12), children: [
+                if (_tabNotices[tab] != null) ...[WarningBox(_tabNotices[tab]!), const SizedBox(height: 10)],
+                for (final o in list)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: OrderTile(order: o, onReturn: () => ref.invalidate(inboxProvider(tab))),
+                  ),
+              ]),
       ),
     );
   }

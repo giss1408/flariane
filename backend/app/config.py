@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FLR_", extra="ignore")
 
     env: Literal["dev", "test", "staging", "prod"] = "dev"
-    # Test-only routes (fake Wave checkout, password-less customer login). Default: on in dev only.
+    # Test-only routes (simulated Wave checkout page). Default: on in dev only.
     # Never mounted in prod, whatever this says.
     dev_routes: bool | None = None
     api_base_url: str = "http://localhost:8000"

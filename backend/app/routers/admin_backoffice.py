@@ -15,6 +15,11 @@ from app.enums import AdminRole, PaymentStatus, RefundStatus
 from app.errors import BadRequest, Conflict, NotFound
 from app.models import AdminDevice, AdminUser, AuditLog, Customer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
 from app.ratelimit import admin_limited
+from typing import Annotated
+
+from pydantic import StringConstraints
+
+from app.schemas import In
 from app.schemas import (
     AdminDeviceOut,
     AdminUserCreatedOut,
@@ -74,6 +79,30 @@ async def dispatch(
     # Biggest communes first; orders without a location at the end.
     ordered = sorted(groups.items(), key=lambda kv: (kv[0] == "Non renseignée", -len(kv[1]), kv[0]))
     return [DispatchGroupOut(commune=c, orders=os) for c, os in ordered]
+
+
+# ---------------------------------------------------------------- whatsapp
+
+
+class WhatsAppTestIn(In):
+    phone: Annotated[str, StringConstraints(max_length=30)]
+
+
+@router.post("/whatsapp/test")
+async def whatsapp_test(data: WhatsAppTestIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
+    """Sends Meta's `hello_world` template to check the WhatsApp Cloud API credentials."""
+    from app.config import get_settings as app_settings
+    from app.integrations import whatsapp
+
+    phone = customer_auth.normalize_ci_phone(data.phone)
+    mode = app_settings().whatsapp_mode
+    try:
+        message_id = await whatsapp.send_template(phone, "hello_world", [], lang="en_US")
+    except whatsapp.WhatsAppError as exc:
+        raise BadRequest("whatsapp_failed", str(exc)[:300]) from None
+    await audit(db, actor_type="admin", actor_id=admin.id, action="whatsapp.test", after={"mode": mode, "to": phone[-4:]}, ip=client_ip(request))
+    await db.commit()
+    return {"mode": mode, "message_id": message_id, "sent": mode == "live"}
 
 
 # ---------------------------------------------------------------- customers

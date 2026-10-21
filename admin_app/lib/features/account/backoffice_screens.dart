@@ -393,6 +393,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     },
                   ),
                 ),
+                const SectionTitle('WhatsApp'),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.chat_rounded),
+                    title: const Text('Tester l’envoi WhatsApp'),
+                    subtitle: const Text('Envoie le message test « hello_world » de Meta'),
+                    onTap: () async {
+                      final phone = await _askPhone(context);
+                      if (phone == null || !context.mounted) return;
+                      try {
+                        final r = await ref.read(adminApiProvider).testWhatsApp(phone);
+                        if (!context.mounted) return;
+                        showInfo(context, r['sent'] == true
+                            ? 'Message envoyé (${r['message_id']}). Vérifiez WhatsApp sur ce numéro.'
+                            : 'WhatsApp n’est pas activé sur le serveur (mode « ${r['mode']} ») : rien n’a été envoyé.');
+                      } catch (e) {
+                        if (context.mounted) showError(context, e);
+                      }
+                    },
+                  ),
+                ),
                 const SectionTitle('Taux de change (FCFA pour 1 unité)'),
                 TextField(controller: _c['EUR'], decoration: const InputDecoration(labelText: 'EUR'), keyboardType: TextInputType.number),
                 const SizedBox(height: 8),
@@ -445,4 +466,19 @@ class ReportScreen extends ConsumerWidget {
           },
         ),
       );
+}
+
+Future<String?> _askPhone(BuildContext context) {
+  final c = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Numéro WhatsApp de test'),
+      content: TextField(controller: c, autofocus: true, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: '07 01 02 03 04')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+        TextButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Envoyer')),
+      ],
+    ),
+  );
 }

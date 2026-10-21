@@ -13,6 +13,7 @@ log = logging.getLogger("flariane.whatsapp")
 
 # name -> number of body parameters. Keep in sync with the templates registered at Meta.
 TEMPLATES: dict[str, int] = {
+    "hello_world": 0,  # Meta's pre-approved sample template (en_US): used to test the connection
     "quote_ready": 4,  # name, ref, total, expiry
     "payment_received": 1,  # ref
     "order_ready_pickup": 5,  # name, ref, location, hours, pickup code

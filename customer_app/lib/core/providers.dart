@@ -4,9 +4,6 @@ import '../data/models.dart';
 import 'api.dart';
 
 /// flutter run --dart-define=API_BASE_URL=https://api.flariane.ci  (emulator default: host machine)
-/// flutter run --dart-define=DEV_BYPASS_AUTH=true  → skips login (dev API only).
-const devBypassAuth = bool.fromEnvironment('DEV_BYPASS_AUTH');
-
 const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
 
 final tokenStoreProvider = Provider<TokenStore>((_) => SecureTokenStore());
@@ -27,13 +24,6 @@ class AuthController extends Notifier<AuthStatus> {
   }
 
   Future<void> _restore() async {
-    if (devBypassAuth) {
-      try {
-        await _api.devLogin();
-        state = AuthStatus.loggedIn;
-        return;
-      } catch (_) {/* fall through to normal login */}
-    }
     final outcome = await _api.refresh();
     // Offline at start-up: stay logged in if a session exists; screens show the network error.
     state = outcome == RefreshOutcome.expired ? AuthStatus.loggedOut : AuthStatus.loggedIn;
