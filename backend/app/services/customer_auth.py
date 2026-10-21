@@ -21,9 +21,28 @@ class InvalidCredentials(DomainError):
     status_code = 401
 
 
+# German mobiles (+49 15x/16x/17x), accepted outside production so the team can test from Germany.
+_DE_MOBILE = re.compile(r"^1[5-7]\d{8,9}$")
+
+
+def _test_phone(digits: str) -> str | None:
+    from app.config import get_settings
+
+    if get_settings().env == "prod":
+        return None
+    for prefix in ("+49", "0049"):
+        if digits.startswith(prefix) and _DE_MOBILE.match(digits[len(prefix):].lstrip("0")):
+            return "+49" + digits[len(prefix):].lstrip("0")
+    return None
+
+
 def normalize_ci_phone(raw: str) -> str:
-    """Accept 0701020304, 07 01 02 03 04, +225 07…, 00225 07…; return E.164."""
-    digits = re.sub(r"[\s.\-()]", "", raw or "")
+    """Accept 0701020304, 07 01 02 03 04, +225 07…, 00225 07…; return E.164.
+    Outside production, German mobiles in international format are accepted too."""
+    digits = re.sub(r"[\s.\-()/]", "", raw or "")
+    test = _test_phone(digits)
+    if test:
+        return test
     if digits.startswith("00225"):
         digits = digits[5:]
     elif digits.startswith("+225"):

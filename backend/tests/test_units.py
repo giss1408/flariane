@@ -149,3 +149,19 @@ def test_temu_links() -> None:
     assert store_of(urls[0]) == "TEMU" and pick_cart_url(urls) == urls[0]
     assert extract_shein_urls("https://temu.com.evil.io/x") == []
     assert store_of("https://onelink.shein.com/57/abc") == "SHEIN"
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [("+49 151 23456789", "+4915123456789"), ("0049 1761234567", "+491761234567"), ("+49 (0)160 1234567", "+491601234567")],
+)
+def test_german_test_numbers(raw: str, expected: str) -> None:
+    assert normalize_ci_phone(raw) == expected
+
+
+def test_german_numbers_refused_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "env", "prod")
+    with pytest.raises(BadRequest):
+        normalize_ci_phone("+4915123456789")
