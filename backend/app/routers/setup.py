@@ -57,3 +57,37 @@ async def first_admin(
         "totp_secret": secret,
         "totp_uri": pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin"),
     }
+
+
+@router.post("/reset-admin")
+async def reset_admin(
+    data: AdminUserIn,
+    request: Request,
+    x_setup_token: str = Header(default=""),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    """Recovery while FLR_SETUP_TOKEN is set: (re)create the super admin with a new password and
+    authenticator key, and revoke all their devices so the next login approves the phone again.
+    Remove FLR_SETUP_TOKEN from the environment once you can sign in."""
+    expected = get_settings().setup_token
+    if not expected or not hmac.compare_digest(expected.encode(), x_setup_token.encode()):
+        raise HTTPException(status_code=403, detail="setup_disabled")
+    secret = pyotp.random_base32()
+    user = await db.scalar(select(AdminUser).where(AdminUser.email == data.email))
+    if user is None:
+        user = AdminUser(email=data.email, name=data.name, role="SUPER_ADMIN", password_hash="", totp_secret_enc=b"")
+        db.add(user)
+    user.name, user.role, user.active = data.name, "SUPER_ADMIN", True
+    user.password_hash, user.totp_secret_enc, user.totp_last_step = hash_password(data.password), encrypt(secret), 0
+    await db.flush()
+    # Revoke every device so the bootstrap rule (no approved device left) approves the next login.
+    for device in (await db.scalars(select(AdminDevice).where(AdminDevice.revoked_at.is_(None)))).all():
+        device.revoked_at = utcnow()
+        await revoke_device_tokens(db, device.id)
+    await audit(db, actor_type="system", actor_id=None, action="setup.reset_admin", entity="admin_user", entity_id=user.id, ip=client_ip(request))
+    await db.commit()
+    return {
+        "email": user.email,
+        "totp_secret": secret,
+        "totp_uri": pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin"),
+    }

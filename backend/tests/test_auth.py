@@ -219,3 +219,18 @@ async def test_setup_retires_legacy_dev_admin(client: AsyncClient, monkeypatch) 
     r = await client.post("/admin/auth/login", json={"email": "boss@flariane.ci", "password": "a-long-password-123",
                                                       "totp": pyotp.TOTP(r.json()["totp_secret"]).now(), "device": {"name": "P", "platform": "android"}})
     assert r.json()["status"] == "ok"
+
+
+async def test_reset_admin_recovers_login(client: AsyncClient, admin: AdminFixture, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "setup_token", "tok")
+    pw = "Ul+H\\/8A?=l{=7hNk[Q7\\@PH0"  # backslashes and symbols survive the round trip
+    body = {"email": admin.user.email, "name": "Admin", "role": "SUPER_ADMIN", "password": pw}
+    assert (await client.post("/setup/reset-admin", json=body)).status_code == 403
+    r = await client.post("/setup/reset-admin", json=body, headers={"x-setup-token": "tok"})
+    assert r.status_code == 200
+    assert (await client.get("/admin/auth/me", headers=admin.headers)).status_code == 401  # old device revoked
+    r = await client.post("/admin/auth/login", json={"email": admin.user.email, "password": pw,
+                                                      "totp": pyotp.TOTP(r.json()["totp_secret"]).now(), "device": {"name": "P", "platform": "android"}})
+    assert r.json()["status"] == "ok"
