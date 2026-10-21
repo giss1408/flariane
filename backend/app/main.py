@@ -19,6 +19,7 @@ from app.routers import (
     dev,
     files,
     payment_return,
+    setup,
     webhooks,
 )
 
@@ -82,7 +83,7 @@ def create_app() -> FastAPI:
         return response
 
     install_error_handlers(app)
-    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return):
+    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return, setup):
         app.include_router(module.router)
     if s.dev_routes_enabled and s.wave_mode == "fake":
         app.include_router(dev.router)  # simulated Wave checkout page

@@ -33,6 +33,9 @@ services:
         generateValue: true
       - key: FLR_WAVE_WEBHOOK_SECRET
         generateValue: true
+      # One-time creation of the first super admin (no shell on the free plan). Remove after setup.
+      - key: FLR_SETUP_TOKEN
+        generateValue: true
       - key: FLR_API_BASE_URL
         value: https://flariane-api.onrender.com # change if Render assigns another URL
       - key: FLR_ENV

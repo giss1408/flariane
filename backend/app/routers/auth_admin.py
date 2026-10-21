@@ -10,7 +10,7 @@ import time
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request
 from limits import parse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -79,8 +79,19 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         db.add(device)
         await db.flush()
         await audit(db, actor_type="admin", actor_id=user.id, action="device.registered", entity="admin_device", entity_id=device.id, ip=ip)
+        # Bootstrap: the very first device of a super admin approves itself (nobody else could).
+        no_approved_device = not await db.scalar(
+            select(func.count()).select_from(AdminDevice).where(AdminDevice.approved_at.is_not(None), AdminDevice.revoked_at.is_(None))
+        )
+        if not (no_approved_device and user.role == "SUPER_ADMIN"):
+            await db.commit()
+            return AdminLoginOut(status="device_pending", device_id=device.id, device_secret=secret)
+        device.approved_at, device.approved_by = utcnow(), user.id
+        await audit(db, actor_type="admin", actor_id=user.id, action="device.auto_approved_bootstrap", entity="admin_device", entity_id=device.id, ip=ip)
+        user.last_login_at = device.last_seen_at = utcnow()
+        refresh = await issue_refresh_token(db, "admin", user.id, device.id)
         await db.commit()
-        return AdminLoginOut(status="device_pending", device_id=device.id, device_secret=secret)
+        return AdminLoginOut(status="ok", device_id=device.id, device_secret=secret, tokens=_tokens(user, device, refresh))
 
     device = await db.get(AdminDevice, data.device.device_id)
     if (

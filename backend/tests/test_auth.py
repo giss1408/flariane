@@ -179,3 +179,29 @@ async def test_delete_account_anonymises(client: AsyncClient, pickup_point) -> N
     assert (await client.get("/me", headers=headers)).json()["phone_masked"] == "+225 07 •• •• 04"
     assert (await client.delete("/me", headers=headers)).status_code == 204
     assert (await client.get("/me", headers=headers)).status_code == 401
+
+
+async def test_first_admin_setup_and_bootstrap_device(client: AsyncClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from app.config import get_settings
+
+    body = {"email": "boss@flariane.ci", "name": "Boss", "role": "SUPER_ADMIN", "password": "a-long-password-123"}
+    assert (await client.post("/setup/first-admin", json=body, headers={"x-setup-token": "nope"})).status_code == 403
+    monkeypatch.setattr(get_settings(), "setup_token", "s3cret-setup")
+    assert (await client.post("/setup/first-admin", json=body, headers={"x-setup-token": "wrong"})).status_code == 403
+    r = await client.post("/setup/first-admin", json=body, headers={"x-setup-token": "s3cret-setup"})
+    assert r.status_code == 200
+    secret = r.json()["totp_secret"]
+    # Only once.
+    assert (await client.post("/setup/first-admin", json={**body, "email": "x@y.ci"}, headers={"x-setup-token": "s3cret-setup"})).status_code == 409
+
+    # Her first device is approved at login (no approved device exists yet).
+    r = await client.post("/admin/auth/login", json={"email": "boss@flariane.ci", "password": "a-long-password-123",
+                                                      "totp": pyotp.TOTP(secret).now(), "device": {"name": "Pixel", "platform": "android"}})
+    assert r.json()["status"] == "ok" and r.json()["tokens"]["access_token"] and r.json()["device_secret"]
+
+
+async def test_second_device_still_needs_approval(client: AsyncClient, admin: AdminFixture) -> None:
+    # `admin` fixture already has an approved device: a new one waits for approval.
+    r = await client.post("/admin/auth/login", json={"email": admin.user.email, "password": admin.password,
+                                                      "totp": pyotp.TOTP(admin.totp_secret).now(), "device": {"name": "Tab", "platform": "android"}})
+    assert r.json()["status"] == "device_pending"

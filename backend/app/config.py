@@ -63,6 +63,9 @@ class Settings(BaseSettings):
 
     rate_limit_storage: str = "memory://"
 
+    # One-time creation of the first super admin over HTTP (hosts without a shell). Empty = disabled.
+    setup_token: str = ""
+
     # How background tasks run: Celery workers in production, in-process in dev, recorded in tests.
     task_mode: Literal["celery", "inline", "record"] = "inline"
 
