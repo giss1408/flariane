@@ -207,9 +207,6 @@ class AdminApi {
   Future<void> deactivateAdminUser(int id) => client.call((d) => d.post('/admin/users/$id/deactivate'), (_) {});
 
   /// VIEWER+
-  Future<Map<String, dynamic>> testWhatsApp(String phone) =>
-      client.call((d) => d.post('/admin/whatsapp/test', data: {'phone': phone}), (j) => j as Map<String, dynamic>);
-
   Future<Map<String, dynamic>> reportSummary() =>
       client.call((d) => d.get('/admin/reports/summary'), (j) => j as Map<String, dynamic>);
 }
