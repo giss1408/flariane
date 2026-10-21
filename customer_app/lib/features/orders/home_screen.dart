@@ -30,7 +30,8 @@ class HomeScreen extends ConsumerWidget {
     final orders = ref.watch(ordersProvider);
     final departure = ref.watch(nextDepartureProvider).valueOrNull;
     final me = ref.watch(meProvider).valueOrNull;
-    final name = me?.displayName?.split(' ').first;
+    final rawName = me?.displayName?.trim() ?? '';
+    final name = rawName.isEmpty ? null : rawName.split(' ').first;
 
     Future<void> newOrder() async {
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen()));
@@ -68,6 +69,10 @@ class HomeScreen extends ConsumerWidget {
             active.isEmpty ? 'Qu’est-ce qui te fait envie cette semaine ?' : 'Voici où en sont tes colis.',
             style: const TextStyle(color: AppColors.muted, fontSize: 15),
           ),
+          if (me != null && name == null) ...[
+            const SizedBox(height: 12),
+            const _NameCard(),
+          ],
           const SizedBox(height: 16),
           _WaxHero(onTap: newOrder),
           if (departure != null && daysUntil(departure, DateTime.now()) >= 0) ...[
@@ -378,5 +383,61 @@ class _LocationNudge extends StatelessWidget {
             ]),
           ),
         ),
+      );
+}
+
+/// Asks for her first name so the app can greet her properly.
+class _NameCard extends ConsumerStatefulWidget {
+  const _NameCard();
+
+  @override
+  ConsumerState<_NameCard> createState() => _NameCardState();
+}
+
+class _NameCardState extends ConsumerState<_NameCard> {
+  final _name = TextEditingController();
+  bool _saving = false;
+
+  Future<void> _save() async {
+    final value = _name.text.trim();
+    if (value.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiProvider).updateMe(name: value);
+      ref.invalidate(meProvider);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        decoration: BoxDecoration(color: const Color(0xFFFFE3EE), borderRadius: BorderRadius.circular(22)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Comment tu t’appelles ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                autofillHints: const [AutofillHints.givenName],
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _save(),
+                decoration: const InputDecoration(hintText: 'Ton prénom', isDense: true),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton.filled(
+              tooltip: 'Enregistrer',
+              onPressed: _saving ? null : _save,
+              style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+              icon: const Icon(Icons.check_rounded, color: Colors.white),
+            ),
+          ]),
+        ]),
       );
 }

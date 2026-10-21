@@ -20,9 +20,11 @@ async def dev_customer_login(db: AsyncSession = Depends(get_session)) -> TokenOu
     ph = phone_hash(TEST_PHONE)
     customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
     if customer is None:
-        customer = Customer(phone_enc=encrypt(TEST_PHONE), phone_hash=ph, display_name="Client Test")
+        customer = Customer(phone_enc=encrypt(TEST_PHONE), phone_hash=ph)
         db.add(customer)
         await db.flush()
+    elif customer.display_name == "Client Test":
+        customer.display_name = None  # older placeholder: let the app ask for a real first name
     refresh = await issue_refresh_token(db, "customer", customer.id)
     await db.commit()
     access = create_access_token(AccessClaims(sub=customer.id, typ="customer"))
