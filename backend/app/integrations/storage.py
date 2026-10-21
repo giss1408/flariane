@@ -14,7 +14,7 @@ from app.errors import BadRequest
 from app.security.crypto import _key
 
 ALLOWED_FORMATS = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
-SIGNED_URL_SECONDS = 300
+SIGNED_URL_SECONDS = 3600  # long enough for a customer reading her quote
 
 
 def sanitize_image(data: bytes) -> tuple[bytes, str, str]:

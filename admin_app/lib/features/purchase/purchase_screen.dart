@@ -14,7 +14,10 @@ enum LineCheck { unchecked, bought, refused }
 
 /// Pure state for the purchase checklist (unit-tested).
 class PurchaseChecklist {
-  PurchaseChecklist(Quote accepted) : states = {for (final l in accepted.lines) l.orderItemId: LineCheck.unchecked};
+  PurchaseChecklist(Quote accepted)
+      : states = {
+          for (final l in accepted.lines) l.orderItemId: LineCheck.unchecked
+        };
 
   final Map<int, LineCheck> states;
 
@@ -27,8 +30,14 @@ class PurchaseChecklist {
   }
 
   bool get complete => states.values.every((s) => s != LineCheck.unchecked);
-  List<int> get bought => [for (final e in states.entries) if (e.value == LineCheck.bought) e.key];
-  List<int> get refused => [for (final e in states.entries) if (e.value == LineCheck.refused) e.key];
+  List<int> get bought => [
+        for (final e in states.entries)
+          if (e.value == LineCheck.bought) e.key
+      ];
+  List<int> get refused => [
+        for (final e in states.entries)
+          if (e.value == LineCheck.refused) e.key
+      ];
 }
 
 class PurchaseScreen extends ConsumerStatefulWidget {
@@ -45,7 +54,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   late final PurchaseChecklist _checklist = PurchaseChecklist(_quote);
   final _ref = TextEditingController();
   final _amount = TextEditingController();
-  String _currency = 'EUR';
+  late String _currency = _quote.isCartMode ? 'XOF' : 'EUR';
   bool _busy = false;
 
   @override
@@ -56,16 +65,22 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   }
 
   Future<void> _submit({String? decision}) async {
-    if (!_checklist.complete) return showInfo(context, 'Cochez ou refusez chaque article.');
+    if (!_checklist.complete) {
+      return showInfo(context, 'Cochez ou refusez chaque article.');
+    }
     final allRefused = _checklist.bought.isEmpty;
-    if (!allRefused && (_ref.text.trim().length < 3 || _amount.text.trim().isEmpty)) {
-      return showInfo(context, 'Saisissez la référence et le montant payé sur SHEIN.');
+    if (!allRefused &&
+        (_ref.text.trim().length < 3 || _amount.text.trim().isEmpty)) {
+      return showInfo(
+          context, 'Saisissez la référence et le montant payé sur SHEIN.');
     }
     setState(() => _busy = true);
     try {
-      final result = await ref.read(adminApiProvider).purchase(widget.order.id, {
+      final result =
+          await ref.read(adminApiProvider).purchase(widget.order.id, {
         'store_order_ref': allRefused ? 'AUCUN' : _ref.text.trim(),
-        'paid_amount': allRefused ? '0' : _amount.text.trim().replaceAll(',', '.'),
+        'paid_amount':
+            allRefused ? '0' : _amount.text.trim().replaceAll(',', '.'),
         'currency': _currency,
         'checked_item_ids': _checklist.bought,
         'refused_item_ids': _checklist.refused,
@@ -98,11 +113,16 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Le prix SHEIN a augmenté'),
-          content: const Text('Le montant payé dépasse le devis au-delà de la marge prévue. '
+          content: const Text(
+              'Le montant payé dépasse le devis au-delà de la marge prévue. '
               'Arrêtez-vous avant de payer SHEIN si vous voulez d’abord contacter le client.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            TextButton(onPressed: () => Navigator.pop(ctx, 'CONTACT_CUSTOMER'), child: const Text('Client contacté')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Annuler')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, 'CONTACT_CUSTOMER'),
+                child: const Text('Client contacté')),
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
               onPressed: () => Navigator.pop(ctx, 'ABSORB'),
@@ -122,30 +142,53 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
         children: [
           if (order.sourceCartUrl != null)
             FilledButton.tonalIcon(
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52)),
               icon: const Icon(Icons.open_in_new_rounded),
               label: const Text('Ouvrir dans SHEIN'),
               onPressed: () => openInShein(context, order.sourceCartUrl!),
             ),
           const SizedBox(height: 12),
-          const WarningBox('Vérifiez taille et couleur de chaque article par rapport au devis accepté — '
-              'c’est ce que le client a validé, pas le panier SHEIN actuel.'),
-          SectionTitle('Devis accepté n°${_quote.version}', trailing: Text(fcfa(_quote.totalXof))),
-          Card(
-            child: Column(children: [
-              for (final l in _quote.lines) _CheckRow(line: l, state: _checklist.states[l.orderItemId]!, onTap: () {
-                setState(() => _checklist.cycle(l.orderItemId));
-              }),
-            ]),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
-            child: Text('Touchez une ligne : ✓ acheté → ✗ indisponible → à faire', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-          ),
+          const WarningBox(
+              'Comparez le panier SHEIN avec le devis accepté : c’est ce que la cliente a validé.'),
+          SectionTitle('Devis accepté n°${_quote.version}',
+              trailing: Text(fcfa(_quote.totalXof))),
+          if (_quote.isCartMode) ...[
+            if (_quote.screenshotUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(_quote.screenshotUrl!,
+                    height: 320,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter),
+              ),
+            const SizedBox(height: 8),
+            Text('Panier SHEIN accepté : ${fcfa(_quote.itemsXof)}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ] else ...[
+            Card(
+              child: Column(children: [
+                for (final l in _quote.lines)
+                  _CheckRow(
+                      line: l,
+                      state: _checklist.states[l.orderItemId]!,
+                      onTap: () {
+                        setState(() => _checklist.cycle(l.orderItemId));
+                      }),
+              ]),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
+              child: Text(
+                  'Touchez une ligne : ✓ acheté → ✗ indisponible → à faire',
+                  style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            ),
+          ],
           const SectionTitle('Commande SHEIN'),
           TextField(
             controller: _ref,
-            decoration: const InputDecoration(labelText: 'Numéro de commande SHEIN'),
+            decoration:
+                const InputDecoration(labelText: 'Numéro de commande SHEIN'),
             textCapitalization: TextCapitalization.characters,
           ),
           const SizedBox(height: 10),
@@ -154,8 +197,11 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
               child: TextField(
                 controller: _amount,
                 decoration: const InputDecoration(labelText: 'Montant payé'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+                ],
               ),
             ),
             const SizedBox(width: 10),
@@ -170,7 +216,8 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
             ),
           ]),
           const SizedBox(height: 8),
-          Text('Livraison : entrepôt du transitaire, destinataire « ${order.publicRef} / Flariane ».',
+          Text(
+              'Livraison : entrepôt du transitaire, destinataire « ${order.publicRef} / Flariane ».',
               style: const TextStyle(color: AppColors.muted)),
         ],
       ),
@@ -180,7 +227,10 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
           child: FilledButton(
             onPressed: _busy || !_checklist.complete ? null : () => _submit(),
             child: _busy
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.5))
                 : const Text('Enregistrer l’achat'),
           ),
         ),
@@ -190,7 +240,8 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
 }
 
 class _CheckRow extends StatelessWidget {
-  const _CheckRow({required this.line, required this.state, required this.onTap});
+  const _CheckRow(
+      {required this.line, required this.state, required this.onTap});
 
   final QuoteLine line;
   final LineCheck state;
@@ -199,16 +250,33 @@ class _CheckRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color, label) = switch (state) {
-      LineCheck.unchecked => (Icons.check_box_outline_blank_rounded, AppColors.muted, 'à faire'),
-      LineCheck.bought => (Icons.check_box_rounded, AppColors.success, 'acheté'),
-      LineCheck.refused => (Icons.cancel_rounded, AppColors.danger, 'indisponible'),
+      LineCheck.unchecked => (
+          Icons.check_box_outline_blank_rounded,
+          AppColors.muted,
+          'à faire'
+        ),
+      LineCheck.bought => (
+          Icons.check_box_rounded,
+          AppColors.success,
+          'acheté'
+        ),
+      LineCheck.refused => (
+          Icons.cancel_rounded,
+          AppColors.danger,
+          'indisponible'
+        ),
     };
     return ListTile(
       onTap: onTap,
       minVerticalPadding: 12,
       leading: Icon(icon, color: color, size: 30, semanticLabel: label),
-      title: Text('${line.qty} × ${line.title}', style: TextStyle(decoration: state == LineCheck.refused ? TextDecoration.lineThrough : null)),
-      subtitle: Text(line.variant.isEmpty ? '—' : line.variant, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text('${line.qty} × ${line.title}',
+          style: TextStyle(
+              decoration: state == LineCheck.refused
+                  ? TextDecoration.lineThrough
+                  : null)),
+      subtitle: Text(line.variant.isEmpty ? '—' : line.variant,
+          style: const TextStyle(fontWeight: FontWeight.w600)),
       trailing: Text(fcfa(line.lineTotalXof)),
     );
   }

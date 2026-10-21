@@ -142,7 +142,8 @@ class OrderAttachment(TimestampMixin, Base):
     __tablename__ = "order_attachments"
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
-    kind: Mapped[str] = mapped_column(String(24), default="CART_SCREENSHOT")
+    kind: Mapped[str] = mapped_column(String(24), default="CART_SCREENSHOT")  # | QUOTE_SCREENSHOT
+    quote_id: Mapped[int | None] = mapped_column(ForeignKey("quotes.id"), index=True)  # QUOTE_SCREENSHOT only
     storage_key: Mapped[str] = mapped_column(String(200))
     content_type: Mapped[str] = mapped_column(String(40))
 

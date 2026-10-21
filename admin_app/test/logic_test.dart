@@ -69,53 +69,22 @@ void main() {
   });
 
   group('QuoteDraftModel', () {
-    test('new order starts with one empty line and is invalid', () {
+    test('new order starts empty and is invalid', () {
       final m = QuoteDraftModel.fromOrder(OrderDetail.fromJson(orderJson()));
-      expect(m.lines, hasLength(1));
+      expect(m.cartPriceXof, isNull);
       expect(m.isValid, isFalse);
     });
 
-    test('change request is applied on top of the last sent quote', () {
-      final order = OrderDetail.fromJson(orderJson(
-        quotes: [quoteJson(version: 1, status: 'CHANGE_REQUESTED')],
-        changes: [
-          {
-            'quote_id': 1,
-            'new_cart_url': null,
-            'removed_item_ids': [11],
-            'line_changes': [
-              {'order_item_id': 10, 'size': 'L'},
-            ],
-            'note': 'En L svp',
-            'created_at': '2026-10-21T19:00:00Z',
-          }
-        ],
-      ));
-      final m = QuoteDraftModel.fromOrder(order);
-      expect(m.lines, hasLength(1));
-      expect(m.lines.single.id, 10);
-      expect(m.lines.single.size, 'L');
-      expect(m.feeXof, 3000, reason: 'fee is kept');
-      expect(m.freightXof, isNull, reason: 'freight goes back to automatic when lines change');
+    test('a correction starts from the last sent quote', () {
+      final m = QuoteDraftModel.fromOrder(OrderDetail.fromJson(orderJson(quotes: [quoteJson(version: 1, status: 'CHANGE_REQUESTED')])));
+      expect(m.cartPriceXof, 19673);
+      expect(m.freightXof, 9000);
       expect(m.isValid, isTrue);
     });
 
-    test('toJson normalises comma prices and empty variants', () {
-      final m = QuoteDraftModel(lines: [DraftLine(title: ' Robe ', qty: 2, price: '12,5', size: ' ')], feeXof: 2500);
-      final j = m.toJson();
-      final item = (j['items'] as List).single as Map<String, dynamic>;
-      expect(item['title'], 'Robe');
-      expect(item['source_price'], '12.5');
-      expect(item['size'], isNull);
-      expect(item.containsKey('id'), isFalse);
-      expect(j['fee_xof'], 2500);
-      expect(j['freight_xof'], isNull);
-    });
-
-    test('validation messages', () {
-      expect(QuoteDraftModel(lines: [DraftLine(title: 'x', price: 'abc')], feeXof: 1).error, contains('Prix invalide'));
-      expect(QuoteDraftModel(lines: [DraftLine(title: 'x', price: '1')]).error, 'Saisissez les frais de service');
-      expect(QuoteDraftModel(lines: [DraftLine(title: 'x', price: '1', qty: 0)], feeXof: 1).error, contains('Quantité'));
+    test('toJson', () {
+      final j = QuoteDraftModel(cartPriceXof: 32500, note: '  ').toJson();
+      expect(j, {'cart_price_xof': 32500, 'freight_xof': null, 'admin_note': null});
     });
 
     test('parseFcfa', () {

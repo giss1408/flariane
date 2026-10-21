@@ -316,7 +316,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   DateTime? _departure;
 
   static const intFields = {
-    'freight_per_item_xof': 'Transport par article (FCFA)',
+    'freight_default_xof': 'Transport par défaut d’un devis (FCFA)',
     'min_fee_xof': 'Frais de service minimum (FCFA)',
     'quote_validity_hours': 'Validité du devis (heures)',
   };
@@ -380,7 +380,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         firstDate: now,
                         lastDate: now.add(const Duration(days: 365)),
                       );
-                      if (picked != null) setState(() => _departure = picked);
+                      if (picked == null) return;
+                      setState(() => _departure = picked);
+                      // Saved immediately: the date is what customers see on their home screen.
+                      final iso = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                      try {
+                        await ref.read(adminApiProvider).updateSettings({'next_departure_date': iso});
+                        if (context.mounted) showInfo(context, 'Prochain départ enregistré.');
+                      } catch (e) {
+                        if (context.mounted) showError(context, e);
+                      }
                     },
                   ),
                 ),

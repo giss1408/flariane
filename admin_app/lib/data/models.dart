@@ -161,6 +161,7 @@ class Quote {
     required this.minFeeXof,
     required this.feeBelowMinimum,
     required this.lines,
+    this.screenshotUrl,
   });
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -180,6 +181,7 @@ class Quote {
         minFeeXof: _int(j['min_fee_xof']) ?? 0,
         feeBelowMinimum: j['fee_below_minimum'] as bool? ?? false,
         lines: _list(j['lines'], QuoteLine.fromJson),
+        screenshotUrl: j['screenshot_url'] as String?,
       );
 
   final int id;
@@ -198,6 +200,9 @@ class Quote {
   final int minFeeXof;
   final bool feeBelowMinimum;
   final List<QuoteLine> lines;
+  final String? screenshotUrl;
+
+  bool get isCartMode => lines.isEmpty;
 }
 
 class ChangeRequest {

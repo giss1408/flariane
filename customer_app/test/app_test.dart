@@ -96,7 +96,7 @@ void main() {
     await tester.scrollUntilVisible(pay, 200);
     expect(tester.widget<FilledButton>(pay).onPressed, isNull);
 
-    await tester.tap(find.text('Tailles et couleurs vérifiées'));
+    await tester.tap(find.text('J’ai vérifié mon panier (tailles, couleurs)'));
     await tester.pump();
     expect(tester.widget<FilledButton>(pay).onPressed, isNotNull);
     expect(find.text('Modifier ma commande'), findsOneWidget);

@@ -16,6 +16,8 @@ DEFAULTS: dict[str, Any] = {
     "quote_validity_hours": 48,
     "price_increase_buffer_percent": 5,
     "store_currency_default": "EUR",
+    # Transport pre-filled on cart-mode quotes.
+    "freight_default_xof": 5000,
     # Next weekly shipment leaving for Abidjan (ISO date), shown to customers. None hides the card.
     "next_departure_date": None,
 }

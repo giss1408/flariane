@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
 import '../../core/format.dart';
@@ -13,8 +14,7 @@ import '../../widgets/common.dart';
 import '../order/order_screen.dart';
 import 'quote_draft.dart';
 
-const currencies = ['EUR', 'USD', 'XOF'];
-
+/// Quote = screenshot of the SHEIN cart + cart price + transport. The customer sees the screenshot.
 class QuoteEditorScreen extends ConsumerStatefulWidget {
   const QuoteEditorScreen({super.key, required this.order});
 
@@ -26,9 +26,10 @@ class QuoteEditorScreen extends ConsumerStatefulWidget {
 
 class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   late final QuoteDraftModel _model = QuoteDraftModel.fromOrder(widget.order);
-  Quote? _saved; // last server response: authoritative totals
+  Quote? _saved; // last server response: authoritative totals and screenshot
   Timer? _debounce;
   bool _saving = false;
+  bool _uploading = false;
   bool _dirty = true;
   bool _sending = false;
   String? _saveError;
@@ -47,6 +48,8 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     super.dispose();
   }
 
+  String? get _screenshotUrl => _saved?.screenshotUrl ?? widget.order.latestSent?.screenshotUrl;
+
   void _changed() {
     setState(() => _dirty = true);
     _scheduleSave();
@@ -54,12 +57,12 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
 
   void _scheduleSave() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 900), _save);
+    _debounce = Timer(const Duration(milliseconds: 900), () => _save());
   }
 
   /// Autosave: the server stores the draft and returns computed totals.
-  Future<bool> _save() async {
-    if (!_model.isValid) return false;
+  Future<bool> _save({bool allowIncomplete = false}) async {
+    if (!_model.isValid && !allowIncomplete) return false;
     setState(() {
       _saving = true;
       _saveError = null;
@@ -80,8 +83,25 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     }
   }
 
+  Future<void> _pickScreenshot() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2000);
+    if (file == null) return;
+    setState(() => _uploading = true);
+    try {
+      _debounce?.cancel();
+      // The screenshot belongs to the draft: make sure one exists first.
+      if (_saved == null && !await _save(allowIncomplete: true)) return;
+      final quote = await ref.read(adminApiProvider).uploadQuoteScreenshot(widget.order.id, file.path);
+      if (mounted) setState(() => _saved = quote);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Future<void> _send() async {
-    final error = _model.error;
+    final error = _model.error ?? (_screenshotUrl == null ? 'Ajoute la capture du panier SHEIN' : null);
     if (error != null) return showInfo(context, error);
     setState(() => _sending = true);
     try {
@@ -92,28 +112,15 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
       final ok = await confirm(
         context,
         title: 'Envoyer le devis n°${quote.version} ?',
-        body: 'Total ${fcfa(quote.totalXof)}. Le client le reçoit sur WhatsApp et ne pourra plus le voir modifié — '
-            'toute correction créera une nouvelle version.',
+        body: 'Total ${fcfa(quote.totalXof)}. La cliente le reçoit avec la capture du panier. '
+            'Toute correction créera une nouvelle version.',
         ok: 'Envoyer',
       );
       if (!ok) return;
-      final api = ref.read(adminApiProvider);
-      try {
-        await api.sendQuote(widget.order.id, quote.version);
-      } on ApiException catch (e) {
-        if (e.code != 'fee_below_minimum' || !mounted) rethrow;
-        final low = await confirm(
-          context,
-          title: 'Frais sous le minimum',
-          body: 'Les frais de service (${fcfa(quote.feeXof)}) sont inférieurs au minimum (${fcfa(quote.minFeeXof)}). Envoyer quand même ?',
-          ok: 'Envoyer quand même',
-        );
-        if (!low) return;
-        await api.sendQuote(widget.order.id, quote.version, confirmLowFee: true);
-      }
+      await ref.read(adminApiProvider).sendQuote(widget.order.id, quote.version);
       ref.invalidate(orderProvider(widget.order.id));
       if (!mounted) return;
-      showInfo(context, 'Devis envoyé au client.');
+      showInfo(context, 'Devis envoyé à la cliente.');
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -139,37 +146,24 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             ),
           if (change != null) ...[
             const SizedBox(height: 12),
-            WarningBox('Modifications demandées appliquées ci-dessous.'
-                '${change.note == null ? '' : ' Note : « ${change.note} »'}'),
+            WarningBox('Modification demandée.${change.note == null ? '' : ' « ${change.note} »'}'
+                '${change.newCartUrl == null ? '' : ' Nouveau lien de panier ci-dessus.'}'),
           ],
-          const SectionTitle('Articles'),
-          for (final (i, line) in _model.lines.indexed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _LineEditor(
-                key: ObjectKey(line),
-                index: i,
-                line: line,
-                onChanged: _changed,
-                onRemove: _model.lines.length == 1
-                    ? null
-                    : () {
-                        setState(() => _model.lines.removeAt(i));
-                        _changed();
-                      },
-              ),
-            ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Ajouter un article'),
-            onPressed: () {
-              setState(() => _model.lines.add(DraftLine(currency: _model.lines.last.currency)));
+          const SectionTitle('Capture du panier SHEIN'),
+          _ScreenshotBox(url: _screenshotUrl, busy: _uploading, onPick: _pickScreenshot),
+          const SectionTitle('Montants'),
+          _AmountField(
+            label: 'Prix SHEIN du panier *',
+            initial: _model.cartPriceXof,
+            onChanged: (v) {
+              _model.cartPriceXof = v;
+              _changed();
             },
           ),
-          const SectionTitle('Frais'),
+          const SizedBox(height: 10),
           _AmountField(
-            label: 'Transport (vide = automatique)',
-            hint: _saved == null ? null : fcfa(_saved!.freightXof),
+            label: 'Transport (vide = 5 000 FCFA)',
+            hint: _saved == null ? '5000' : '${_saved!.freightXof}',
             initial: _model.freightXof,
             onChanged: (v) {
               _model.freightXof = v;
@@ -177,35 +171,11 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
             },
           ),
           const SizedBox(height: 10),
-          _AmountField(
-            label: 'Douane (vide = automatique)',
-            hint: _saved == null ? null : fcfa(_saved!.customsXof),
-            initial: _model.customsXof,
-            onChanged: (v) {
-              _model.customsXof = v;
-              _changed();
-            },
-          ),
-          const SizedBox(height: 10),
-          _AmountField(
-            label: 'Frais de service *',
-            initial: _model.feeXof,
-            autofocus: _model.feeXof == null && order.draft == null && order.latestSent != null,
-            onChanged: (v) {
-              _model.feeXof = v;
-              _changed();
-            },
-          ),
-          if (_saved != null && _saved!.feeBelowMinimum && !_dirty) ...[
-            const SizedBox(height: 8),
-            WarningBox('Frais sous le minimum (${fcfa(_saved!.minFeeXof)}).'),
-          ],
-          const SizedBox(height: 10),
           TextFormField(
             initialValue: _model.note,
             maxLines: 3,
             maxLength: 1000,
-            decoration: const InputDecoration(labelText: 'Message au client (optionnel)'),
+            decoration: const InputDecoration(labelText: 'Message à la cliente (optionnel)'),
             onChanged: (v) {
               _model.note = v;
               _changed();
@@ -225,18 +195,14 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               Expanded(child: _statusLine()),
               Text(
                 _saved == null ? '—' : fcfa(_saved!.totalXof),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: _dirty ? AppColors.muted : null,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _dirty ? AppColors.muted : null),
               ),
             ]),
             if (_saved != null && !_dirty)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Articles ${fcfa(_saved!.itemsXof)} · Transport ${fcfa(_saved!.freightXof)} · Douane ${fcfa(_saved!.customsXof)}',
+                  'Panier ${fcfa(_saved!.itemsXof)} + transport ${fcfa(_saved!.freightXof)}',
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
@@ -254,7 +220,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   }
 
   Widget _statusLine() {
-    final error = _model.error;
+    final error = _model.error ?? (_screenshotUrl == null ? 'Ajoute la capture du panier' : null);
     final (text, color) = switch (true) {
       _ when error != null => (error, AppColors.warning),
       _ when _saveError != null => (_saveError!, AppColors.danger),
@@ -266,115 +232,66 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
   }
 }
 
-class _LineEditor extends StatelessWidget {
-  const _LineEditor({super.key, required this.index, required this.line, required this.onChanged, this.onRemove});
+class _ScreenshotBox extends StatelessWidget {
+  const _ScreenshotBox({required this.url, required this.busy, required this.onPick});
 
-  final int index;
-  final DraftLine line;
-  final VoidCallback onChanged;
-  final VoidCallback? onRemove;
+  final String? url;
+  final bool busy;
+  final VoidCallback onPick;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(children: [
-            Row(children: [
-              Text('Article ${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              if (onRemove != null)
-                IconButton(tooltip: 'Retirer', icon: const Icon(Icons.delete_outline_rounded), onPressed: onRemove),
-            ]),
-            TextFormField(
-              initialValue: line.title,
-              decoration: const InputDecoration(labelText: 'Nom'),
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: (v) {
-                line.title = v;
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(
-                child: TextFormField(
-                  initialValue: line.size,
-                  decoration: const InputDecoration(labelText: 'Taille'),
-                  onChanged: (v) {
-                    line.size = v;
-                    onChanged();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  initialValue: line.color,
-                  decoration: const InputDecoration(labelText: 'Couleur'),
-                  onChanged: (v) {
-                    line.color = v;
-                    onChanged();
-                  },
-                ),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              SizedBox(
-                width: 76,
-                child: TextFormField(
-                  initialValue: '${line.qty}',
-                  decoration: const InputDecoration(labelText: 'Qté'),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-                  onChanged: (v) {
-                    line.qty = int.tryParse(v) ?? 0;
-                    onChanged();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  initialValue: line.price,
-                  decoration: const InputDecoration(labelText: 'Prix SHEIN unitaire'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-                  onChanged: (v) {
-                    line.price = v;
-                    onChanged();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<String>(
-                value: line.currency,
-                items: [for (final c in currencies) DropdownMenuItem(value: c, child: Text(c))],
-                onChanged: (v) {
-                  if (v == null) return;
-                  line.currency = v;
-                  onChanged(); // parent setState rebuilds this card with the new value
-                },
-              ),
-            ]),
+  Widget build(BuildContext context) {
+    if (busy) {
+      return const SizedBox(height: 160, child: Center(child: CircularProgressIndicator()));
+    }
+    if (url == null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onPick,
+        child: Container(
+          height: 160,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.primary, width: 1.5),
+          ),
+          child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.primary),
+            SizedBox(height: 8),
+            Text('Ajouter la capture du panier SHEIN', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text('La cliente la verra avant de payer', style: TextStyle(color: AppColors.muted, fontSize: 13)),
           ]),
         ),
       );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Capture du panier')),
+              body: InteractiveViewer(child: Center(child: Image.network(url!))),
+            ),
+          )),
+          child: Image.network(url!, height: 260, fit: BoxFit.cover, alignment: Alignment.topCenter),
+        ),
+      ),
+      TextButton.icon(onPressed: onPick, icon: const Icon(Icons.refresh_rounded), label: const Text('Remplacer la capture')),
+    ]);
+  }
 }
 
 class _AmountField extends StatelessWidget {
-  const _AmountField({required this.label, required this.initial, required this.onChanged, this.hint, this.autofocus = false});
+  const _AmountField({required this.label, required this.initial, required this.onChanged, this.hint});
 
   final String label;
   final String? hint;
   final int? initial;
   final ValueChanged<int?> onChanged;
-  final bool autofocus;
 
   @override
   Widget build(BuildContext context) => TextFormField(
         initialValue: initial?.toString() ?? '',
-        autofocus: autofocus,
         decoration: InputDecoration(labelText: label, hintText: hint, suffixText: 'FCFA'),
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],

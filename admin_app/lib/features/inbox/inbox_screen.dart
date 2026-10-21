@@ -22,7 +22,6 @@ const inboxTabs = [
   InboxTab('to_ship', 'À expédier'),
   InboxTab('in_transit', 'En route'),
   InboxTab('pickups', 'Retraits'),
-  InboxTab('refunds', 'Remb.'),
   InboxTab('done', 'Terminées'),
 ];
 

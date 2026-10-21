@@ -128,6 +128,11 @@ class AdminApi {
         (j) => Quote.fromJson(j as Map<String, dynamic>),
       );
 
+  Future<Quote> uploadQuoteScreenshot(int orderId, String path) => client.call(
+        (d) async => d.post('/admin/orders/$orderId/quote-screenshot', data: FormData.fromMap({'file': await MultipartFile.fromFile(path)})),
+        (j) => Quote.fromJson(j as Map<String, dynamic>),
+      );
+
   Future<Quote> sendQuote(int orderId, int version, {bool confirmLowFee = false}) => client.call(
         (d) => d.post('/admin/orders/$orderId/quotes/$version/send', data: {'confirm_low_fee': confirmLowFee}),
         (j) => Quote.fromJson(j as Map<String, dynamic>),

@@ -29,7 +29,7 @@ const statusLabels = {
   'QUOTED': 'Devis envoyé',
   'AWAITING_PAYMENT': 'Attente paiement',
   'PAID': 'Payée — à acheter',
-  'PURCHASED': 'Achetée',
+  'PURCHASED': 'Commandée',
   'IN_TRANSIT': 'En route',
   'ARRIVED': 'Arrivée',
   'READY_FOR_PICKUP': 'Prête au retrait',
@@ -67,5 +67,7 @@ const errorMessages = {
   'shipment_not_open': 'Cette expédition est déjà partie.',
   'order_not_purchased': 'Seules les commandes achetées peuvent être expédiées.',
   'order_already_in_shipment': 'Commande déjà dans une expédition.',
+  'cart_quote_incomplete': 'Ajoute la capture du panier et le prix SHEIN.',
+  'no_draft': 'Enregistre d’abord le devis.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

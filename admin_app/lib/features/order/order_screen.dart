@@ -283,6 +283,14 @@ class _QuoteSummary extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(children: [
+            if (q.screenshotUrl != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(q.screenshotUrl!, height: 200, width: double.infinity, fit: BoxFit.cover, alignment: Alignment.topCenter),
+                ),
+              ),
             for (final l in q.lines)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -292,10 +300,10 @@ class _QuoteSummary extends StatelessWidget {
                 ]),
               ),
             const Divider(),
-            AmountRow('Articles', q.itemsXof),
+            AmountRow(q.isCartMode ? 'Panier SHEIN' : 'Articles', q.itemsXof),
             AmountRow('Transport', q.freightXof),
-            AmountRow('Douane', q.customsXof),
-            AmountRow('Frais de service', q.feeXof),
+            if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
+            if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
             AmountRow('Total', q.totalXof, bold: true),
             if (q.expiresAt != null && q.status == 'SENT')
               Align(alignment: Alignment.centerLeft, child: Text('Valable jusqu’au ${dateTime(q.expiresAt)}', style: const TextStyle(color: AppColors.muted))),

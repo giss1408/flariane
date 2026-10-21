@@ -20,7 +20,7 @@ String date(DateTime when) => DateFormat('dd/MM/yyyy', 'fr').format(when.toLocal
 const steps = [
   ('QUOTE_REQUESTED', 'Devis'),
   ('AWAITING_PAYMENT', 'Payé'),
-  ('PURCHASED', 'Acheté'),
+  ('PURCHASED', 'Commandé'),
   ('IN_TRANSIT', 'En route'),
   ('ARRIVED', 'Arrivé'),
   ('READY_FOR_PICKUP', 'Prêt au retrait'),
@@ -44,7 +44,7 @@ const statusLabels = {
   'QUOTED': 'Devis prêt',
   'AWAITING_PAYMENT': 'En attente de paiement',
   'PAID': 'Payée',
-  'PURCHASED': 'Achetée',
+  'PURCHASED': 'Commandée',
   'IN_TRANSIT': 'En route',
   'ARRIVED': 'Arrivée à Abidjan',
   'READY_FOR_PICKUP': 'Prête au retrait',

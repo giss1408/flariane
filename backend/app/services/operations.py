@@ -81,6 +81,8 @@ async def record_purchase(db: AsyncSession, order_id: int, data: PurchaseIn, adm
 
     line_items = {line.order_item_id: line for line in quote.lines}
     checked, refused = set(data.checked_item_ids), set(data.refused_item_ids)
+    if not line_items:
+        return await _record_cart_purchase(db, order, quote, payment, data, admin_id, ip)
     if checked & refused:
         raise BadRequest("item_both_checked_and_refused")
     if checked | refused != set(line_items):
@@ -138,6 +140,27 @@ async def record_purchase(db: AsyncSession, order_id: int, data: PurchaseIn, adm
         ip=ip,
     )
     return {"status": order.status, "paid_xof": paid_xof, "quoted_items_xof": quoted_items, "refund_xof": refund_xof, "estimated_margin_xof": margin}
+
+
+async def _record_cart_purchase(db: AsyncSession, order: Order, quote, payment: Payment, data: PurchaseIn, admin_id: int, ip: str | None) -> dict[str, int | str]:  # type: ignore[no-untyped-def]
+    """Cart-mode quote (screenshot + cart price): the whole cart is bought at once."""
+    if data.checked_item_ids or data.refused_item_ids:
+        raise BadRequest("no_lines_in_cart_quote")
+    settings = await get_settings_map(db)
+    fx = {**settings["fx_rates"], **quote.fx_rates, "XOF": "1"}
+    if data.currency not in fx:
+        raise BadRequest("missing_fx_rate", data.currency)
+    paid_xof = to_xof(Decimal(data.paid_amount), data.currency, fx)
+    buffer = Decimal(str(settings["price_increase_buffer_percent"])) / 100
+    if paid_xof > quote.items_xof * (1 + buffer) and data.price_increase_decision is None:
+        raise Conflict("price_increase_decision_required", f"paid={paid_xof} quoted={quote.items_xof}")
+    db.add(StorePurchase(order_id=order.id, store="SHEIN", store_order_ref=data.store_order_ref, paid_amount=data.paid_amount,
+                         currency=data.currency, paid_xof=paid_xof, price_increase_decision=data.price_increase_decision, purchased_by=admin_id))
+    await transition_order(db, order, OrderStatus.PURCHASED, actor=f"admin:{admin_id}", actor_type="admin", actor_id=admin_id, ip=ip)
+    await audit(db, actor_type="admin", actor_id=admin_id, action="purchase.recorded", entity="order", entity_id=order.id,
+                after={"store_order_ref": data.store_order_ref, "paid_xof": paid_xof, "mode": "cart"}, ip=ip)
+    margin = payment.amount_xof - paid_xof - quote.freight_xof - quote.customs_xof
+    return {"status": order.status, "paid_xof": paid_xof, "quoted_items_xof": quote.items_xof, "refund_xof": 0, "estimated_margin_xof": margin}
 
 
 async def cancel_item_by_store(db: AsyncSession, order_id: int, item_id: int, reason: str, admin_id: int, ip: str | None) -> Refund:

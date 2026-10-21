@@ -106,6 +106,7 @@ class Quote {
     required this.note,
     required this.expiresAt,
     required this.lines,
+    this.screenshotUrl,
   });
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -119,6 +120,7 @@ class Quote {
         note: j['admin_note'] as String?,
         expiresAt: _date(j['expires_at']),
         lines: ((j['lines'] as List?) ?? []).cast<Map<String, dynamic>>().map(QuoteLine.fromJson).toList(),
+        screenshotUrl: j['screenshot_url'] as String?,
       );
 
   final int version;
@@ -131,6 +133,7 @@ class Quote {
   final String? note;
   final DateTime? expiresAt;
   final List<QuoteLine> lines;
+  final String? screenshotUrl;
 
   bool isOpen(DateTime now) => status == 'SENT' && expiresAt != null && expiresAt!.isAfter(now);
 }

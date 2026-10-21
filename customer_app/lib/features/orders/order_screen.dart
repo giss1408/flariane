@@ -236,6 +236,10 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         if (q.expiresAt != null && open) Text('valable jusqu’au ${dateTime(q.expiresAt)}', style: const TextStyle(color: AppColors.muted)),
       ]),
       const SizedBox(height: 8),
+      if (q.screenshotUrl != null) ...[
+        CartScreenshot(url: q.screenshotUrl!),
+        const SizedBox(height: 10),
+      ],
       for (final l in q.lines)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -251,10 +255,10 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(children: [
-            AmountRow('Articles', q.itemsXof),
-            AmountRow('Transport', q.freightXof),
-            AmountRow('Douane', q.customsXof),
-            AmountRow('Frais de service', q.feeXof),
+            AmountRow(q.lines.isEmpty ? 'Panier SHEIN' : 'Articles', q.itemsXof),
+            AmountRow('Transport jusqu’à Abidjan', q.freightXof),
+            if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
+            if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
             const Divider(),
             AmountRow('Total', q.totalXof, bold: true),
           ]),
@@ -271,7 +275,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
           onChanged: (v) => setState(() => _sizesChecked = v ?? false),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Tailles et couleurs vérifiées'),
+          title: const Text('J’ai vérifié mon panier (tailles, couleurs)'),
           subtitle: const Text('Les articles ne peuvent pas être retournés.'),
         ),
         FilledButton(
@@ -458,4 +462,48 @@ class _ChangeRequestSheetState extends ConsumerState<ChangeRequestSheet> {
       ),
     );
   }
+}
+
+/// The SHEIN cart exactly as quoted. Tap to zoom.
+class CartScreenshot extends StatelessWidget {
+  const CartScreenshot({super.key, required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Ton panier SHEIN')),
+            body: InteractiveViewer(maxScale: 5, child: Center(child: Image.network(url))),
+          ),
+        )),
+        child: Stack(children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Image.network(
+              url,
+              height: 320,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              loadingBuilder: (c, child, p) => p == null ? child : const SizedBox(height: 320, child: Center(child: CircularProgressIndicator())),
+              errorBuilder: (_, __, ___) => const SizedBox(height: 120, child: Center(child: Text('Capture indisponible, tire pour rafraîchir'))),
+            ),
+          ),
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: AppColors.plum.withOpacity(0.8), borderRadius: BorderRadius.circular(20)),
+              child: const Row(children: [
+                Icon(Icons.zoom_in_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 4),
+                Text('Voir mon panier', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ]),
+      );
 }

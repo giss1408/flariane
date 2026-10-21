@@ -168,13 +168,19 @@ async def _order_for(db: AsyncSession, customer: Customer, ref: str) -> Order:
     return order
 
 
-def _quote_out(q) -> QuoteOut:  # type: ignore[no-untyped-def]
+def _quote_out(q, screenshot_url: str | None = None) -> QuoteOut:  # type: ignore[no-untyped-def]
     return QuoteOut(
         version=q.version, status=q.status, items_xof=q.items_xof, freight_xof=q.freight_xof,
         customs_xof=q.customs_xof, fee_xof=q.fee_xof, total_xof=q.total_xof, admin_note=q.admin_note,
         expires_at=q.expires_at, sent_at=q.sent_at,
         lines=[QuoteLineOut.model_validate(line) for line in q.lines],
+        screenshot_url=screenshot_url,
     )
+
+
+async def _quote_shot(db: AsyncSession, quote_id: int) -> str | None:
+    shot = await quotes.quote_screenshot(db, quote_id)
+    return storage.signed_url(shot.storage_key) if shot else None
 
 
 async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
@@ -182,7 +188,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
     payment = await db.scalar(select(Payment).where(Payment.order_id == order.id).order_by(Payment.id.desc()).limit(1))
     history = (await db.scalars(select(OrderStatusHistory).where(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.id))).all()
     point = await db.get(PickupPoint, order.pickup_point_id) if order.pickup_point_id else None
-    attachments = await db.scalar(select(func.count()).select_from(OrderAttachment).where(OrderAttachment.order_id == order.id)) or 0
+    attachments = await db.scalar(select(func.count()).select_from(OrderAttachment).where(OrderAttachment.order_id == order.id, OrderAttachment.kind == "CART_SCREENSHOT")) or 0
     expired = quote is not None and (
         quote.status == QuoteStatus.EXPIRED
         or (quote.status == QuoteStatus.SENT and quote.expires_at is not None and quote.expires_at <= utcnow())
@@ -198,7 +204,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         customer_note=order.customer_note,
         pickup_point=PickupPointOut.model_validate(point) if point else None,
         delivery_location=_location_out(order.delivery_commune, order.delivery_location_enc),
-        quote=_quote_out(quote) if quote else None,
+        quote=_quote_out(quote, await _quote_shot(db, quote.id)) if quote else None,
         payment=PaymentOut(status=payment.status, amount_xof=payment.amount_xof, launch_url=payment.launch_url) if payment else None,
         history=[StatusEventOut.model_validate(h) for h in history],
         attachments=attachments,
@@ -267,7 +273,7 @@ async def upload_attachment(ref: str, file: UploadFile = File(...), customer: Cu
     order = await _order_for(db, customer, ref)
     if order.status not in (OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED):
         raise Conflict("attachments_closed")
-    count = await db.scalar(select(func.count()).select_from(OrderAttachment).where(OrderAttachment.order_id == order.id)) or 0
+    count = await db.scalar(select(func.count()).select_from(OrderAttachment).where(OrderAttachment.order_id == order.id, OrderAttachment.kind == "CART_SCREENSHOT")) or 0
     if count >= get_settings().max_attachments_per_order:
         raise Conflict("too_many_attachments")
     raw = await file.read(get_settings().max_upload_mb * 1024 * 1024 + 1)

@@ -260,3 +260,35 @@ async def test_location_snapshot_and_dispatch(client: AsyncClient, customer: dic
 
     groups = (await client.get("/admin/dispatch?statuses=QUOTE_REQUESTED", headers=admin.headers)).json()
     assert groups[0]["commune"] == "Yopougon" and groups[0]["orders"][0]["public_ref"] == ref
+
+
+async def test_cart_mode_quote_with_screenshot(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    import io
+
+    from PIL import Image
+
+    from tests.conftest import pay
+
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    r = await client.put(f"/admin/orders/{oid}/quote-draft", json={"cart_price_xof": 32500}, headers=admin.headers)
+    q = r.json()
+    assert r.status_code == 200 and q["freight_xof"] == 5000 and q["total_xof"] == 37500 and q["lines"] == []
+    # Can't send without the cart screenshot.
+    r = await client.post(f"/admin/orders/{oid}/quotes/1/send", json={}, headers=admin.headers)
+    assert r.status_code == 400 and r.json()["detail"] == "cart_quote_incomplete"
+    buf = io.BytesIO()
+    Image.new("RGB", (30, 30), "pink").save(buf, format="PNG")
+    r = await client.post(f"/admin/orders/{oid}/quote-screenshot", files={"file": ("cart.png", buf.getvalue(), "image/png")}, headers=admin.headers)
+    assert r.status_code == 200 and r.json()["screenshot_url"]
+    assert (await client.post(f"/admin/orders/{oid}/quotes/1/send", json={}, headers=admin.headers)).status_code == 200
+
+    detail = (await client.get(f"/orders/{ref}", headers=customer)).json()
+    assert detail["quote"]["total_xof"] == 37500 and detail["quote"]["screenshot_url"]
+    assert detail["attachments"] == 0  # the quote screenshot isn't one of her uploads
+
+    p = (await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)).json()
+    assert await pay(client, p["launch_url"]) == 200
+    r = await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH9", "paid_amount": "32500", "currency": "XOF"}, headers=admin.headers)
+    assert r.status_code == 200 and r.json()["estimated_margin_xof"] == 0
+

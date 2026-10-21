@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -68,13 +68,14 @@ TABS: dict[str, list[OrderStatus]] = {
 }
 
 
-def admin_quote_out(q: Quote, min_fee: int) -> AdminQuoteOut:
+def admin_quote_out(q: Quote, min_fee: int, screenshot_url: str | None = None) -> AdminQuoteOut:
     return AdminQuoteOut(
         id=q.id, version=q.version, status=q.status, items_xof=q.items_xof, freight_xof=q.freight_xof,
         customs_xof=q.customs_xof, fee_xof=q.fee_xof, total_xof=q.total_xof, admin_note=q.admin_note,
         expires_at=q.expires_at, sent_at=q.sent_at, fx_rates=q.fx_rates, created_by=q.created_by,
         answered_at=q.answered_at, min_fee_xof=min_fee, fee_below_minimum=q.fee_xof < min_fee,
         lines=[QuoteLineOut.model_validate(line) for line in q.lines],
+        screenshot_url=screenshot_url,
     )
 
 
@@ -115,6 +116,11 @@ async def inbox(
     ]
 
 
+async def _shot_url(db: AsyncSession, quote_id: int) -> str | None:
+    shot = await quotes.quote_screenshot(db, quote_id)
+    return storage.signed_url(shot.storage_key) if shot else None
+
+
 def _location(commune: str | None, blob: bytes | None) -> LocationOut | None:
     data = loc.unpack(commune, blob)
     return LocationOut(**data) if data else None
@@ -136,7 +142,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         await db.scalars(select(QuoteChangeRequest).where(QuoteChangeRequest.quote_id.in_(quote_ids)).order_by(QuoteChangeRequest.id.desc()))
     ).all() if quote_ids else []
     items = (await db.scalars(select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id))).all()
-    attachments = (await db.scalars(select(OrderAttachment).where(OrderAttachment.order_id == order.id))).all()
+    attachments = (await db.scalars(select(OrderAttachment).where(OrderAttachment.order_id == order.id, OrderAttachment.kind == "CART_SCREENSHOT"))).all()
     payments = (await db.scalars(select(Payment).where(Payment.order_id == order.id).order_by(Payment.id.desc()))).all()
     purchase = await db.scalar(select(StorePurchase).where(StorePurchase.order_id == order.id))
     history = (await db.scalars(select(OrderStatusHistory).where(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.id))).all()
@@ -156,7 +162,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         pickup_point=PickupPointOut.model_validate(point) if point else None,
         delivery_location=_location(order.delivery_commune, order.delivery_location_enc),
         items=[OrderItemOut.model_validate(i) for i in items],
-        quotes=[admin_quote_out(q, min_fee) for q in all_quotes],
+        quotes=[admin_quote_out(q, min_fee, await _shot_url(db, q.id)) for q in all_quotes],
         change_requests=[ChangeRequestOut.model_validate(c) for c in changes],
         attachments=[AttachmentOut(id=a.id, url=storage.signed_url(a.storage_key), content_type=a.content_type) for a in attachments],
         payments=[PaymentOut(status=p.status, amount_xof=p.amount_xof, launch_url=None) for p in payments],
@@ -187,7 +193,21 @@ async def save_draft(order_id: int, data: QuoteDraftIn, admin: AdminContext = op
     quote, meta = await quotes.save_draft(db, order_id, data, admin.id)
     await db.commit()
     await db.refresh(quote, ["lines"])
-    return admin_quote_out(quote, meta["min_fee_xof"])
+    return admin_quote_out(quote, meta["min_fee_xof"], await _shot_url(db, quote.id))
+
+
+@router.post("/{order_id}/quote-screenshot", response_model=AdminQuoteOut)
+async def upload_quote_screenshot(order_id: int, file: UploadFile = File(...), admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> AdminQuoteOut:
+    """Screenshot of the SHEIN cart as quoted; shown to the customer before she pays."""
+    raw = await file.read(10 * 1024 * 1024 + 1)
+    data, content_type, ext = storage.sanitize_image(raw)
+    key = storage.new_key(order_id, ext)
+    storage.put(key, data, content_type)
+    quote = await quotes.attach_quote_screenshot(db, order_id, key, content_type)
+    settings = await get_settings_map(db)
+    await db.commit()
+    await db.refresh(quote, ["lines"])
+    return admin_quote_out(quote, int(settings["min_fee_xof"]), storage.signed_url(key))
 
 
 @router.post("/{order_id}/quotes/{version}/send", response_model=AdminQuoteOut)
@@ -196,7 +216,7 @@ async def send(order_id: int, version: int, data: SendQuoteIn, request: Request,
     settings = await get_settings_map(db)
     await db.commit()
     await db.refresh(quote, ["lines"])
-    return admin_quote_out(quote, int(settings["min_fee_xof"]))
+    return admin_quote_out(quote, int(settings["min_fee_xof"]), await _shot_url(db, quote.id))
 
 
 @router.post("/{order_id}/purchase", response_model=PurchaseOut)

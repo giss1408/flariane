@@ -169,6 +169,7 @@ class QuoteOut(Out):
     expires_at: datetime | None
     sent_at: datetime | None
     lines: list[QuoteLineOut]
+    screenshot_url: str | None = None  # SHEIN cart as quoted (cart mode)
 
 
 class StatusEventOut(Out):
@@ -237,10 +238,14 @@ class DraftItemIn(In):
 
 
 class QuoteDraftIn(In):
-    items: list[DraftItemIn] = Field(min_length=1, max_length=100)
+    """Two modes. Cart mode (used by the app): `cart_price_xof` = SHEIN cart total in FCFA,
+    proven by a cart screenshot; quote = cart + transport. Item mode: one line per article."""
+
+    cart_price_xof: Annotated[int, Field(ge=0, le=50_000_000)] | None = None
+    items: list[DraftItemIn] = Field(default_factory=list, max_length=100)
     freight_xof: Annotated[int, Field(ge=0, le=10_000_000)] | None = None
     customs_xof: Annotated[int, Field(ge=0, le=10_000_000)] | None = None
-    fee_xof: Annotated[int, Field(ge=0, le=10_000_000)]
+    fee_xof: Annotated[int, Field(ge=0, le=10_000_000)] = 0
     fx_rates: dict[Currency, Annotated[Decimal, Field(gt=0, le=100000)]] | None = None
     admin_note: Note = None
     validity_hours: Annotated[int, Field(ge=1, le=168)] | None = None
@@ -410,6 +415,7 @@ class SettingsIn(In):
     quote_validity_hours: Annotated[int, Field(ge=1, le=168)] | None = None
     price_increase_buffer_percent: Annotated[float, Field(ge=0, le=100)] | None = None
     store_currency_default: Currency | None = None
+    freight_default_xof: Annotated[int, Field(ge=0)] | None = None
     next_departure_date: date | None = None
 
 

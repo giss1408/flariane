@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.enums import OrderStatus, PaymentStatus, QuoteStatus
 from app.errors import BadRequest, Conflict, NotFound
-from app.models import Customer, Order, OrderItem, Payment, Quote, QuoteChangeRequest, QuoteLine
+from app.models import Customer, Order, OrderAttachment, OrderItem, Payment, Quote, QuoteChangeRequest, QuoteLine
 from app.schemas import ChangeRequestIn, QuoteDraftIn
 from app.security.tokens import utcnow
 from app.services import notify
@@ -65,6 +65,10 @@ async def save_draft(db: AsyncSession, order_id: int, data: QuoteDraftIn, admin_
         raise Conflict("order_not_quotable", order.status)
 
     settings = await get_settings_map(db)
+    if data.cart_price_xof is not None:
+        return await _save_cart_draft(db, order, data, admin_id, settings)
+    if not data.items:
+        raise BadRequest("empty_quote")
     fx_rates = {k: str(v) for k, v in (data.fx_rates or {}).items()} or dict(settings["fx_rates"])
     for item in data.items:
         if item.source_currency not in fx_rates:
@@ -147,6 +151,56 @@ async def save_draft(db: AsyncSession, order_id: int, data: QuoteDraftIn, admin_
     return quote, meta
 
 
+async def _draft_for(db: AsyncSession, order: Order, admin_id: int) -> Quote:
+    """The open draft, or a new version. A new version reuses the previous cart screenshot."""
+    latest = await latest_quote(db, order.id)
+    if latest is not None and latest.status == QuoteStatus.DRAFT:
+        await db.refresh(latest, ["lines"])
+        latest.lines.clear()
+        return latest
+    quote = Quote(order_id=order.id, version=(latest.version + 1) if latest else 1, status=QuoteStatus.DRAFT, created_by=admin_id, lines=[])
+    db.add(quote)
+    await db.flush()
+    if latest is not None:
+        prev = await quote_screenshot(db, latest.id)
+        if prev is not None:
+            db.add(OrderAttachment(order_id=order.id, kind="QUOTE_SCREENSHOT", quote_id=quote.id,
+                                   storage_key=prev.storage_key, content_type=prev.content_type))
+    return quote
+
+
+async def _save_cart_draft(db: AsyncSession, order: Order, data: QuoteDraftIn, admin_id: int, settings: dict[str, Any]) -> tuple[Quote, dict[str, Any]]:
+    quote = await _draft_for(db, order, admin_id)
+    freight = data.freight_xof if data.freight_xof is not None else int(settings["freight_default_xof"])
+    customs = data.customs_xof or 0
+    quote.items_xof, quote.freight_xof, quote.customs_xof, quote.fee_xof = data.cart_price_xof, freight, customs, data.fee_xof
+    quote.total_xof = (data.cart_price_xof or 0) + freight + customs + data.fee_xof
+    quote.fx_rates, quote.admin_note, quote.expires_at = dict(settings["fx_rates"]), data.admin_note, None
+    quote.validity_hours = data.validity_hours or int(settings["quote_validity_hours"])
+    await db.flush()
+    return quote, {"min_fee_xof": int(settings["min_fee_xof"])}
+
+
+async def quote_screenshot(db: AsyncSession, quote_id: int) -> OrderAttachment | None:
+    return await db.scalar(
+        select(OrderAttachment)
+        .where(OrderAttachment.quote_id == quote_id, OrderAttachment.kind == "QUOTE_SCREENSHOT")
+        .order_by(OrderAttachment.id.desc())
+        .limit(1)
+    )
+
+
+async def attach_quote_screenshot(db: AsyncSession, order_id: int, storage_key: str, content_type: str) -> Quote:
+    order = await lock_order(db, id=order_id)
+    if order is None:
+        raise NotFound()
+    quote = await latest_quote(db, order.id)
+    if quote is None or quote.status != QuoteStatus.DRAFT:
+        raise Conflict("no_draft")
+    db.add(OrderAttachment(order_id=order.id, kind="QUOTE_SCREENSHOT", quote_id=quote.id, storage_key=storage_key, content_type=content_type))
+    return quote
+
+
 async def send_quote(db: AsyncSession, order_id: int, version: int, admin_id: int, confirm_low_fee: bool, ip: str | None) -> Quote:
     order = await lock_order(db, id=order_id)
     if order is None:
@@ -154,12 +208,13 @@ async def send_quote(db: AsyncSession, order_id: int, version: int, admin_id: in
     quote = await latest_quote(db, order.id, with_lines=True)
     if quote is None or quote.version != version or quote.status != QuoteStatus.DRAFT:
         raise Conflict("draft_outdated")
-    if not quote.lines:
-        raise BadRequest("empty_quote")
+    cart_mode = not quote.lines
+    if cart_mode and (quote.items_xof <= 0 or await quote_screenshot(db, quote.id) is None):
+        raise BadRequest("cart_quote_incomplete", "Capture du panier et prix SHEIN requis")
     if order.status not in (OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED):
         raise Conflict("order_not_quotable", order.status)
     settings = await get_settings_map(db)
-    if quote.fee_xof < int(settings["min_fee_xof"]) and not confirm_low_fee:
+    if not cart_mode and quote.fee_xof < int(settings["min_fee_xof"]) and not confirm_low_fee:
         raise Conflict("fee_below_minimum", str(settings["min_fee_xof"]))
 
     now = utcnow()
