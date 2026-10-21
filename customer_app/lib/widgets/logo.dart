@@ -2,7 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Flariane mark: a stylised "F" on a deep-teal → gold gradient tile, with a small
+import '../core/theme.dart';
+
+/// Flariane mark: a stylised "F" on a bissap → plum gradient tile, with a small
 /// gold "spark" at the end of the top bar (the parcel arriving).
 class FlarianeLogo extends StatelessWidget {
   const FlarianeLogo({super.key, this.size = 72, this.withWordmark = false});
@@ -23,10 +25,10 @@ class FlarianeLogo extends StatelessWidget {
         mark,
         SizedBox(height: size * 0.18),
         ShaderMask(
-          shaderCallback: (r) => const LinearGradient(colors: [Color(0xFF0F5F5C), Color(0xFF2A9D8F), Color(0xFFC9A227)]).createShader(r),
+          shaderCallback: (r) => const LinearGradient(colors: [Color(0xFFB5164F), Color(0xFFE0457B), Color(0xFFFFB020)]).createShader(r),
           child: Text(
             'Flariane',
-            style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w800, letterSpacing: 0.5, color: Colors.white),
+            style: display(size * 0.46, color: Colors.white),
           ),
         ),
       ]),
@@ -41,14 +43,14 @@ class _MarkPainter extends CustomPainter {
     final tile = RRect.fromRectAndRadius(Offset.zero & s, Radius.circular(w * 0.28));
 
     // Tile: diagonal teal gradient with a soft glow.
-    canvas.drawShadow(Path()..addRRect(tile), const Color(0xFF0F5F5C), w * 0.06, false);
+    canvas.drawShadow(Path()..addRRect(tile), const Color(0xFFB5164F), w * 0.06, false);
     canvas.drawRRect(
       tile,
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0B4F4C), Color(0xFF14807A), Color(0xFF2A9D8F)],
+          colors: [Color(0xFF5B1048), Color(0xFFB5164F), Color(0xFFE0457B)],
         ).createShader(Offset.zero & s),
     );
     // Sheen across the top-left.
@@ -85,7 +87,7 @@ class _MarkPainter extends CustomPainter {
       final p = c + Offset(math.cos(a) * r, math.sin(a) * r);
       i == 0 ? spark.moveTo(p.dx, p.dy) : spark.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(spark..close(), Paint()..color = const Color(0xFFE9C46A));
+    canvas.drawPath(spark..close(), Paint()..color = const Color(0xFFFFB020));
   }
 
   @override
@@ -116,8 +118,8 @@ class FlarianeHeader extends StatelessWidget implements PreferredSizeWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             ShaderMask(
-              shaderCallback: (r) => const LinearGradient(colors: [Color(0xFF0F5F5C), Color(0xFF2A9D8F), Color(0xFFC9A227)]).createShader(r),
-              child: const Text('Flariane', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+              shaderCallback: (r) => const LinearGradient(colors: [Color(0xFFB5164F), Color(0xFFE0457B), Color(0xFFFFB020)]).createShader(r),
+              child: Text('Flariane', style: display(22, color: Colors.white)),
             ),
             if (subtitle != null)
               Text(subtitle!, style: TextStyle(fontSize: 13, color: muted), overflow: TextOverflow.ellipsis),
@@ -130,7 +132,7 @@ class FlarianeHeader extends StatelessWidget implements PreferredSizeWidget {
         child: Container(
           height: 2,
           decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [Color(0xFF0F5F5C), Color(0xFF2A9D8F), Color(0xFFE9C46A)]),
+            gradient: LinearGradient(colors: [Color(0xFFB5164F), Color(0xFFE0457B), Color(0xFFFFB020), Color(0xFF38D6AE)]),
           ),
         ),
       ),

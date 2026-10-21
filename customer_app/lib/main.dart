@@ -60,7 +60,7 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> {
       title: 'Flariane',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.light, // the bissap & blush palette is designed for light backgrounds
       locale: const Locale('fr'),
       supportedLocales: const [Locale('fr'), Locale('en')],
       localizationsDelegates: const [
