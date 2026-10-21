@@ -205,3 +205,17 @@ async def test_second_device_still_needs_approval(client: AsyncClient, admin: Ad
     r = await client.post("/admin/auth/login", json={"email": admin.user.email, "password": admin.password,
                                                       "totp": pyotp.TOTP(admin.totp_secret).now(), "device": {"name": "Tab", "platform": "android"}})
     assert r.json()["status"] == "device_pending"
+
+
+async def test_setup_retires_legacy_dev_admin(client: AsyncClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from app.config import get_settings
+
+    legacy = await make_admin(email="dev@flariane.ci")  # has an approved device
+    monkeypatch.setattr(get_settings(), "setup_token", "tok")
+    body = {"email": "boss@flariane.ci", "name": "Boss", "role": "SUPER_ADMIN", "password": "a-long-password-123"}
+    r = await client.post("/setup/first-admin", json=body, headers={"x-setup-token": "tok"})
+    assert r.status_code == 200
+    assert (await client.get("/admin/auth/me", headers=legacy.headers)).status_code == 401
+    r = await client.post("/admin/auth/login", json={"email": "boss@flariane.ci", "password": "a-long-password-123",
+                                                      "totp": pyotp.TOTP(r.json()["totp_secret"]).now(), "device": {"name": "P", "platform": "android"}})
+    assert r.json()["status"] == "ok"

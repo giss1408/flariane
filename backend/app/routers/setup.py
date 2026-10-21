@@ -13,12 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
-from app.models import AdminUser
+from app.models import AdminDevice, AdminUser
 from app.ratelimit import ip_limited
 from app.schemas import AdminUserIn
 from app.security.crypto import encrypt, hash_password
 from app.security.deps import client_ip
+from app.security.tokens import revoke_device_tokens, utcnow
 from app.services.audit import audit
+
+LEGACY_DEV_ADMIN = "dev@flariane.ci"
 
 router = APIRouter(prefix="/setup", tags=["setup"], include_in_schema=False, dependencies=[Depends(ip_limited)])
 
@@ -33,7 +36,15 @@ async def first_admin(
     expected = get_settings().setup_token
     if not expected or not hmac.compare_digest(expected.encode(), x_setup_token.encode()):
         raise HTTPException(status_code=403, detail="setup_disabled")
-    if await db.scalar(select(func.count()).select_from(AdminUser)):
+    # The removed password-less test login left a placeholder admin (dev@flariane.ci) that nobody
+    # can sign in with: retire it and its devices so it doesn't block setup or the device bootstrap.
+    legacy = await db.scalar(select(AdminUser).where(AdminUser.email == LEGACY_DEV_ADMIN))
+    if legacy is not None and legacy.active:
+        legacy.active = False
+        for device in (await db.scalars(select(AdminDevice).where(AdminDevice.admin_user_id == legacy.id))).all():
+            device.revoked_at = device.revoked_at or utcnow()
+            await revoke_device_tokens(db, device.id)
+    if await db.scalar(select(func.count()).select_from(AdminUser).where(AdminUser.email != LEGACY_DEV_ADMIN)):
         raise HTTPException(status_code=409, detail="already_set_up")
     secret = pyotp.random_base32()
     user = AdminUser(email=data.email, name=data.name, role="SUPER_ADMIN", password_hash=hash_password(data.password), totp_secret_enc=encrypt(secret))
