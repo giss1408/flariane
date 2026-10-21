@@ -20,6 +20,9 @@ from app.schemas import (
     AdminUserCreatedOut,
     AdminUserIn,
     AdminUserOut,
+    DispatchGroupOut,
+    DispatchOrderOut,
+    LocationOut,
     PickupPointIn,
     PickupPointOut,
     RefundCompleteIn,
@@ -32,6 +35,7 @@ from app.security.crypto import encrypt, hash_password
 from app.security.deps import AdminContext, client_ip, require_role
 from app.security.tokens import revoke_device_tokens, utcnow
 from app.services import customer_auth, operations
+from app.services import location as loc
 from app.services.audit import audit
 from app.services.settings import get_settings_map, set_setting
 
@@ -39,6 +43,37 @@ router = APIRouter(prefix="/admin", tags=["admin-backoffice"], dependencies=[Dep
 viewer = Depends(require_role(AdminRole.VIEWER))
 operator = Depends(require_role(AdminRole.OPERATOR))
 super_admin = Depends(require_role(AdminRole.SUPER_ADMIN))
+
+
+# ---------------------------------------------------------------- dispatch
+
+
+@router.get("/dispatch", response_model=list[DispatchGroupOut])
+async def dispatch(
+    statuses: str = "IN_TRANSIT,ARRIVED,READY_FOR_PICKUP",
+    _: AdminContext = viewer,
+    db: AsyncSession = Depends(get_session),
+) -> list[DispatchGroupOut]:
+    """Parcels on their way or arrived, grouped by the customer's commune, to plan dispatch."""
+    wanted = [s for s in statuses.split(",") if s]
+    rows = (
+        await db.execute(
+            select(Order, Customer.display_name)
+            .join(Customer, Customer.id == Order.customer_id)
+            .where(Order.status.in_(wanted))
+            .order_by(Order.delivery_commune, Order.public_ref)
+        )
+    ).all()
+    groups: dict[str, list[DispatchOrderOut]] = {}
+    for o, name in rows:
+        data = loc.unpack(o.delivery_commune, o.delivery_location_enc)
+        groups.setdefault(o.delivery_commune or "Non renseignée", []).append(
+            DispatchOrderOut(order_id=o.id, public_ref=o.public_ref, status=o.status, customer_name=name,
+                             location=LocationOut(**data) if data else None)
+        )
+    # Biggest communes first; orders without a location at the end.
+    ordered = sorted(groups.items(), key=lambda kv: (kv[0] == "Non renseignée", -len(kv[1]), kv[0]))
+    return [DispatchGroupOut(commune=c, orders=os) for c, os in ordered]
 
 
 # ---------------------------------------------------------------- customers

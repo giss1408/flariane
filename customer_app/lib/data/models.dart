@@ -1,18 +1,45 @@
 DateTime? _date(Object? v) => v == null ? null : DateTime.parse(v as String);
 int? _int(Object? v) => v == null ? null : (v as num).toInt();
 
+class Location {
+  Location({required this.commune, required this.quartier, this.landmark, this.lat, this.lng});
+
+  factory Location.fromJson(Map<String, dynamic> j) => Location(
+        commune: j['commune'] as String,
+        quartier: j['quartier'] as String,
+        landmark: j['landmark'] as String?,
+        lat: (j['lat'] as num?)?.toDouble(),
+        lng: (j['lng'] as num?)?.toDouble(),
+      );
+
+  final String commune;
+  final String quartier;
+  final String? landmark;
+  final double? lat;
+  final double? lng;
+
+  bool get hasGps => lat != null && lng != null;
+  String get short => '$commune, $quartier';
+
+  Map<String, dynamic> toJson() => {'commune': commune, 'quartier': quartier, 'landmark': landmark, 'lat': lat, 'lng': lng};
+}
+
+Location? _location(Object? j) => j == null ? null : Location.fromJson(j as Map<String, dynamic>);
+
 class Me {
-  Me({required this.displayName, required this.phoneMasked, this.mustChangePassword = false});
+  Me({required this.displayName, required this.phoneMasked, this.mustChangePassword = false, this.location});
 
   factory Me.fromJson(Map<String, dynamic> j) => Me(
         displayName: j['display_name'] as String?,
         phoneMasked: j['phone_masked'] as String? ?? '',
         mustChangePassword: j['must_change_password'] as bool? ?? false,
+        location: _location(j['location']),
       );
 
   final String? displayName;
   final String phoneMasked;
   final bool mustChangePassword;
+  final Location? location;
 }
 
 class PickupPoint {
@@ -129,6 +156,7 @@ class Order {
     required this.totalXof,
     required this.createdAt,
     required this.pickupPoint,
+    this.deliveryLocation,
     required this.quote,
     required this.payment,
     required this.attachments,
@@ -142,6 +170,7 @@ class Order {
         totalXof: _int(j['total_xof']),
         createdAt: _date(j['created_at'])!,
         pickupPoint: j['pickup_point'] == null ? null : PickupPoint.fromJson(j['pickup_point'] as Map<String, dynamic>),
+        deliveryLocation: _location(j['delivery_location']),
         quote: j['quote'] == null ? null : Quote.fromJson(j['quote'] as Map<String, dynamic>),
         payment: j['payment'] == null ? null : Payment.fromJson(j['payment'] as Map<String, dynamic>),
         attachments: j['attachments'] as int? ?? 0,
@@ -154,6 +183,7 @@ class Order {
   final int? totalXof;
   final DateTime createdAt;
   final PickupPoint? pickupPoint;
+  final Location? deliveryLocation;
   final Quote? quote;
   final Payment? payment;
   final int attachments;

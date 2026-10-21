@@ -30,6 +30,7 @@ from app.schemas import (
     AttachmentOut,
     CancelItemIn,
     ChangeRequestOut,
+    LocationOut,
     OrderItemOut,
     PaymentOut,
     PickupConfirmIn,
@@ -46,6 +47,7 @@ from app.schemas import (
 )
 from app.security.crypto import decrypt, mask_phone
 from app.security.deps import AdminContext, client_ip, require_role
+from app.services import location as loc
 from app.services import operations, quotes
 from app.services.audit import audit
 from app.services.settings import get_settings_map
@@ -113,6 +115,11 @@ async def inbox(
     ]
 
 
+def _location(commune: str | None, blob: bytes | None) -> LocationOut | None:
+    data = loc.unpack(commune, blob)
+    return LocationOut(**data) if data else None
+
+
 async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
     order = await db.get(Order, order_id)
     if order is None:
@@ -147,6 +154,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         submitted_links=order.submitted_links,
         customer_note=order.customer_note,
         pickup_point=PickupPointOut.model_validate(point) if point else None,
+        delivery_location=_location(order.delivery_commune, order.delivery_location_enc),
         items=[OrderItemOut.model_validate(i) for i in items],
         quotes=[admin_quote_out(q, min_fee) for q in all_quotes],
         change_requests=[ChangeRequestOut.model_validate(c) for c in changes],

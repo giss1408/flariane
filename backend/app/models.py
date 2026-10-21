@@ -40,6 +40,11 @@ class Customer(TimestampMixin, Base):
     locale: Mapped[str] = mapped_column(String(5), default="fr")
     password_hash: Mapped[str | None] = mapped_column(String(200))  # argon2id
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)  # after an admin reset
+    # Where she lives in Abidjan, for dispatch planning. Commune in clear (grouping);
+    # quartier, landmark and GPS encrypted as JSON (AES-GCM), like the phone number.
+    location_commune: Mapped[str | None] = mapped_column(String(40), index=True)
+    location_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    location_updated_at: Mapped[datetime | None] = _ts()
     anonymised_at: Mapped[datetime | None] = _ts()
 
 
@@ -102,6 +107,9 @@ class Order(TimestampMixin, Base):
     source_cart_url: Mapped[str | None] = mapped_column(Text)
     submitted_links: Mapped[list[str]] = mapped_column(JSON, default=list)
     customer_note: Mapped[str | None] = mapped_column(Text)
+    # Snapshot of the customer's location when the order was created (or last updated before purchase).
+    delivery_commune: Mapped[str | None] = mapped_column(String(40), index=True)
+    delivery_location_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     status: Mapped[str] = mapped_column(String(24), index=True)
     pickup_point_id: Mapped[int | None] = mapped_column(ForeignKey("pickup_points.id"))
     total_xof: Mapped[int | None] = mapped_column(BigInteger)

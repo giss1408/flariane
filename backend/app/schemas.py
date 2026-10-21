@@ -96,12 +96,36 @@ class PushTokenIn(In):
 # ---------- customer ----------
 
 
+Commune = Literal[
+    "Abobo", "Adjamé", "Attécoubé", "Cocody", "Koumassi", "Marcory", "Plateau", "Port-Bouët",
+    "Treichville", "Yopougon", "Anyama", "Bingerville", "Songon",
+]
+
+
+class LocationIn(In):
+    commune: Commune
+    quartier: Str80
+    landmark: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = None
+    lat: Annotated[float, Field(ge=4.9, le=5.8)] | None = None  # roughly the Abidjan area
+    lng: Annotated[float, Field(ge=-4.6, le=-3.6)] | None = None
+
+
+class LocationOut(BaseModel):
+    commune: str
+    quartier: str
+    landmark: str | None
+    lat: float | None
+    lng: float | None
+    maps_url: str | None
+
+
 class CustomerOut(Out):
     id: int
     display_name: str | None
     locale: str
     phone_masked: str
     must_change_password: bool = False
+    location: LocationOut | None = None
 
 
 class CustomerUpdateIn(In):
@@ -171,6 +195,7 @@ class OrderDetailOut(OrderSummaryOut):
     submitted_links: list[str]
     customer_note: str | None
     pickup_point: PickupPointOut | None
+    delivery_location: LocationOut | None = None
     quote: QuoteOut | None
     payment: PaymentOut | None
     history: list[StatusEventOut]
@@ -293,6 +318,7 @@ class AdminOrderDetailOut(BaseModel):
     submitted_links: list[str]
     customer_note: str | None
     pickup_point: PickupPointOut | None
+    delivery_location: LocationOut | None = None
     items: list[OrderItemOut]
     quotes: list[AdminQuoteOut]
     change_requests: list[ChangeRequestOut]
@@ -432,6 +458,19 @@ class AdminMeOut(BaseModel):
     name: str
     role: str
     device_id: int
+
+
+class DispatchOrderOut(BaseModel):
+    order_id: int
+    public_ref: str
+    status: str
+    customer_name: str | None
+    location: LocationOut | None
+
+
+class DispatchGroupOut(BaseModel):
+    commune: str  # "Non renseignée" when the customer gave no location
+    orders: list[DispatchOrderOut]
 
 
 class ReportSummaryOut(BaseModel):

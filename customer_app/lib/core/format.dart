@@ -72,5 +72,6 @@ const errorMessages = {
   'unsupported_image_type': 'Format accepté : JPEG, PNG ou WebP.',
   'file_too_large': 'Image trop lourde (10 Mo max).',
   'too_many_attachments': '10 captures maximum.',
+  'incomplete_gps': 'Position GPS incomplète, réessaie.',
   'rate_limited': 'Trop de requêtes. Patientez un instant.',
 };

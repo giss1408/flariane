@@ -53,6 +53,23 @@ class OrderScreen extends ConsumerWidget {
               ],
               if (o.latestSent != null) _QuoteSummary(order: o),
               if (o.purchase != null) _PurchaseSummary(order: o),
+              const SectionTitle('Adresse à Abidjan'),
+              Card(
+                child: o.deliveryLocation == null
+                    ? const ListTile(leading: Icon(Icons.location_off_outlined), title: Text('Non renseignée par la cliente'))
+                    : ListTile(
+                        leading: const Icon(Icons.home_work_outlined),
+                        title: Text('${o.deliveryLocation!.commune}, ${o.deliveryLocation!.quartier}'),
+                        subtitle: o.deliveryLocation!.landmark == null ? null : Text(o.deliveryLocation!.landmark!),
+                        trailing: o.deliveryLocation!.mapsUrl == null
+                            ? null
+                            : IconButton(
+                                tooltip: 'Ouvrir dans Maps',
+                                icon: const Icon(Icons.map_rounded),
+                                onPressed: () => launchUrl(Uri.parse(o.deliveryLocation!.mapsUrl!), mode: LaunchMode.externalApplication),
+                              ),
+                      ),
+              ),
               if (o.pickupPoint != null) ...[
                 const SectionTitle('Point de retrait'),
                 Card(

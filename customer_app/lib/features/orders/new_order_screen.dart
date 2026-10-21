@@ -7,6 +7,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
+import '../account/location_screen.dart';
 import 'order_screen.dart';
 
 /// Mirrors the server's check so the customer gets instant feedback; the server re-validates.
@@ -85,6 +86,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final points = ref.watch(pickupPointsProvider);
+    final location = ref.watch(meProvider).valueOrNull?.location;
     return Scaffold(
       appBar: const FlarianeHeader(subtitle: 'Nouveau panier'),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -105,6 +107,16 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         const Text(
             'Vérifiez tailles et couleurs dans votre panier SHEIN avant d’envoyer.',
             style: TextStyle(color: AppColors.warning)),
+        const SizedBox(height: 16),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.place_rounded, color: AppColors.primary),
+            title: Text(location == null ? 'Ajoute ton adresse à Abidjan' : 'Livraison : ${location.short}'),
+            subtitle: Text(location?.landmark ?? (location == null ? 'Pour préparer la distribution de ton colis' : 'Toucher pour modifier')),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LocationScreen(initial: location))),
+          ),
+        ),
         const SizedBox(height: 16),
         points.when(
           loading: () => const LinearProgressIndicator(),

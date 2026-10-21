@@ -238,3 +238,25 @@ async def test_order_without_pickup_point(client: AsyncClient, customer: dict) -
 
     r = await client.post("/orders", json={"share_text": CART_SHARE}, headers=customer)
     assert r.status_code == 201 and r.json()["pickup_point"] is None
+
+
+async def test_location_snapshot_and_dispatch(client: AsyncClient, customer: dict, admin: AdminFixture) -> None:
+    from tests.conftest import CART_SHARE
+
+    loc = {"commune": "Cocody", "quartier": "Riviera 3", "landmark": "Près de la pharmacie Les Oscars", "lat": 5.36, "lng": -3.95}
+    r = await client.put("/me/location", json=loc, headers=customer)
+    assert r.status_code == 200 and r.json()["location"]["maps_url"].endswith("5.36,-3.95")
+    assert (await client.put("/me/location", json={**loc, "commune": "Paris"}, headers=customer)).status_code == 422
+    assert (await client.put("/me/location", json={**loc, "lng": None}, headers=customer)).status_code == 400
+
+    ref = (await client.post("/orders", json={"share_text": CART_SHARE}, headers=customer)).json()["public_ref"]
+    oid = await order_id(ref)
+    detail = (await client.get(f"/admin/orders/{oid}", headers=admin.headers)).json()
+    assert detail["delivery_location"]["quartier"] == "Riviera 3"
+
+    # Moving before the parcel arrives updates open orders.
+    await client.put("/me/location", json={"commune": "Yopougon", "quartier": "Niangon"}, headers=customer)
+    assert (await client.get(f"/orders/{ref}", headers=customer)).json()["delivery_location"]["commune"] == "Yopougon"
+
+    groups = (await client.get("/admin/dispatch?statuses=QUOTE_REQUESTED", headers=admin.headers)).json()
+    assert groups[0]["commune"] == "Yopougon" and groups[0]["orders"][0]["public_ref"] == ref

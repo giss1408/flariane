@@ -7,6 +7,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import 'dispatch_screen.dart';
 
 final shipmentsProvider = FutureProvider.autoDispose<List<Shipment>>((ref) => ref.watch(adminApiProvider).shipments());
 
@@ -20,7 +21,16 @@ class ShipmentsScreen extends ConsumerWidget {
     final shipments = ref.watch(shipmentsProvider);
     final canOperate = ref.watch(sessionProvider).me?.canOperate ?? false;
     return Scaffold(
-      appBar: AppBar(title: const Text('Expéditions')),
+      appBar: AppBar(
+        title: const Text('Expéditions'),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('Répartition'),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DispatchScreen())),
+          ),
+        ],
+      ),
       floatingActionButton: canOperate
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add_rounded),

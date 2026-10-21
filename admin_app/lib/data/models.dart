@@ -54,6 +54,24 @@ class PickupPoint {
   final String openingHours;
 }
 
+class DeliveryLocation {
+  DeliveryLocation({required this.commune, required this.quartier, this.landmark, this.mapsUrl});
+
+  factory DeliveryLocation.fromJson(Map<String, dynamic> j) => DeliveryLocation(
+        commune: j['commune'] as String,
+        quartier: j['quartier'] as String,
+        landmark: j['landmark'] as String?,
+        mapsUrl: j['maps_url'] as String?,
+      );
+
+  final String commune;
+  final String quartier;
+  final String? landmark;
+  final String? mapsUrl;
+}
+
+DeliveryLocation? _loc(Object? j) => j == null ? null : DeliveryLocation.fromJson(j as Map<String, dynamic>);
+
 class OrderItem {
   OrderItem({
     required this.id,
@@ -264,6 +282,7 @@ class OrderDetail {
     required this.submittedLinks,
     required this.customerNote,
     required this.pickupPoint,
+    this.deliveryLocation,
     required this.items,
     required this.quotes,
     required this.changeRequests,
@@ -285,6 +304,7 @@ class OrderDetail {
         submittedLinks: ((j['submitted_links'] as List?) ?? []).cast<String>(),
         customerNote: j['customer_note'] as String?,
         pickupPoint: j['pickup_point'] == null ? null : PickupPoint.fromJson(j['pickup_point'] as Map<String, dynamic>),
+        deliveryLocation: _loc(j['delivery_location']),
         items: _list(j['items'], OrderItem.fromJson),
         quotes: _list(j['quotes'], Quote.fromJson),
         changeRequests: _list(j['change_requests'], ChangeRequest.fromJson),
@@ -305,6 +325,7 @@ class OrderDetail {
   final List<String> submittedLinks;
   final String? customerNote;
   final PickupPoint? pickupPoint;
+  final DeliveryLocation? deliveryLocation;
   final List<OrderItem> items;
   final List<Quote> quotes; // newest first
   final List<ChangeRequest> changeRequests; // newest first
@@ -354,6 +375,27 @@ class Shipment {
   final DateTime? departedAt;
   final DateTime? arrivedAt;
   final List<String> orderRefs;
+}
+
+class DispatchGroup {
+  DispatchGroup({required this.commune, required this.orders});
+
+  factory DispatchGroup.fromJson(Map<String, dynamic> j) => DispatchGroup(
+        commune: j['commune'] as String,
+        orders: [
+          for (final o in (j['orders'] as List).cast<Map<String, dynamic>>())
+            (
+              id: o['order_id'] as int,
+              ref: o['public_ref'] as String,
+              status: o['status'] as String,
+              name: o['customer_name'] as String?,
+              location: _loc(o['location']),
+            ),
+        ],
+      );
+
+  final String commune;
+  final List<({int id, String ref, String status, String? name, DeliveryLocation? location})> orders;
 }
 
 class AdminMe {

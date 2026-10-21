@@ -157,6 +157,11 @@ class AdminApi {
         (j) => (j as List).cast<Map<String, dynamic>>().map(PickupPoint.fromJson).toList(),
       );
 
+  Future<List<DispatchGroup>> dispatch() => client.call(
+        (d) => d.get('/admin/dispatch'),
+        (j) => (j as List).cast<Map<String, dynamic>>().map(DispatchGroup.fromJson).toList(),
+      );
+
   Future<List<Shipment>> shipments() => client.call(
         (d) => d.get('/admin/shipments'),
         (j) => (j as List).cast<Map<String, dynamic>>().map(Shipment.fromJson).toList(),

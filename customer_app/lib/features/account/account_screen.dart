@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
 import '../auth/login_screen.dart';
+import 'location_screen.dart';
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -35,6 +36,14 @@ class AccountScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         Card(
           child: Column(children: [
+            ListTile(
+              leading: const Icon(Icons.place_outlined),
+              title: const Text('Mon adresse à Abidjan'),
+              subtitle: Text(me.valueOrNull?.location?.short ?? 'Pas encore renseignée'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => LocationScreen(initial: me.valueOrNull?.location)),
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.password_rounded),
               title: const Text('Changer mon mot de passe'),

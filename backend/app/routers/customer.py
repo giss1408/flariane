@@ -25,6 +25,8 @@ from app.schemas import (
     CustomerOut,
     ChangePasswordIn,
     CustomerUpdateIn,
+    LocationIn,
+    LocationOut,
     OrderCreateIn,
     OrderDetailOut,
     OrderSummaryOut,
@@ -39,6 +41,7 @@ from app.security.deps import client_ip
 from app.security.tokens import utcnow
 from app.services import customer_auth, notify, quotes
 from app.services.audit import audit
+from app.services import location as loc
 from app.services.links import extract_shein_urls
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
@@ -53,7 +56,20 @@ def _customer_out(c: Customer) -> CustomerOut:
     return CustomerOut(
         id=c.id, display_name=c.display_name, locale=c.locale,
         phone_masked=mask_phone(phone) if phone else "", must_change_password=c.must_change_password,
+        location=_location_out(c.location_commune, c.location_enc),
     )
+
+
+def _location_out(commune: str | None, blob: bytes | None) -> LocationOut | None:
+    data = loc.unpack(commune, blob)
+    return LocationOut(**data) if data else None
+
+
+# Orders whose parcel hasn't been handed over yet follow the customer's latest location.
+LOCATION_FOLLOWS = (
+    OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT, OrderStatus.PAID,
+    OrderStatus.PURCHASED, OrderStatus.IN_TRANSIT, OrderStatus.ARRIVED,
+)
 
 
 @router.get("/me", response_model=CustomerOut)
@@ -67,6 +83,20 @@ async def update_me(data: CustomerUpdateIn, customer: Customer = authed, db: Asy
         customer.display_name = data.display_name
     if data.locale is not None:
         customer.locale = data.locale
+    await db.commit()
+    return _customer_out(customer)
+
+
+@router.put("/me/location", response_model=CustomerOut)
+async def set_location(data: LocationIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    """Her place in Abidjan, used to plan dispatch when parcels arrive."""
+    if (data.lat is None) != (data.lng is None):
+        raise BadRequest("incomplete_gps")
+    blob = loc.pack(data.quartier, data.landmark, data.lat, data.lng)
+    customer.location_commune, customer.location_enc, customer.location_updated_at = data.commune, blob, utcnow()
+    for o in (await db.scalars(select(Order).where(Order.customer_id == customer.id, Order.status.in_(LOCATION_FOLLOWS)))).all():
+        o.delivery_commune, o.delivery_location_enc = data.commune, blob
+    await audit(db, actor_type="customer", actor_id=customer.id, action="customer.location_set", after={"commune": data.commune}, ip=client_ip(request))
     await db.commit()
     return _customer_out(customer)
 
@@ -105,9 +135,11 @@ async def delete_me(request: Request, customer: Customer = authed, db: AsyncSess
     if await db.scalar(select(func.count()).select_from(Order).where(Order.customer_id == customer.id, Order.status.in_(open_statuses))):
         raise Conflict("orders_in_progress")
     customer.display_name, customer.phone_enc, customer.phone_hash, customer.password_hash = None, None, None, None
+    customer.location_commune, customer.location_enc = None, None
     customer.anonymised_at = utcnow()
     for o in (await db.scalars(select(Order).where(Order.customer_id == customer.id))).all():
         o.source_cart_url, o.submitted_links, o.customer_note = None, [], None
+        o.delivery_commune, o.delivery_location_enc = None, None
     for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id))).all():
         t.revoked_at = utcnow()
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.anonymised", ip=client_ip(request))
@@ -165,6 +197,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         submitted_links=order.submitted_links,
         customer_note=order.customer_note,
         pickup_point=PickupPointOut.model_validate(point) if point else None,
+        delivery_location=_location_out(order.delivery_commune, order.delivery_location_enc),
         quote=_quote_out(quote) if quote else None,
         payment=PaymentOut(status=payment.status, amount_xof=payment.amount_xof, launch_url=payment.launch_url) if payment else None,
         history=[StatusEventOut.model_validate(h) for h in history],
@@ -206,6 +239,8 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
         customer_note=data.note,
         status=OrderStatus.QUOTE_REQUESTED,
         pickup_point_id=point.id if point else None,
+        delivery_commune=customer.location_commune,
+        delivery_location_enc=customer.location_enc,
     )
     db.add(order)
     await db.flush()

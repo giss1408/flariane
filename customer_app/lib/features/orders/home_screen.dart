@@ -10,6 +10,7 @@ import '../../widgets/departure_ticket.dart';
 import '../../widgets/logo.dart';
 import '../../widgets/wax.dart';
 import '../account/account_screen.dart';
+import '../account/location_screen.dart';
 import 'new_order_screen.dart';
 import 'order_screen.dart';
 
@@ -28,7 +29,8 @@ class HomeScreen extends ConsumerWidget {
     });
     final orders = ref.watch(ordersProvider);
     final departure = ref.watch(nextDepartureProvider).valueOrNull;
-    final name = ref.watch(meProvider).valueOrNull?.displayName?.split(' ').first;
+    final me = ref.watch(meProvider).valueOrNull;
+    final name = me?.displayName?.split(' ').first;
 
     Future<void> newOrder() async {
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen()));
@@ -71,6 +73,10 @@ class HomeScreen extends ConsumerWidget {
           if (departure != null && daysUntil(departure, DateTime.now()) >= 0) ...[
             const SizedBox(height: 12),
             DepartureTicket(departure: departure, onTap: newOrder),
+          ],
+          if (me != null && me.location == null) ...[
+            const SizedBox(height: 12),
+            _LocationNudge(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LocationScreen()))),
           ],
           if (active.isNotEmpty) ...[
             const SizedBox(height: 24),
@@ -337,5 +343,40 @@ class _EmptyOrders extends StatelessWidget {
           SizedBox(height: 4),
           Text('Partage ton premier panier SHEIN pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
         ]),
+      );
+}
+
+class _LocationNudge extends StatelessWidget {
+  const _LocationNudge({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(color: Color(0xFFD9F7EE), shape: BoxShape.circle),
+                child: const Icon(Icons.place_rounded, color: AppColors.success),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Où te livrer à Abidjan ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text('Ajoute ta commune et un repère', style: TextStyle(color: AppColors.muted)),
+                ]),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ]),
+          ),
+        ),
       );
 }
