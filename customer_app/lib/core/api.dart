@@ -158,6 +158,12 @@ class CustomerApi {
 
   Future<void> deleteMe() => _call(() => dio.delete('/me'), (_) {});
 
+  /// Public info (no auth): next shipment departure date, or null.
+  Future<DateTime?> nextDeparture() => _call(() => dio.get('/public/info'), (j) {
+        final v = (j as Map)['next_departure_date'] as String?;
+        return v == null ? null : DateTime.parse(v);
+      });
+
   // ---- orders
 
   Future<List<PickupPoint>> pickupPoints() => _call(() => dio.get('/pickup-points'),

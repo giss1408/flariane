@@ -1,7 +1,7 @@
 """Request/response models. Requests forbid unknown fields; responses are separate models so
 internal columns (hashes, encrypted values) can never leak."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -384,6 +384,7 @@ class SettingsIn(In):
     quote_validity_hours: Annotated[int, Field(ge=1, le=168)] | None = None
     price_increase_buffer_percent: Annotated[float, Field(ge=0, le=100)] | None = None
     store_currency_default: Currency | None = None
+    next_departure_date: date | None = None
 
 
 class PickupPointIn(In):

@@ -40,6 +40,7 @@ from app.security.tokens import utcnow
 from app.services import customer_auth, notify, quotes
 from app.services.audit import audit
 from app.services.links import extract_shein_urls
+from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
 from app.services.payments import start_checkout
 
@@ -111,6 +112,13 @@ async def delete_me(request: Request, customer: Customer = authed, db: AsyncSess
         t.revoked_at = utcnow()
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.anonymised", ip=client_ip(request))
     await db.commit()
+
+
+@router.get("/public/info")
+async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
+    """Shown on the customer home screen. No auth: nothing private here."""
+    settings = await get_settings_map(db)
+    return {"next_departure_date": settings.get("next_departure_date")}
 
 
 @router.get("/pickup-points", response_model=list[PickupPointOut])

@@ -142,7 +142,7 @@ async def get_settings(_: AdminContext = viewer, db: AsyncSession = Depends(get_
 @router.put("/settings")
 async def update_settings(data: SettingsIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
     before = await get_settings_map(db)
-    changes = data.model_dump(exclude_none=True)
+    changes = data.model_dump(exclude_none=True, mode="json")
     if "fx_rates" in changes:
         changes["fx_rates"] = {**before["fx_rates"], **{k: str(v) for k, v in changes["fx_rates"].items()}, "XOF": "1"}
     for key, value in changes.items():

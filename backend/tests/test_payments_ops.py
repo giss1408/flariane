@@ -207,3 +207,10 @@ async def test_reports_and_csv(client: AsyncClient, customer: dict, admin: Admin
     assert s["paid_orders"] == 1 and s["fees_xof"] == 3000 and s["revenue_xof"] > 0
     r = await client.get("/admin/reports/orders.csv", headers=admin.headers)
     assert r.status_code == 200 and "reference;date;client" in r.text and "Awa Koné" in r.text
+
+
+async def test_next_departure_date(client: AsyncClient, admin: AdminFixture) -> None:
+    assert (await client.get("/public/info")).json() == {"next_departure_date": None}
+    r = await client.put("/admin/settings", json={"next_departure_date": "2026-12-15"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert (await client.get("/public/info")).json() == {"next_departure_date": "2026-12-15"}

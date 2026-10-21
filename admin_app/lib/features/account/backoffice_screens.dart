@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../core/session.dart';
@@ -312,6 +313,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _c = <String, TextEditingController>{};
   bool _loaded = false;
+  DateTime? _departure;
 
   static const intFields = {
     'freight_per_item_xof': 'Transport par article (FCFA)',
@@ -334,6 +336,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final fx = (s['fx_rates'] as Map).cast<String, dynamic>();
       _c['EUR'] = TextEditingController(text: '${fx['EUR'] ?? ''}');
       _c['USD'] = TextEditingController(text: '${fx['USD'] ?? ''}');
+      final d = s['next_departure_date'] as String?;
+      _departure = d == null ? null : DateTime.parse(d);
       setState(() => _loaded = true);
     }).catchError((Object e) {
       if (mounted) showError(context, e);
@@ -344,6 +348,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final body = <String, dynamic>{
       for (final k in intFields.keys) k: int.tryParse(_c[k]!.text.trim()),
       for (final k in numFields.keys) k: double.tryParse(_c[k]!.text.trim().replaceAll(',', '.')),
+      if (_departure != null)
+        'next_departure_date': '${_departure!.year}-${_departure!.month.toString().padLeft(2, '0')}-${_departure!.day.toString().padLeft(2, '0')}',
       'fx_rates': {'EUR': _c['EUR']!.text.trim().replaceAll(',', '.'), 'USD': _c['USD']!.text.trim().replaceAll(',', '.')},
     }..removeWhere((_, v) => v == null);
     try {
@@ -360,6 +366,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         body: !_loaded
             ? const Center(child: CircularProgressIndicator())
             : ListView(padding: const EdgeInsets.all(16), children: [
+                const SectionTitle('Prochain départ (affiché aux clientes)'),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.flight_takeoff_rounded),
+                    title: Text(_departure == null ? 'Aucune date' : DateFormat('EEEE d MMMM yyyy', 'fr').format(_departure!)),
+                    subtitle: const Text('Toucher pour choisir'),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _departure != null && _departure!.isAfter(now) ? _departure! : now,
+                        firstDate: now,
+                        lastDate: now.add(const Duration(days: 365)),
+                      );
+                      if (picked != null) setState(() => _departure = picked);
+                    },
+                  ),
+                ),
                 const SectionTitle('Taux de change (FCFA pour 1 unité)'),
                 TextField(controller: _c['EUR'], decoration: const InputDecoration(labelText: 'EUR'), keyboardType: TextInputType.number),
                 const SizedBox(height: 8),

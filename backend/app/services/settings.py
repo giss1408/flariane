@@ -16,6 +16,8 @@ DEFAULTS: dict[str, Any] = {
     "quote_validity_hours": 48,
     "price_increase_buffer_percent": 5,
     "store_currency_default": "EUR",
+    # Next weekly shipment leaving for Abidjan (ISO date), shown to customers. None hides the card.
+    "next_departure_date": None,
 }
 
 

@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/departure_ticket.dart';
 import '../../widgets/logo.dart';
 import '../../widgets/wax.dart';
 import '../account/account_screen.dart';
@@ -26,6 +27,7 @@ class HomeScreen extends ConsumerWidget {
       }
     });
     final orders = ref.watch(ordersProvider);
+    final departure = ref.watch(nextDepartureProvider).valueOrNull;
     final name = ref.watch(meProvider).valueOrNull?.displayName?.split(' ').first;
 
     Future<void> newOrder() async {
@@ -53,7 +55,10 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(ordersProvider.future),
+        onRefresh: () {
+          ref.invalidate(nextDepartureProvider);
+          return ref.refresh(ordersProvider.future);
+        },
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
           Text(name == null ? 'Salut 👋' : 'Salut $name 👋', style: display(28)),
           const SizedBox(height: 4),
@@ -63,6 +68,10 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           _WaxHero(onTap: newOrder),
+          if (departure != null && daysUntil(departure, DateTime.now()) >= 0) ...[
+            const SizedBox(height: 12),
+            DepartureTicket(departure: departure, onTap: newOrder),
+          ],
           if (active.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text(active.length == 1 ? 'Ta commande en cours' : 'Tes commandes en cours', style: display(20, weight: FontWeight.w700)),

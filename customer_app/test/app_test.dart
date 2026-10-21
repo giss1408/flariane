@@ -5,6 +5,7 @@ import 'package:flariane/core/theme.dart';
 import 'package:flariane/data/models.dart';
 import 'package:flariane/features/orders/new_order_screen.dart';
 import 'package:flariane/features/orders/order_screen.dart';
+import 'package:flariane/widgets/departure_ticket.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,5 +100,13 @@ void main() {
     await tester.pump();
     expect(tester.widget<FilledButton>(pay).onPressed, isNotNull);
     expect(find.text('Modifier ma commande'), findsOneWidget);
+  });
+
+  test('departure countdown', () {
+    final today = DateTime(2026, 12, 3, 18);
+    expect(daysUntil(DateTime(2026, 12, 15), today), 12);
+    expect(countdownLabel(12), 'J-12');
+    expect(countdownLabel(1), 'Demain');
+    expect(countdownLabel(0), 'C’est aujourd’hui');
   });
 }
