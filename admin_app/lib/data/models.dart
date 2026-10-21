@@ -242,21 +242,27 @@ class Attachment {
 }
 
 class PaymentInfo {
-  PaymentInfo({required this.status, required this.amountXof, this.provider = 'WAVE', this.declared = false});
+  PaymentInfo({required this.status, required this.amountXof, this.provider = 'WAVE', this.declared = false, this.method, this.hasProof = false});
 
   factory PaymentInfo.fromJson(Map<String, dynamic> j) => PaymentInfo(
         status: j['status'] as String,
         amountXof: _int(j['amount_xof'])!,
         provider: j['provider'] as String? ?? 'WAVE',
         declared: j['declared'] as bool? ?? false,
+        method: j['method'] as String?,
+        hasProof: j['has_proof'] as bool? ?? false,
       );
 
   final String status;
   final int amountXof;
-  final String provider; // WAVE | WAVE_QR
+  final String provider; // WAVE | MANUAL (| WAVE_QR, older)
   final bool declared;
+  final String? method; // WAVE | ORANGE | MOOV
+  final bool hasProof;
 
-  bool get awaitsManualConfirmation => provider == 'WAVE_QR' && status == 'PENDING';
+  String get methodName => const {'WAVE': 'Wave', 'ORANGE': 'Orange Money', 'MOOV': 'Moov Money'}[method] ?? 'Mobile money';
+
+  bool get awaitsManualConfirmation => (provider == 'MANUAL' || provider == 'WAVE_QR') && status == 'PENDING';
 }
 
 class StatusEvent {

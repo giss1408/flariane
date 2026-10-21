@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -420,7 +421,14 @@ class _PrimaryAction extends ConsumerWidget {
         if (manual == null) return relance;
         return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (manual.declared) ...[
-            const WarningBox('La cliente dit avoir payé. Vérifie dans ton app Wave (montant + référence), puis confirme.'),
+            WarningBox('La cliente a payé par ${manual.methodName}. Vérifie la capture et ton compte (montant + référence), puis confirme.'),
+            const SizedBox(height: 8),
+            if (manual.hasProof)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.receipt_rounded),
+                label: const Text('Voir la capture du paiement'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ProofScreen(orderId: order.id))),
+              ),
             const SizedBox(height: 8),
           ] else ...[
             relance,
@@ -500,9 +508,9 @@ class _PrimaryAction extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Paiement reçu sur Wave ?'),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Confirme seulement si tu vois ${fcfa(amount)} pour ${order.publicRef} dans ton app Wave.'),
+          Text('Confirme seulement si tu vois ${fcfa(amount)} pour ${order.publicRef} sur ton compte.'),
           const SizedBox(height: 12),
-          TextField(controller: txn, decoration: const InputDecoration(labelText: 'N° de transaction Wave (optionnel)')),
+          TextField(controller: txn, decoration: const InputDecoration(labelText: 'N° de transaction (optionnel)')),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
@@ -617,4 +625,23 @@ class _PrimaryAction extends ConsumerWidget {
       if (context.mounted) showError(context, e);
     }
   }
+}
+
+class _ProofScreen extends ConsumerWidget {
+  const _ProofScreen({required this.orderId});
+
+  final int orderId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+        appBar: AppBar(title: const Text('Capture du paiement')),
+        body: FutureBuilder<List<int>>(
+          future: ref.read(adminApiProvider).paymentProof(orderId),
+          builder: (context, snap) {
+            if (snap.hasError) return ErrorView(snap.error!, onRetry: () => (context as Element).markNeedsBuild());
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            return InteractiveViewer(maxScale: 5, child: Center(child: Image.memory(Uint8List.fromList(snap.data!))));
+          },
+        ),
+      );
 }

@@ -2,10 +2,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
 from app.db import get_session
 from app.enums import AdminRole, OrderStatus, QuoteStatus
@@ -255,6 +255,18 @@ async def confirm_payment(order_id: int, data: ConfirmPaymentIn, request: Reques
     """Wave QR: the admin saw the money in their Wave app. Marks the payment received and the order paid."""
     await payments_service.confirm_manual_payment(db, order_id, data.transaction_ref, admin.id, client_ip(request))
     await db.commit()
+
+
+@router.get("/{order_id}/payment-proof")
+async def payment_proof(order_id: int, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> Response:
+    """The customer's payment screenshot (latest one), admins only."""
+    payment = await db.scalar(
+        select(Payment).where(Payment.order_id == order_id, Payment.proof_content_type.is_not(None))
+        .order_by(Payment.id.desc()).limit(1).options(undefer(Payment.proof_image))
+    )
+    if payment is None or payment.proof_image is None:
+        raise NotFound()
+    return Response(payment.proof_image, media_type=payment.proof_content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
 
 
 class WhatsAppMessageIn(BaseModel):

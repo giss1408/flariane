@@ -1,7 +1,9 @@
 import base64
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
+from typing import Literal
+
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +48,7 @@ from app.services import location as loc
 from app.services.links import extract_shein_urls, pick_cart_url, store_of
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
-from app.services.payments import start_checkout, transition_payment
+from app.services.payments import MANUAL_PROVIDERS, start_checkout, transition_payment
 
 router = APIRouter(tags=["customer"])
 authed = Depends(customer_limited)
@@ -156,6 +158,9 @@ async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
         "payment_mode": settings["payment_mode"],
         "wave_phone": settings.get("wave_phone"),
         "has_wave_qr": bool(settings.get("wave_qr_image")),
+        # Only methods with a number are offered to customers.
+        "payment_accounts": {k: v for k, v in (settings.get("payment_accounts") or {}).items() if v}
+        or ({"WAVE": settings["wave_phone"]} if settings.get("wave_phone") else {}),
     }
 
 
@@ -318,9 +323,9 @@ async def retry_payment(ref: str, customer: Customer = authed, db: AsyncSession 
 async def _start_payment(db: AsyncSession, payment: Payment, ref: str) -> PaymentOut:
     """Wave Checkout (business account) or manual Wave QR, depending on the payment_mode setting."""
     settings = await get_settings_map(db)
-    if settings["payment_mode"] == "wave_qr":
+    if settings["payment_mode"] != "wave_checkout":
         if payment.status == PaymentStatus.INITIATED:
-            payment.provider = "WAVE_QR"
+            payment.provider = "MANUAL"
             await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
             await db.commit()
         return PaymentOut.of(payment, launch=False)
@@ -329,20 +334,30 @@ async def _start_payment(db: AsyncSession, payment: Payment, ref: str) -> Paymen
 
 
 @router.post("/orders/{ref}/payment/declare", response_model=PaymentOut)
-async def declare_payment(ref: str, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> PaymentOut:
-    """Wave QR: she says she paid; an admin checks their Wave app and confirms."""
+async def declare_payment(
+    ref: str,
+    request: Request,
+    method: Literal["WAVE", "ORANGE", "MOOV"] = Form(...),
+    file: UploadFile = File(...),
+    customer: Customer = authed,
+    db: AsyncSession = Depends(get_session),
+) -> PaymentOut:
+    """She paid from her Wave / Orange Money / Moov Money app and sends the screenshot.
+    An admin checks it against their account and confirms."""
     order = await _order_for(db, customer, ref)
     payment = await db.scalar(
-        select(Payment).where(Payment.order_id == order.id, Payment.provider == "WAVE_QR", Payment.status == PaymentStatus.PENDING)
+        select(Payment).where(Payment.order_id == order.id, Payment.provider.in_(MANUAL_PROVIDERS), Payment.status == PaymentStatus.PENDING)
         .order_by(Payment.id.desc()).limit(1)
     )
     if payment is None:
         raise Conflict("no_pending_payment")
-    if payment.status_reason != "declared":
-        payment.status_reason = "declared"
-        await audit(db, actor_type="customer", actor_id=customer.id, action="payment.declared", entity="payment", entity_id=payment.id, ip=client_ip(request))
-        notify.admins(db, "payment_declared", order)
-        await db.commit()
+    data, content_type, _ = storage.sanitize_image(await file.read(10 * 1024 * 1024 + 1))
+    payment.method, payment.proof_image, payment.proof_content_type = method, data, content_type
+    payment.status_reason = "declared"
+    await audit(db, actor_type="customer", actor_id=customer.id, action="payment.declared", entity="payment", entity_id=payment.id,
+                after={"method": method}, ip=client_ip(request))
+    notify.admins(db, "payment_declared", order)
+    await db.commit()
     return PaymentOut.of(payment, launch=False)
 
 

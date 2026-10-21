@@ -93,7 +93,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final pay = find.widgetWithText(FilledButton, 'Accepter et payer 35 608 FCFA avec Wave');
+    final pay = find.widgetWithText(FilledButton, 'Accepter et payer 35 608 FCFA');
     await tester.scrollUntilVisible(pay, 200);
     expect(tester.widget<FilledButton>(pay).onPressed, isNull);
 

@@ -181,13 +181,16 @@ class PaymentOut(BaseModel):
     status: str
     amount_xof: int
     launch_url: str | None
-    provider: str = "WAVE"  # WAVE (checkout) | WAVE_QR (manual, confirmed by an admin)
-    declared: bool = False  # WAVE_QR: the customer said she paid
+    provider: str = "WAVE"  # WAVE (checkout) | MANUAL (mobile money + screenshot, confirmed by an admin)
+    declared: bool = False  # MANUAL: the customer sent her payment screenshot
+    method: str | None = None  # WAVE | ORANGE | MOOV
+    has_proof: bool = False
 
     @classmethod
     def of(cls, p, launch: bool = True) -> "PaymentOut":  # type: ignore[no-untyped-def]
         return cls(status=p.status, amount_xof=p.amount_xof, launch_url=p.launch_url if launch else None,
-                   provider=p.provider, declared=p.status_reason == "declared")
+                   provider=p.provider, declared=p.status_reason == "declared", method=p.method,
+                   has_proof=p.proof_content_type is not None)
 
 
 class OrderSummaryOut(BaseModel):
@@ -425,7 +428,8 @@ class SettingsIn(In):
     price_increase_buffer_percent: Annotated[float, Field(ge=0, le=100)] | None = None
     store_currency_default: Currency | None = None
     freight_default_xof: Annotated[int, Field(ge=0)] | None = None
-    payment_mode: Literal["wave_qr", "wave_checkout"] | None = None
+    payment_mode: Literal["manual", "wave_qr", "wave_checkout"] | None = None
+    payment_accounts: dict[Literal["WAVE", "ORANGE", "MOOV"], Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None] | None = None
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     next_departure_date: date | None = None
 

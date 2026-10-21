@@ -315,7 +315,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _c = <String, TextEditingController>{};
   bool _loaded = false;
   DateTime? _departure;
-  String _paymentMode = 'wave_qr';
+  String _paymentMode = 'manual';
   bool _hasWaveQr = false;
 
   static const intFields = {
@@ -339,7 +339,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final fx = (s['fx_rates'] as Map).cast<String, dynamic>();
       _c['EUR'] = TextEditingController(text: '${fx['EUR'] ?? ''}');
       _c['USD'] = TextEditingController(text: '${fx['USD'] ?? ''}');
-      _paymentMode = s['payment_mode'] as String? ?? 'wave_qr';
+      _paymentMode = (s['payment_mode'] as String?) == 'wave_checkout' ? 'wave_checkout' : 'manual';
+      final accounts = ((s['payment_accounts'] as Map?) ?? {}).cast<String, dynamic>();
+      for (final k in ['WAVE', 'ORANGE', 'MOOV']) {
+        _c['acct_$k'] = TextEditingController(text: (accounts[k] as String?) ?? (k == 'WAVE' ? s['wave_phone'] as String? ?? '' : ''));
+      }
       _hasWaveQr = s['has_wave_qr'] == true;
       _c['wave_phone'] = TextEditingController(text: s['wave_phone'] as String? ?? '');
       final d = s['next_departure_date'] as String?;
@@ -357,7 +361,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (_departure != null)
         'next_departure_date': '${_departure!.year}-${_departure!.month.toString().padLeft(2, '0')}-${_departure!.day.toString().padLeft(2, '0')}',
       'payment_mode': _paymentMode,
-      if (_c['wave_phone']!.text.trim().isNotEmpty) 'wave_phone': _c['wave_phone']!.text.trim(),
+      'payment_accounts': {
+        for (final k in ['WAVE', 'ORANGE', 'MOOV']) k: _c['acct_$k']!.text.trim().isEmpty ? null : _c['acct_$k']!.text.trim(),
+      },
       'fx_rates': {'EUR': _c['EUR']!.text.trim().replaceAll(',', '.'), 'USD': _c['USD']!.text.trim().replaceAll(',', '.')},
     }..removeWhere((_, v) => v == null);
     try {
@@ -401,10 +407,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     },
                   ),
                 ),
-                const SectionTitle('Paiement Wave'),
+                const SectionTitle('Paiement'),
                 SegmentedButton<String>(
                   segments: const [
-                    ButtonSegment(value: 'wave_qr', label: Text('QR Wave perso')),
+                    ButtonSegment(value: 'manual', label: Text('Capture du paiement')),
                     ButtonSegment(value: 'wave_checkout', label: Text('Wave Business')),
                   ],
                   selected: {_paymentMode},
@@ -413,17 +419,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _paymentMode == 'wave_qr'
-                      ? 'La cliente scanne ton QR, paie, puis tu confirmes le paiement dans chaque commande.'
+                      ? 'La cliente paie sur Wave, Orange ou Moov, envoie la capture, puis tu confirmes dans la commande.'
                       : 'Paiement automatique via l’API Wave Business (clé API requise sur le serveur).',
                   style: const TextStyle(color: AppColors.muted),
                 ),
                 const SizedBox(height: 8),
-                TextField(controller: _c['wave_phone'], decoration: const InputDecoration(labelText: 'Ton numéro Wave'), keyboardType: TextInputType.phone),
+                for (final (k, label) in const [('WAVE', 'Numéro Wave'), ('ORANGE', 'Numéro Orange Money'), ('MOOV', 'Numéro Moov Money')])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      controller: _c['acct_$k'],
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(labelText: label, helperText: 'Vide = non proposé aux clientes'),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Card(
                   child: ListTile(
                     leading: Icon(_hasWaveQr ? Icons.qr_code_2_rounded : Icons.qr_code_scanner_rounded),
-                    title: Text(_hasWaveQr ? 'QR Wave enregistré' : 'Ajouter ton QR Wave'),
+                    title: Text(_hasWaveQr ? 'QR Wave enregistré' : 'Ajouter ton QR Wave (optionnel)'),
                     subtitle: const Text('Capture d’écran de ton QR dans l’app Wave'),
                     trailing: const Icon(Icons.upload_rounded),
                     onTap: () async {

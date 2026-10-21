@@ -139,7 +139,7 @@ class Quote {
 }
 
 class Payment {
-  Payment({required this.status, required this.amountXof, required this.launchUrl, this.provider = 'WAVE', this.declared = false});
+  Payment({required this.status, required this.amountXof, required this.launchUrl, this.provider = 'WAVE', this.declared = false, this.method});
 
   factory Payment.fromJson(Map<String, dynamic> j) => Payment(
         status: j['status'] as String,
@@ -147,6 +147,7 @@ class Payment {
         launchUrl: j['launch_url'] as String?,
         provider: j['provider'] as String? ?? 'WAVE',
         declared: j['declared'] as bool? ?? false,
+        method: j['method'] as String?,
       );
 
   final String status;
@@ -154,8 +155,10 @@ class Payment {
   final String? launchUrl;
   final String provider; // WAVE (checkout link) | WAVE_QR (personal QR, confirmed by Flariane)
   final bool declared;
+  final String? method; // WAVE | ORANGE | MOOV
 
-  bool get isQr => provider == 'WAVE_QR';
+  /// Paid outside the app (mobile money + screenshot), confirmed by Flariane.
+  bool get isQr => provider == 'MANUAL' || provider == 'WAVE_QR';
 }
 
 class Order {

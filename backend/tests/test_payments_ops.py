@@ -224,30 +224,33 @@ async def test_whatsapp_test_endpoint(client: AsyncClient, admin: AdminFixture) 
     assert whatsapp.SENT_LOG[-1]["template"] == "hello_world" and whatsapp.SENT_LOG[-1]["lang"] == "en_US"
 
 
-async def test_wave_qr_manual_payment(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+async def test_manual_mobile_money_payment(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
     import io
 
     from PIL import Image
 
     from app import tasks
 
-    buf = io.BytesIO()
-    Image.new("RGB", (40, 40), "blue").save(buf, format="PNG")
-    r = await client.post("/admin/settings/wave-qr", files={"file": ("qr.png", buf.getvalue(), "image/png")}, headers=admin.headers)
-    assert r.status_code == 200 and r.json()["has_wave_qr"] and "wave_qr_image" not in r.json()
-    await client.put("/admin/settings", json={"payment_mode": "wave_qr", "wave_phone": "07 00 00 00 00"}, headers=admin.headers)
+    await client.put("/admin/settings", json={"payment_mode": "manual", "payment_accounts": {"WAVE": "0700000000", "ORANGE": "0707070707", "MOOV": None}}, headers=admin.headers)
     info = (await client.get("/public/info")).json()
-    assert info["payment_mode"] == "wave_qr" and info["has_wave_qr"] and info["wave_phone"] == "07 00 00 00 00"
-    assert (await client.get("/public/wave-qr")).headers["content-type"] == "image/png"
+    assert info["payment_mode"] == "manual" and info["payment_accounts"] == {"WAVE": "0700000000", "ORANGE": "0707070707"}
 
     ref = (await create_order(client, customer, pickup_point))["public_ref"]
     oid = await order_id(ref)
     await quote_and_send(client, admin, oid)
     p = (await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)).json()
-    assert p["provider"] == "WAVE_QR" and p["status"] == "PENDING" and p["launch_url"] is None
-    r = await client.post(f"/orders/{ref}/payment/declare", headers=customer)
-    assert r.json()["declared"] is True
+    assert p["provider"] == "MANUAL" and p["status"] == "PENDING" and p["launch_url"] is None
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 60), "orange").save(buf, format="JPEG")
+    r = await client.post(f"/orders/{ref}/payment/declare", data={"method": "ORANGE"}, files={"file": ("pay.jpg", buf.getvalue(), "image/jpeg")}, headers=customer)
+    assert r.status_code == 200, r.text
+    assert r.json()["declared"] and r.json()["method"] == "ORANGE" and r.json()["has_proof"]
     assert tasks.RECORDED[-1][1]["event"] == "payment_declared"
-    assert (await client.post(f"/admin/orders/{oid}/confirm-payment", json={"transaction_ref": "T_ABC"}, headers=admin.headers)).status_code == 204
+
+    proof = await client.get(f"/admin/orders/{oid}/payment-proof", headers=admin.headers)
+    assert proof.status_code == 200 and proof.headers["content-type"] == "image/jpeg"
+    assert (await client.get(f"/admin/orders/{oid}/payment-proof", headers=customer)).status_code == 401
+
+    assert (await client.post(f"/admin/orders/{oid}/confirm-payment", json={"transaction_ref": "OM123"}, headers=admin.headers)).status_code == 204
     assert (await client.get(f"/orders/{ref}", headers=customer)).json()["status"] == "PAID"
-    assert (await client.post(f"/admin/orders/{oid}/confirm-payment", json={}, headers=admin.headers)).status_code == 409

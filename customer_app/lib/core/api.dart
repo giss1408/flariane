@@ -168,8 +168,11 @@ class CustomerApi {
 
   String get waveQrUrl => '${dio.options.baseUrl}/public/wave-qr';
 
-  Future<Payment> declarePayment(String ref) =>
-      _call(() => dio.post('/orders/$ref/payment/declare'), (j) => Payment.fromJson(j as Map<String, dynamic>));
+  Future<Payment> declarePayment(String ref, {required String method, required String proofPath}) => _call(
+        () async => dio.post('/orders/$ref/payment/declare',
+            data: FormData.fromMap({'method': method, 'file': await MultipartFile.fromFile(proofPath)})),
+        (j) => Payment.fromJson(j as Map<String, dynamic>),
+      );
 
   // ---- orders
 

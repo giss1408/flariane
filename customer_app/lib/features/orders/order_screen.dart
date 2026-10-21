@@ -11,7 +11,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
-import 'wave_pay_screen.dart';
+import 'pay_screen.dart';
 import '../../widgets/logo.dart';
 
 class OrderScreen extends ConsumerStatefulWidget {
@@ -132,8 +132,8 @@ class _StatusBanner extends ConsumerWidget {
       'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', AppColors.primary),
       'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', AppColors.warning),
       'QUOTED' => ('Votre devis est prêt.', AppColors.primary),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Paiement déclaré : on le vérifie dans Wave.', AppColors.primary),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie avec Wave pour lancer la commande.', AppColors.warning),
+      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', AppColors.primary),
+      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', AppColors.warning),
       'AWAITING_PAYMENT' when order.paymentPending => ('Nous confirmons votre paiement Wave…', AppColors.primary),
       'AWAITING_PAYMENT' => ('Paiement non abouti. Vous pouvez réessayer.', AppColors.warning),
       'PAID' => ('Paiement reçu. Nous achetons vos articles.', AppColors.success),
@@ -173,9 +173,9 @@ class _StatusBanner extends ConsumerWidget {
           const SizedBox(height: 10),
           FilledButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => WavePayScreen(orderRef: order.ref, amountXof: order.payment!.amountXof, declared: order.payment!.declared),
+              builder: (_) => PayScreen(orderRef: order.ref, amountXof: order.payment!.amountXof, declared: order.payment!.declared),
             )),
-            child: Text(order.payment!.declared ? 'Voir les infos de paiement' : 'Payer avec Wave'),
+            child: Text(order.payment!.declared ? 'Preuve envoyée' : 'Payer (Wave, Orange, Moov)'),
           ),
         ],
         if (order.status == 'AWAITING_PAYMENT' && !order.paymentPending && order.payment?.isQr != true) ...[
@@ -227,7 +227,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
       if (p.isQr) {
         if (mounted) {
           await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => WavePayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
+            builder: (_) => PayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
           ));
         }
       } else {
@@ -304,7 +304,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
           onPressed: _sizesChecked && !_busy ? _accept : null,
           child: _busy
               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-              : Text('Accepter et payer ${fcfa(q.totalXof)} avec Wave'),
+              : Text('Accepter et payer ${fcfa(q.totalXof)}'),
         ),
         const SizedBox(height: 8),
         OutlinedButton(

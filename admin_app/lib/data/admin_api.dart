@@ -220,6 +220,12 @@ class AdminApi {
         (_) {},
       );
 
+  /// The customer's payment screenshot (private: fetched with the admin token).
+  Future<List<int>> paymentProof(int orderId) => client.call(
+        (d) => d.get('/admin/orders/$orderId/payment-proof', options: Options(responseType: ResponseType.bytes)),
+        (j) => j as List<int>,
+      );
+
   Future<Map<String, dynamic>> uploadWaveQr(String path) => client.call(
         (d) async => d.post('/admin/settings/wave-qr', data: FormData.fromMap({'file': await MultipartFile.fromFile(path)})),
         (j) => j as Map<String, dynamic>,

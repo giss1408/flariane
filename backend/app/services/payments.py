@@ -20,6 +20,9 @@ from app.services.orders import transition_order
 
 log = logging.getLogger("flariane.payments")
 
+# Paid by the customer outside our systems, confirmed by an admin (WAVE_QR kept for older rows).
+MANUAL_PROVIDERS = ("MANUAL", "WAVE_QR")
+
 P = PaymentStatus
 PAYMENT_TRANSITIONS: dict[P, set[P]] = {
     P.INITIATED: {P.PENDING, P.FAILED},
@@ -163,7 +166,7 @@ async def confirm_manual_payment(db: AsyncSession, order_id: int, transaction_re
     if order.status != OrderStatus.AWAITING_PAYMENT:
         raise Conflict("not_awaiting_payment", order.status)
     payment = await db.scalar(
-        select(Payment).where(Payment.order_id == order.id, Payment.provider == "WAVE_QR", Payment.status == P.PENDING)
+        select(Payment).where(Payment.order_id == order.id, Payment.provider.in_(MANUAL_PROVIDERS), Payment.status == P.PENDING)
         .order_by(Payment.id.desc()).limit(1).with_for_update()
     )
     if payment is None:

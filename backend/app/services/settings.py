@@ -16,10 +16,12 @@ DEFAULTS: dict[str, Any] = {
     "quote_validity_hours": 48,
     "price_increase_buffer_percent": 5,
     "store_currency_default": "EUR",
-    # wave_qr: customer pays your personal Wave QR / number, admin confirms by hand.
+    # manual: customer pays one of our mobile-money numbers, uploads a screenshot, admin confirms.
     # wave_checkout: Wave Business Checkout API (automatic confirmation).
-    "payment_mode": "wave_qr",
-    "wave_phone": None,
+    "payment_mode": "manual",
+    "wave_phone": None,  # legacy, superseded by payment_accounts["WAVE"]
+    # Numbers customers pay to. A method without a number isn't offered.
+    "payment_accounts": {"WAVE": None, "ORANGE": None, "MOOV": None},
     "wave_qr_image": None,  # {"content_type": ..., "data_b64": ...}: kept in the DB, survives redeploys
     # Transport pre-filled on cart-mode quotes.
     "freight_default_xof": 5000,
