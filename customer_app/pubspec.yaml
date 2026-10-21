@@ -100,3 +100,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+dependency_overrides:
+  # Newer geolocator_android needs a newer Flutter Gradle plugin than 3.24 ships.
+  geolocator_android: 4.6.1
