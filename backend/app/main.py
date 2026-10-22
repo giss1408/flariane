@@ -19,6 +19,7 @@ from app.routers import (
     customer,
     dev,
     files,
+    legal,
     payment_return,
     setup,
     webhooks,
@@ -55,8 +56,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     s = get_settings()
     prod = s.env == "prod"
-    if prod and (s.wave_mode != "live" or s.whatsapp_mode != "live"):
-        raise RuntimeError("production requires live Wave and WhatsApp")
+    # Production may run with manual mobile-money payments and admin-sent WhatsApp; the simulated
+    # Wave page is never mounted in prod (dev_routes_enabled is False), and checkout refuses fake Wave.
 
     app = FastAPI(
         title="Flariane API",
@@ -87,7 +88,7 @@ def create_app() -> FastAPI:
         return response
 
     install_error_handlers(app)
-    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return, setup):
+    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return, setup, legal):
         app.include_router(module.router)
     if s.dev_routes_enabled and s.wave_mode == "fake":
         app.include_router(dev.router)  # simulated Wave checkout page

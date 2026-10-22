@@ -364,6 +364,8 @@ async def retry_payment(ref: str, customer: Customer = authed, db: AsyncSession 
 async def _start_payment(db: AsyncSession, payment: Payment, ref: str) -> PaymentOut:
     """Wave Checkout (business account) or manual Wave QR, depending on the payment_mode setting."""
     settings = await get_settings_map(db)
+    if settings["payment_mode"] == "wave_checkout" and get_settings().env == "prod" and get_settings().wave_mode != "live":
+        raise Conflict("payment_unavailable", "Wave Business n’est pas configuré")
     if settings["payment_mode"] != "wave_checkout":
         if payment.status == PaymentStatus.INITIATED:
             payment.provider = "MANUAL"

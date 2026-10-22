@@ -165,3 +165,14 @@ def test_german_numbers_refused_in_prod(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(get_settings(), "env", "prod")
     with pytest.raises(BadRequest):
         normalize_ci_phone("+4915123456789")
+
+
+async def test_legal_pages() -> None:
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        for path in ("/legal/confidentialite", "/legal/suppression-compte"):
+            r = await c.get(path)
+            assert r.status_code == 200 and "Flariane" in r.text

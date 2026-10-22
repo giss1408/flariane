@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -56,6 +57,11 @@ class AccountScreen extends ConsumerWidget {
                 await ref.read(authProvider.notifier).logout();
                 if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Confidentialité'),
+              onTap: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),

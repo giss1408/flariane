@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/providers.dart';
@@ -138,6 +139,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         child: const Text('Mot de passe oublié ?'),
                       ),
+                    TextButton(
+                      onPressed: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
+                      child: const Text('Confidentialité', style: TextStyle(color: AppColors.muted)),
+                    ),
                   ]),
                 ),
               ),

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Never mounted in prod, whatever this says.
     dev_routes: bool | None = None
     api_base_url: str = "http://localhost:8000"
+    # Shown on the public privacy / account-deletion pages required by the app stores.
+    contact_email: str = "contact@flariane.ci"
+    company_name: str = "Flariane"
     customer_app_url: str = "http://localhost:3000"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
