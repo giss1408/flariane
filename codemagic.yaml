@@ -33,7 +33,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.regisse.flariane
       vars:
-        APP_STORE_APPLE_ID: "" # App Store Connect → the app → App Information → Apple ID (numeric)
+        APP_STORE_APPLE_ID: "6825787211" # App Store Connect → the app → App Information → Apple ID (numeric)
         API_BASE_URL: https://flariane-api.onrender.com
     scripts:
       - name: Dependencies
