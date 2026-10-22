@@ -30,7 +30,7 @@ android {
     defaultConfig {
         applicationId = "com.regisse.flariane"
         minSdk = 23 // flutter_secure_storage
-        targetSdk = 35 // Google Play requirement (Android 15)
+        targetSdk = 36 // Google Play requirement (Android 16) since 31 August 2026
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
