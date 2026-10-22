@@ -2,7 +2,8 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db import get_session
+from app.db import get_session, on_commit
+from app.tasks import dispatch
 from app.errors import DomainError
 from app.ratelimit import ip_limited
 from app.schemas import LoginIn, RefreshIn, RegisterIn, TokenOut
@@ -54,6 +55,7 @@ async def register(data: RegisterIn, request: Request, response: Response, db: A
     customer = await customer_auth.register(db, data.phone, data.password, data.display_name)
     refresh = await issue_refresh_token(db, "customer", customer.id)
     await audit(db, actor_type="customer", actor_id=customer.id, action="auth.registered", ip=client_ip(request))
+    on_commit(db, lambda: dispatch("push_admins", event="customer_registered", order_ref=f"#{customer.id}", order_id=0))
     await db.commit()
     return _tokens(customer.id, refresh, data.client, response)
 

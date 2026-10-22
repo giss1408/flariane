@@ -74,5 +74,6 @@ const errorMessages = {
   'no_quote': 'Aucun devis envoyé.',
   'no_pending_payment': 'Aucun paiement Wave en attente.',
   'not_awaiting_payment': 'La commande n’attend plus de paiement.',
+  'already_verified': 'Numéro déjà vérifié.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

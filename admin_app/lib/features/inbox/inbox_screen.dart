@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import '../order/order_screen.dart';
+import 'verifications_screen.dart';
 
 class InboxTab {
   const InboxTab(this.key, this.label);
@@ -78,7 +79,10 @@ class InboxScreen extends ConsumerWidget {
             tabs: [for (final t in inboxTabs) Tab(text: t.label)],
           ),
         ),
-        body: TabBarView(children: [for (final t in inboxTabs) _OrderList(tab: t.key)]),
+        body: Column(children: [
+          if (ref.watch(sessionProvider).me?.canOperate ?? false) const VerificationsBanner(),
+          Expanded(child: TabBarView(children: [for (final t in inboxTabs) _OrderList(tab: t.key)])),
+        ]),
       ),
     );
   }

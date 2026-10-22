@@ -46,6 +46,18 @@ class ChangePasswordIn(In):
     new_password: Password
 
 
+class VerifyPhoneIn(In):
+    code: Annotated[str, StringConstraints(pattern=r"^\d{6}$")]
+
+
+class UnverifiedCustomerOut(BaseModel):
+    id: int
+    display_name: str | None
+    phone_masked: str
+    created_at: datetime
+    code_sent: bool
+
+
 class TempPasswordOut(BaseModel):
     temporary_password: str  # shown once to the admin
 
@@ -125,6 +137,7 @@ class CustomerOut(Out):
     locale: str
     phone_masked: str
     must_change_password: bool = False
+    phone_verified: bool = True
     location: LocationOut | None = None
 
 

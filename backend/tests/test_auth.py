@@ -274,3 +274,40 @@ async def test_super_admin_always_needs_totp(client: AsyncClient, admin: AdminFi
     assert r.json()["totp_required"] is True and r.json()["totp_uri"]
     r = await client.post(f"/admin/users/{admin.user.id}/totp", json={"required": False}, headers=admin.headers)
     assert r.status_code == 400
+
+
+async def test_phone_verification_by_whatsapp_code(client: AsyncClient, admin: AdminFixture) -> None:
+    from urllib.parse import unquote
+
+    from app import tasks
+    from tests.conftest import CART_SHARE
+
+    r = await client.post("/auth/register", json={"phone": "0507080910", "password": "bonjour-2026", "display_name": "Aya"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert tasks.RECORDED[-1][1]["event"] == "customer_registered"
+    assert (await client.get("/me", headers=h)).json()["phone_verified"] is False
+    r = await client.post("/orders", json={"share_text": CART_SHARE}, headers=h)
+    assert r.status_code == 403 and r.json()["detail"] == "phone_not_verified"
+
+    pending = (await client.get("/admin/customers/unverified", headers=admin.headers)).json()
+    cid = pending[0]["id"]
+    assert pending[0]["phone_masked"] == "+225 05 •• •• 10" and pending[0]["code_sent"] is False
+    url = (await client.post(f"/admin/customers/{cid}/verification-code", headers=admin.headers)).json()["url"]
+    assert url.startswith("https://wa.me/2250507080910?text=")
+    code = unquote(url).split("*")[1]
+    wrong = "000000" if code != "000000" else "111111"
+    assert (await client.post("/me/verify-phone", json={"code": wrong}, headers=h)).status_code == 400
+    r = await client.post("/me/verify-phone", json={"code": code}, headers=h)
+    assert r.status_code == 200 and r.json()["phone_verified"] is True
+    assert (await client.post("/orders", json={"share_text": CART_SHARE}, headers=h)).status_code == 201
+    assert (await client.get("/admin/customers/unverified", headers=admin.headers)).json() == []
+
+
+async def test_reject_fake_registration(client: AsyncClient, admin: AdminFixture) -> None:
+    r = await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    cid = (await client.get("/admin/customers/unverified", headers=admin.headers)).json()[0]["id"]
+    assert (await client.post(f"/admin/customers/{cid}/reject", headers=admin.headers)).status_code == 204
+    assert (await client.get("/me", headers=h)).status_code == 401
+    # The number is free again for its real owner.
+    assert (await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026"})).status_code == 201

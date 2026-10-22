@@ -27,19 +27,21 @@ class Location {
 Location? _location(Object? j) => j == null ? null : Location.fromJson(j as Map<String, dynamic>);
 
 class Me {
-  Me({required this.displayName, required this.phoneMasked, this.mustChangePassword = false, this.location});
+  Me({required this.displayName, required this.phoneMasked, this.mustChangePassword = false, this.location, this.phoneVerified = true});
 
   factory Me.fromJson(Map<String, dynamic> j) => Me(
         displayName: j['display_name'] as String?,
         phoneMasked: j['phone_masked'] as String? ?? '',
         mustChangePassword: j['must_change_password'] as bool? ?? false,
         location: _location(j['location']),
+        phoneVerified: j['phone_verified'] as bool? ?? true,
       );
 
   final String? displayName;
   final String phoneMasked;
   final bool mustChangePassword;
   final Location? location;
+  final bool phoneVerified;
 }
 
 class PickupPoint {

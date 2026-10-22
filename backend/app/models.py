@@ -40,6 +40,11 @@ class Customer(TimestampMixin, Base):
     locale: Mapped[str] = mapped_column(String(5), default="fr")
     password_hash: Mapped[str | None] = mapped_column(String(200))  # argon2id
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)  # after an admin reset
+    # Number ownership, proven with a code the admin sends from their WhatsApp. No orders before that.
+    phone_verified_at: Mapped[datetime | None] = _ts()
+    verify_code_hash: Mapped[str | None] = mapped_column(String(64))
+    verify_code_expires_at: Mapped[datetime | None] = _ts()
+    verify_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Where she lives in Abidjan, for dispatch planning. Commune in clear (grouping);
     # quartier, landmark and GPS encrypted as JSON (AES-GCM), like the phone number.
     location_commune: Mapped[str | None] = mapped_column(String(40), index=True)

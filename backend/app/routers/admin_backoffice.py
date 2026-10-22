@@ -36,8 +36,9 @@ from app.schemas import (
     SettingsIn,
     TempPasswordOut,
     TotpRequiredIn,
+    UnverifiedCustomerOut,
 )
-from app.security.crypto import encrypt, hash_password
+from app.security.crypto import decrypt, encrypt, hash_password, mask_phone
 from fastapi import HTTPException
 
 from app.enums import ROLE_RANK
@@ -119,6 +120,48 @@ async def whatsapp_test(data: WhatsAppTestIn, request: Request, admin: AdminCont
 
 
 # ---------------------------------------------------------------- customers
+
+
+@router.get("/customers/unverified", response_model=list[UnverifiedCustomerOut])
+async def unverified_customers(_: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> list[UnverifiedCustomerOut]:
+    rows = (await db.scalars(
+        select(Customer).where(Customer.phone_verified_at.is_(None), Customer.anonymised_at.is_(None)).order_by(Customer.created_at)
+    )).all()
+    return [
+        UnverifiedCustomerOut(id=c.id, display_name=c.display_name, phone_masked=mask_phone(decrypt(c.phone_enc)) if c.phone_enc else "",
+                              created_at=c.created_at, code_sent=c.verify_code_hash is not None)
+        for c in rows
+    ]
+
+
+@router.post("/customers/{customer_id}/verification-code")
+async def send_verification_code(customer_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+    """New 6-digit code + wa.me link: the admin sends it from their WhatsApp, the customer types it in the app."""
+    from app.services import phone_verification
+    from app.services.notify import first_name
+    from app.services.wa_messages import wa_link
+
+    customer = await db.get(Customer, customer_id)
+    if customer is None or customer.phone_enc is None:
+        raise NotFound()
+    code = phone_verification.issue_code(customer)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="customer.verification_code_sent", entity="customer", entity_id=customer.id, ip=client_ip(request))
+    await db.commit()
+    return {"url": wa_link(decrypt(customer.phone_enc), phone_verification.message(first_name(customer), code))}
+
+
+@router.post("/customers/{customer_id}/reject", status_code=204)
+async def reject_registration(customer_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
+    """Unverified registration that isn't genuine (number not on WhatsApp, no answer): anonymise it."""
+    customer = await db.get(Customer, customer_id)
+    if customer is None:
+        raise NotFound()
+    if customer.phone_verified_at is not None:
+        raise Conflict("already_verified")
+    customer.display_name = customer.phone_enc = customer.phone_hash = customer.password_hash = None
+    customer.anonymised_at = utcnow()
+    await audit(db, actor_type="admin", actor_id=admin.id, action="customer.registration_rejected", entity="customer", entity_id=customer.id, ip=client_ip(request))
+    await db.commit()
 
 
 @router.post("/customers/{customer_id}/reset-password", response_model=TempPasswordOut)

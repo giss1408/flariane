@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import get_session
 from app.enums import OrderStatus, PaymentStatus, QuoteStatus
-from app.errors import BadRequest, Conflict, NotFound
+from app.errors import BadRequest, Conflict, Forbidden, NotFound
 from app.integrations import storage
 from app.models import (
     Customer,
@@ -28,6 +28,7 @@ from app.schemas import (
     CustomerOut,
     ChangePasswordIn,
     CustomerUpdateIn,
+    VerifyPhoneIn,
     LocationIn,
     LocationOut,
     OrderCreateIn,
@@ -42,7 +43,7 @@ from app.schemas import (
 from app.security.crypto import decrypt, mask_phone
 from app.security.deps import client_ip
 from app.security.tokens import utcnow
-from app.services import customer_auth, notify, quotes
+from app.services import customer_auth, notify, phone_verification, quotes
 from app.services.audit import audit
 from app.services import location as loc
 from app.services.links import extract_shein_urls, pick_cart_url, store_of
@@ -60,6 +61,7 @@ def _customer_out(c: Customer) -> CustomerOut:
         id=c.id, display_name=c.display_name, locale=c.locale,
         phone_masked=mask_phone(phone) if phone else "", must_change_password=c.must_change_password,
         location=_location_out(c.location_commune, c.location_enc),
+        phone_verified=c.phone_verified_at is not None,
     )
 
 
@@ -86,6 +88,17 @@ async def update_me(data: CustomerUpdateIn, customer: Customer = authed, db: Asy
         customer.display_name = data.display_name
     if data.locale is not None:
         customer.locale = data.locale
+    await db.commit()
+    return _customer_out(customer)
+
+
+@router.post("/me/verify-phone", response_model=CustomerOut)
+async def verify_phone(data: VerifyPhoneIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    try:
+        phone_verification.check_code(customer, data.code)
+    finally:
+        await db.commit()  # keep the failed-attempt counter
+    await audit(db, actor_type="customer", actor_id=customer.id, action="customer.phone_verified", ip=client_ip(request))
     await db.commit()
     return _customer_out(customer)
 
@@ -236,6 +249,8 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
 
 @router.post("/orders", response_model=OrderDetailOut, status_code=201)
 async def create_order(data: OrderCreateIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> OrderDetailOut:
+    if customer.phone_verified_at is None:
+        raise Forbidden("phone_not_verified")
     urls = extract_shein_urls(data.share_text)
     if not urls:
         raise BadRequest("no_shein_link", "Collez le lien de partage de votre panier SHEIN ou Temu")

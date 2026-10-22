@@ -115,6 +115,17 @@ class AdminApi {
         (j) => (j as List).cast<Map<String, dynamic>>().map(PickupDeskOrder.fromJson).toList(),
       );
 
+  Future<List<Map<String, dynamic>>> unverifiedCustomers() => client.call(
+        (d) => d.get('/admin/customers/unverified'),
+        (j) => (j as List).cast<Map<String, dynamic>>(),
+      );
+
+  /// New 6-digit code for the customer, as a wa.me link to send from this phone.
+  Future<String> verificationCodeLink(int customerId) =>
+      client.call((d) => d.post('/admin/customers/$customerId/verification-code'), (j) => (j as Map)['url'] as String);
+
+  Future<void> rejectRegistration(int customerId) => client.call((d) => d.post('/admin/customers/$customerId/reject'), (_) {});
+
   Future<String> revealPhone(int orderId) =>
       client.call((d) => d.post('/admin/orders/$orderId/reveal-phone'), (j) => (j as Map)['phone'] as String);
 

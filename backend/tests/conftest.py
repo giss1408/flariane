@@ -125,6 +125,16 @@ PASSWORD = "awa-secret-2026"
 async def login_customer(client: AsyncClient, phone: str = PHONE, name: str = "Awa Koné") -> dict[str, str]:
     r = await client.post("/auth/register", json={"phone": phone, "password": PASSWORD, "display_name": name})
     assert r.status_code == 201, r.text
+    # Most tests start from a verified number (the verification flow has its own test).
+    from sqlalchemy import update
+
+    from app.models import Customer
+    from app.security.crypto import phone_hash
+    from app.services.customer_auth import normalize_ci_phone
+
+    async with SessionLocal() as db:
+        await db.execute(update(Customer).where(Customer.phone_hash == phone_hash(normalize_ci_phone(phone))).values(phone_verified_at=utcnow()))
+        await db.commit()
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 

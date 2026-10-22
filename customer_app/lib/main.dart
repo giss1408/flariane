@@ -9,6 +9,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'core/providers.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/verify_phone_screen.dart';
 import 'features/orders/home_screen.dart';
 
 Future<void> main() async {
@@ -77,13 +78,15 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> {
   }
 }
 
-/// After an admin password reset, the customer must set a new password before anything else.
+/// Gates before the home screen: forced password change (after an admin reset), then phone verification.
 class _PasswordGate extends ConsumerWidget {
   const _PasswordGate();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(meProvider).valueOrNull;
-    return me?.mustChangePassword == true ? const ChangePasswordScreen(forced: true) : const HomeScreen();
+    if (me?.mustChangePassword == true) return const ChangePasswordScreen(forced: true);
+    if (me != null && !me.phoneVerified) return VerifyPhoneScreen(phoneMasked: me.phoneMasked);
+    return const HomeScreen();
   }
 }

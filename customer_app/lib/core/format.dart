@@ -73,5 +73,9 @@ const errorMessages = {
   'file_too_large': 'Image trop lourde (10 Mo max).',
   'too_many_attachments': '10 captures maximum.',
   'incomplete_gps': 'Position GPS incomplète, réessaie.',
+  'phone_not_verified': 'Vérifie d’abord ton numéro avec le code reçu sur WhatsApp.',
+  'wrong_verification_code': 'Code incorrect.',
+  'no_verification_code': 'Pas encore de code : tu vas le recevoir sur WhatsApp.',
+  'verification_locked': 'Trop d’essais. Écris-nous sur WhatsApp pour recevoir un nouveau code.',
   'rate_limited': 'Trop de requêtes. Patientez un instant.',
 };
