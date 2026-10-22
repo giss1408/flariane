@@ -180,6 +180,7 @@ class Order {
     required this.attachments,
     required this.canCancel,
     required this.canRequestRequote,
+    this.paymentDeadline,
   });
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
@@ -195,6 +196,7 @@ class Order {
         attachments: j['attachments'] as int? ?? 0,
         canCancel: j['can_cancel'] as bool? ?? false,
         canRequestRequote: j['can_request_requote'] as bool? ?? false,
+        paymentDeadline: _date(j['payment_deadline']),
       );
 
   final String ref;
@@ -209,6 +211,7 @@ class Order {
   final int attachments;
   final bool canCancel;
   final bool canRequestRequote;
+  final DateTime? paymentDeadline; // cancelled automatically if not paid by then
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 

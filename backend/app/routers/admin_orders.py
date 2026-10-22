@@ -55,6 +55,7 @@ from app.services import location as loc
 from app.services import wa_messages as wa
 from app.services import operations, quotes
 from app.services import payments as payments_service
+from app.security.tokens import utcnow
 from app.services.audit import audit
 from app.services.settings import get_settings_map
 
@@ -102,7 +103,7 @@ async def inbox(
     if q:
         stmt = stmt.where(Order.public_ref.ilike(f"%{q.strip().upper()}%"))
     elif tab != "all":
-        stmt = stmt.where(Order.status.in_(TABS[tab]))
+        stmt = stmt.where(Order.status.in_(TABS[tab]), Order.archived_at.is_(None))
     order_desc = tab in ("done", "all") or bool(q)
     stmt = stmt.order_by(Order.status_changed_at.desc() if order_desc else Order.status_changed_at.asc()).limit(200)
     rows = (await db.execute(stmt)).all()
@@ -346,6 +347,19 @@ class WhatsAppMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: Literal["quote", "payment", "pickup"]
     code: Annotated[str, StringConstraints(pattern=r"^\d{6}$")] | None = None
+
+
+@router.post("/{order_id}/archive", status_code=204)
+async def archive_order(order_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
+    """Remove a finished order from the admin lists (collected, cancelled or refunded). Kept for history."""
+    order = await db.get(Order, order_id)
+    if order is None:
+        raise NotFound()
+    if order.status not in (OrderStatus.PICKED_UP, OrderStatus.CANCELLED, OrderStatus.REFUNDED):
+        raise Conflict("order_not_finished")
+    order.archived_at = utcnow()
+    await audit(db, actor_type="admin", actor_id=admin.id, action="order.archived", entity="order", entity_id=order.id, ip=client_ip(request))
+    await db.commit()
 
 
 @router.post("/{order_id}/whatsapp")

@@ -193,6 +193,8 @@ async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
         "payment_mode": settings["payment_mode"],
         "wave_phone": settings.get("wave_phone"),
         "has_wave_qr": bool(settings.get("wave_qr_image")),
+        "support_whatsapp": settings.get("support_whatsapp"),
+        "payment_deadline_days": settings["payment_deadline_days"],
         # Only methods with a number are offered to customers.
         "payment_accounts": {k: v for k, v in (settings.get("payment_accounts") or {}).items() if v}
         or ({"WAVE": settings["wave_phone"]} if settings.get("wave_phone") else {}),
@@ -266,6 +268,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         attachments=attachments,
         can_cancel=await quotes.can_cancel(db, order),
         can_request_requote=order.status == OrderStatus.QUOTED and expired,
+        payment_deadline=await quotes.payment_deadline(db, order),
     )
 
 

@@ -141,11 +141,51 @@ async def reconcile_payments() -> dict[str, int]:
     return counts
 
 
+async def cancel_unpaid_orders() -> int:
+    """Quotes not paid within `payment_deadline_days`: cancel the order. Orders whose payment proof
+    is waiting for an admin check are left alone."""
+    from app.enums import OrderStatus
+    from app.models import Order
+    from app.services.orders import transition_order
+    from app.services.settings import get_settings_map
+
+    cancelled = 0
+    async with session_factory() as db:
+        days = int((await get_settings_map(db))["payment_deadline_days"])
+        cutoff = utcnow() - timedelta(days=days)
+        candidates = (await db.scalars(
+            select(Order).where(Order.status.in_([OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT]))
+        )).all()
+        for order in candidates:
+            sent = await db.scalar(
+                select(Quote.sent_at).where(Quote.order_id == order.id, Quote.status != QuoteStatus.DRAFT)
+                .order_by(Quote.version.desc()).limit(1)
+            )
+            if sent is None or sent > cutoff:
+                continue
+            in_review = await db.scalar(select(Payment.id).where(
+                Payment.order_id == order.id, Payment.status.in_([PaymentStatus.PENDING, PaymentStatus.SUCCEEDED, PaymentStatus.HELD]),
+                (Payment.status_reason == "declared") | (Payment.status != PaymentStatus.PENDING),
+            ).limit(1))
+            if in_review is not None:
+                continue
+            await db.refresh(order, with_for_update=True)
+            if order.status not in (OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT):
+                continue
+            for p in (await db.scalars(select(Payment).where(Payment.order_id == order.id, Payment.status.in_([PaymentStatus.INITIATED, PaymentStatus.PENDING])))).all():
+                p.status, p.status_reason = PaymentStatus.EXPIRED, "unpaid_deadline"
+            await transition_order(db, order, OrderStatus.CANCELLED, actor="system:unpaid_deadline")
+            cancelled += 1
+        await db.commit()
+    return cancelled
+
+
 TASKS: dict[str, Callable[..., Awaitable[Any]]] = {
     "send_customer_whatsapp": send_customer_whatsapp,
     "push_admins": push_admins,
     "expire_quotes": expire_quotes,
     "reconcile_payments": reconcile_payments,
+    "cancel_unpaid_orders": cancel_unpaid_orders,
 }
 
 

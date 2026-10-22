@@ -23,6 +23,10 @@ DEFAULTS: dict[str, Any] = {
     # Numbers customers pay to. A method without a number isn't offered.
     "payment_accounts": {"WAVE": None, "ORANGE": None, "MOOV": None},
     "wave_qr_image": None,  # {"content_type": ..., "data_b64": ...}: kept in the DB, survives redeploys
+    # Orders not paid within this many days after the quote is sent are cancelled automatically.
+    "payment_deadline_days": 3,
+    # WhatsApp number customers write to with questions (wa.me). None hides the button.
+    "support_whatsapp": None,
     # Transport pre-filled on cart-mode quotes.
     "freight_default_xof": 5000,
     # Next weekly shipment leaving for Abidjan (ISO date), shown to customers. None hides the card.

@@ -52,6 +52,11 @@ class HomeScreen extends ConsumerWidget {
         showBack: false,
         actions: [
           IconButton(
+            tooltip: 'Poser une question sur WhatsApp',
+            icon: const Icon(Icons.chat_outlined),
+            onPressed: () => askOnWhatsApp(context, ref),
+          ),
+          IconButton(
             tooltip: 'Mon compte',
             icon: const Icon(Icons.person_outline_rounded),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen())),
@@ -189,7 +194,7 @@ class _ActiveOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nudge = switch (order.status) {
-      'QUOTED' => 'Ton devis t’attend',
+      'QUOTED' => 'Ton devis t’attend (3 jours pour payer)',
       'AWAITING_PAYMENT' => 'Paiement à finaliser',
       'READY_FOR_PICKUP' => 'Ton colis t’attend au point de retrait',
       _ => null,

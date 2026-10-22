@@ -32,14 +32,15 @@ async def _inline_scheduler() -> None:
     log = logging.getLogger("flariane.scheduler")
     ticks = 0
     while True:
-        await asyncio.sleep(300)
-        ticks += 1
-        for name, every in (("expire_quotes", 1), ("reconcile_payments", 2)):
+        # Runs once right after start-up (free hosting wakes up on demand), then every 5 minutes.
+        for name, every in (("expire_quotes", 1), ("reconcile_payments", 2), ("cancel_unpaid_orders", 1)):
             if ticks % every == 0:
                 try:
                     await tasks.TASKS[name]()
                 except Exception:
                     log.exception("scheduled task %s failed", name)
+        await asyncio.sleep(300)
+        ticks += 1
 
 
 @contextlib.asynccontextmanager

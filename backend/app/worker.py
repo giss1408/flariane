@@ -23,6 +23,7 @@ celery_app.conf.update(
     beat_schedule={
         "expire-quotes": {"task": "flariane.expire_quotes", "schedule": 300.0},
         "reconcile-payments": {"task": "flariane.reconcile_payments", "schedule": 600.0},
+        "cancel-unpaid": {"task": "flariane.cancel_unpaid_orders", "schedule": 3600.0},
     },
 )
 

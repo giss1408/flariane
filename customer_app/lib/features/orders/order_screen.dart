@@ -89,6 +89,12 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
                 ),
               ),
             ],
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.chat_rounded),
+              label: const Text('Poser une question sur WhatsApp'),
+              onPressed: () => askOnWhatsApp(context, ref, orderRef: o.ref),
+            ),
             if (o.canCancel) ...[
               const SizedBox(height: 16),
               TextButton(
@@ -122,6 +128,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
       if (mounted) showError(context, e);
     }
   }
+}
+
+/// Opens WhatsApp to Flariane's support number with the order reference pre-filled.
+Future<void> askOnWhatsApp(BuildContext context, WidgetRef ref, {String? orderRef}) async {
+  final number = (await ref.read(publicInfoProvider.future))['support_whatsapp'] as String?;
+  if (number == null || number.isEmpty) {
+    if (context.mounted) showInfo(context, 'Le support WhatsApp n’est pas encore disponible.');
+    return;
+  }
+  var digits = number.replaceAll(RegExp(r'\D'), '');
+  if (digits.length == 10 && digits.startsWith('0')) digits = '225$digits';
+  final text = orderRef == null ? 'Bonjour Flariane, j’ai une question : ' : 'Bonjour Flariane, j’ai une question sur ma commande $orderRef : ';
+  await launchUrl(Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(text)}'), mode: LaunchMode.externalApplication);
 }
 
 class _StatusBanner extends ConsumerWidget {
@@ -158,6 +177,11 @@ class _StatusBanner extends ConsumerWidget {
           ],
           Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
         ]),
+        if (order.paymentDeadline != null && !(order.payment?.declared ?? false)) ...[
+          const SizedBox(height: 8),
+          Text('À payer avant le ${dateTime(order.paymentDeadline)}, sinon la commande sera annulée.',
+              style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+        ],
         if (order.canRequestRequote) ...[
           const SizedBox(height: 10),
           OutlinedButton(

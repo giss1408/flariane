@@ -75,5 +75,6 @@ const errorMessages = {
   'no_pending_payment': 'Aucun paiement Wave en attente.',
   'not_awaiting_payment': 'La commande n’attend plus de paiement.',
   'already_verified': 'Numéro déjà vérifié.',
+  'order_not_finished': 'Seules les commandes terminées peuvent être retirées.',
   'shipment_empty': 'Ajoutez au moins une commande.',
 };

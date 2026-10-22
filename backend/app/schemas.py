@@ -235,6 +235,7 @@ class OrderDetailOut(OrderSummaryOut):
     attachments: int
     can_cancel: bool
     can_request_requote: bool
+    payment_deadline: datetime | None = None  # cancelled automatically if not paid by then
 
 
 class AcceptQuoteIn(In):
@@ -453,6 +454,8 @@ class SettingsIn(In):
     price_increase_buffer_percent: Annotated[float, Field(ge=0, le=100)] | None = None
     store_currency_default: Currency | None = None
     freight_default_xof: Annotated[int, Field(ge=0)] | None = None
+    payment_deadline_days: Annotated[int, Field(ge=1, le=30)] | None = None
+    support_whatsapp: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     payment_mode: Literal["manual", "wave_qr", "wave_checkout"] | None = None
     payment_accounts: dict[Literal["WAVE", "ORANGE", "MOOV"], Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None] | None = None
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None

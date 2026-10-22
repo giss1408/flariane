@@ -124,6 +124,8 @@ class Order(TimestampMixin, Base):
     pickup_point_id: Mapped[int | None] = mapped_column(ForeignKey("pickup_points.id"))
     total_xof: Mapped[int | None] = mapped_column(BigInteger)
     status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Hidden from admin lists (delivered orders the admin cleared). Kept for history and reports.
+    archived_at: Mapped[datetime | None] = _ts()
 
     customer: Mapped[Customer] = relationship(lazy="raise")
     pickup_point: Mapped[PickupPoint | None] = relationship(lazy="raise")

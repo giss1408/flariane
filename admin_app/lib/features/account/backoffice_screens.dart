@@ -384,6 +384,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     'freight_default_xof': 'Transport par défaut d’un devis (FCFA)',
     'min_fee_xof': 'Frais de service minimum (FCFA)',
     'quote_validity_hours': 'Validité du devis (heures)',
+    'payment_deadline_days': 'Délai de paiement avant annulation (jours)',
   };
   static const numFields = {
     'customs_rate_percent': 'Douane (% des articles)',
@@ -407,7 +408,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _c['acct_$k'] = TextEditingController(text: (accounts[k] as String?) ?? (k == 'WAVE' ? s['wave_phone'] as String? ?? '' : ''));
       }
       _hasWaveQr = s['has_wave_qr'] == true;
-      _c['wave_phone'] = TextEditingController(text: s['wave_phone'] as String? ?? '');
+      _c['support_whatsapp'] = TextEditingController(text: s['support_whatsapp'] as String? ?? '');
       final d = s['next_departure_date'] as String?;
       _departure = d == null ? null : DateTime.parse(d);
       setState(() => _loaded = true);
@@ -423,6 +424,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (_departure != null)
         'next_departure_date': '${_departure!.year}-${_departure!.month.toString().padLeft(2, '0')}-${_departure!.day.toString().padLeft(2, '0')}',
       'payment_mode': _paymentMode,
+      if (_c['support_whatsapp']!.text.trim().isNotEmpty) 'support_whatsapp': _c['support_whatsapp']!.text.trim(),
       'payment_accounts': {
         for (final k in ['WAVE', 'ORANGE', 'MOOV']) k: _c['acct_$k']!.text.trim().isEmpty ? null : _c['acct_$k']!.text.trim(),
       },
@@ -468,6 +470,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       }
                     },
                   ),
+                ),
+                const SectionTitle('Support WhatsApp'),
+                TextField(
+                  controller: _c['support_whatsapp'],
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Numéro WhatsApp pour les questions des clientes'),
                 ),
                 const SectionTitle('Paiement'),
                 SegmentedButton<String>(

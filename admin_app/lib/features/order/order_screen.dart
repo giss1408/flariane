@@ -499,6 +499,20 @@ class _PrimaryAction extends ConsumerWidget {
             child: FilledButton(onPressed: () => _confirmPickup(context, ref), child: const Text('Valider le retrait')),
           ),
         ]);
+      case 'PICKED_UP' || 'CANCELLED' || 'REFUNDED':
+        return OutlinedButton.icon(
+          icon: const Icon(Icons.archive_outlined),
+          onPressed: () async {
+            if (!await confirm(context, title: 'Retirer cette commande ?', body: 'Elle disparaît des listes (gardée dans l’historique et les rapports).', ok: 'Retirer')) return;
+            try {
+              await ref.read(adminApiProvider).client.call((d) => d.post('/admin/orders/${order.id}/archive'), (_) {});
+              if (context.mounted) Navigator.of(context).pop();
+            } catch (e) {
+              if (context.mounted) showError(context, e);
+            }
+          },
+          label: const Text('Retirer des listes'),
+        );
       default:
         return const SizedBox.shrink();
     }

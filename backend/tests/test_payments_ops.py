@@ -286,3 +286,35 @@ async def test_pickup_agent_role(client: AsyncClient, customer: dict, admin: Adm
                         ("get", "/admin/shipments"), ("get", "/admin/reports/summary"), ("get", f"/admin/orders/{oid}/payment-proof")]:
         assert (await getattr(client, method)(url, headers=agent.headers)).status_code == 403, url
     assert (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "quote"}, headers=agent.headers)).status_code == 403
+
+
+async def test_unpaid_orders_cancelled_after_deadline(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app import tasks
+    from app.models import Quote
+    from app.security.tokens import utcnow
+
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    await quote_and_send(client, admin, oid)
+    detail = (await client.get(f"/orders/{ref}", headers=customer)).json()
+    assert detail["payment_deadline"] is not None
+    assert await tasks.cancel_unpaid_orders() == 0  # not yet
+    async with SessionLocal() as db:
+        await db.execute(update(Quote).values(sent_at=utcnow() - timedelta(days=4)))
+        await db.commit()
+    assert await tasks.cancel_unpaid_orders() == 1
+    assert (await client.get(f"/orders/{ref}", headers=customer)).json()["status"] == "CANCELLED"
+
+
+async def test_archive_delivered_order(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    assert (await client.post(f"/admin/orders/{oid}/archive", headers=admin.headers)).status_code == 409
+    await client.post(f"/orders/{ref}/cancel", headers=customer)
+    assert len((await client.get("/admin/orders?tab=done", headers=admin.headers)).json()) == 1
+    assert (await client.post(f"/admin/orders/{oid}/archive", headers=admin.headers)).status_code == 204
+    assert (await client.get("/admin/orders?tab=done", headers=admin.headers)).json() == []

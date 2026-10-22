@@ -6,7 +6,7 @@ Rules:
 - Totals are computed here, never taken from a client.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -411,3 +411,17 @@ async def can_cancel(db: AsyncSession, order: Order) -> bool:
         quote = await accepted_quote(db, order.id)
         return quote is None or await _active_payment(db, quote.id) is None
     return False
+
+
+UNPAID_STATUSES = (OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT)
+
+
+async def payment_deadline(db: AsyncSession, order: Order) -> datetime | None:
+    """When an unpaid order will be cancelled: N days after the current quote was sent."""
+    if order.status not in UNPAID_STATUSES:
+        return None
+    quote = await latest_non_draft(db, order.id)
+    if quote is None or quote.sent_at is None:
+        return None
+    days = int((await get_settings_map(db))["payment_deadline_days"])
+    return quote.sent_at + timedelta(days=days)
