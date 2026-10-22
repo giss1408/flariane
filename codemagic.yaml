@@ -1,0 +1,64 @@
+# Codemagic: build the customer app for iOS and send it to TestFlight.
+#
+# This Mac (macOS 13, Xcode 15.2) cannot submit to the App Store, which needs
+# Xcode 16+. Codemagic builds on its own Macs with a current Xcode.
+#
+# One-time setup (codemagic.io):
+#   1. Add the GitHub repository giss1408/flariane.
+#   2. Team settings → Integrations → Developer Portal → connect an App Store
+#      Connect API key (App Manager role) and name it "flariane-asc".
+#   3. App Store Connect: create the app with bundle ID ci.flariane.flariane.
+# Then start the "customer-ios" workflow, by hand or by pushing a tag
+# customer-v* (e.g. git tag customer-v1.0.0 && git push origin customer-v1.0.0).
+
+workflows:
+  customer-ios:
+    name: Customer app – iOS → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: customer_app
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "customer-v*"
+    integrations:
+      app_store_connect: flariane-asc
+    environment:
+      # Same Flutter as the local machine, so pubspec.lock resolves identically.
+      flutter: 3.24.2
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: ci.flariane.flariane
+      vars:
+        APP_STORE_APPLE_ID: "" # App Store Connect → the app → App Information → Apple ID (numeric)
+        API_BASE_URL: https://flariane-api.onrender.com
+    scripts:
+      - name: Dependencies
+        script: |
+          flutter pub get
+          cd ios && pod install --repo-update
+      - name: Signing profiles
+        script: xcode-project use-profiles
+      - name: Tests
+        script: flutter test
+        ignore_failure: false
+      - name: Build IPA
+        script: |
+          # Build number = latest TestFlight build + 1, so every upload is
+          # accepted without editing pubspec.yaml. Version name stays from pubspec.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          flutter build ipa --release \
+            --build-number=$((LATEST + 1)) \
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
