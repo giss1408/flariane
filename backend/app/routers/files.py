@@ -20,5 +20,5 @@ async def get_file(key: str, exp: int, sig: str) -> Response:
     return Response(
         data,
         media_type=content_type,
-        headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"},
+        headers={"Cache-Control": "private, max-age=86400, immutable", "X-Content-Type-Options": "nosniff"},
     )

@@ -15,6 +15,7 @@ from app.security.crypto import _key
 
 ALLOWED_FORMATS = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
 SIGNED_URL_SECONDS = 3600  # long enough for a customer reading her quote
+MAX_SIDE = 1280
 
 
 def sanitize_image(data: bytes) -> tuple[bytes, str, str]:
@@ -32,13 +33,22 @@ def sanitize_image(data: bytes) -> tuple[bytes, str, str]:
         raise BadRequest("unsupported_image_type", "JPEG, PNG ou WebP")
     if img.width * img.height > 40_000_000:
         raise BadRequest("image_too_large")
-    if fmt == "JPEG" and img.mode not in ("RGB", "L"):
-        img = img.convert("RGB")
+    # Screenshots are read on phones: 1280 px on the long side is plenty and keeps downloads small.
+    img.thumbnail((MAX_SIDE, MAX_SIDE))
     out = io.BytesIO()
     # Pillow writes no EXIF/XMP/text chunks unless explicitly passed, so re-saving strips metadata.
-    img.save(out, format=fmt)
-    ext = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[fmt]
-    return out.getvalue(), ALLOWED_FORMATS[fmt], ext
+    if fmt == "PNG" and img.mode in ("RGBA", "LA", "P") and _has_alpha(img):
+        img.save(out, format="PNG", optimize=True)
+        return out.getvalue(), "image/png", "png"
+    # Everything else becomes a well-compressed JPEG (screenshots: 5-10x smaller than PNG).
+    img.convert("RGB").save(out, format="JPEG", quality=78, optimize=True, progressive=True)
+    return out.getvalue(), "image/jpeg", "jpg"
+
+
+def _has_alpha(img: "Image.Image") -> bool:
+    if img.mode == "P":
+        return "transparency" in img.info
+    return img.getchannel("A").getextrema()[0] < 255
 
 
 def new_key(order_id: int, ext: str) -> str:
@@ -77,7 +87,8 @@ def signed_url(key: str) -> str:
         return _s3().generate_presigned_url(
             "get_object", Params={"Bucket": s.s3_bucket, "Key": key}, ExpiresIn=SIGNED_URL_SECONDS
         )
-    exp = int(time.time()) + SIGNED_URL_SECONDS
+    # Expiry rounded to the hour: the URL stays identical within the hour, so phones reuse cached copies.
+    exp = (int(time.time()) // 3600 + 2) * 3600
     return f"{s.api_base_url}/files/{key}?exp={exp}&sig={_local_sig(key, exp)}"
 
 

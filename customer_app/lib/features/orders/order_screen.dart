@@ -10,6 +10,7 @@ import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import 'pay_screen.dart';
@@ -540,20 +541,19 @@ class CartScreenshot extends StatelessWidget {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => Scaffold(
             appBar: AppBar(title: const Text('Ton panier')),
-            body: InteractiveViewer(maxScale: 5, child: Center(child: Image.network(url))),
+            body: InteractiveViewer(maxScale: 5, child: Center(child: CachedImage(url))),
           ),
         )),
         child: Stack(children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(22),
-            child: Image.network(
+            child: CachedImage(
               url,
               height: 320,
               width: double.infinity,
               fit: BoxFit.cover,
               alignment: Alignment.topCenter,
-              loadingBuilder: (c, child, p) => p == null ? child : const SizedBox(height: 320, child: Center(child: CircularProgressIndicator())),
-              errorBuilder: (_, __, ___) => const SizedBox(height: 120, child: Center(child: Text('Capture indisponible, tire pour rafraîchir'))),
+              errorText: 'Capture indisponible, tire pour rafraîchir',
             ),
           ),
           Positioned(

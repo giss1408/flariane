@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -14,6 +17,13 @@ import 'features/orders/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Fonts ship with the app (assets/google_fonts): never download them over mobile data.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(() async* {
+    for (final f in ['OFL-BricolageGrotesque.txt', 'OFL-DMSans.txt']) {
+      yield LicenseEntryWithLineBreaks([f.split('-').last.replaceAll('.txt', '')], await rootBundle.loadString('assets/google_fonts/$f'));
+    }
+  });
   await initializeDateFormatting('fr');
   runApp(const ProviderScope(child: FlarianeApp()));
 }

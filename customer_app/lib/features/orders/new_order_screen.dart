@@ -44,7 +44,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
 
   Future<void> _pick() async {
     final files =
-        await ImagePicker().pickMultiImage(imageQuality: 85, maxWidth: 2000);
+        await ImagePicker().pickMultiImage(imageQuality: 70, maxWidth: 1280); // light uploads on mobile data
     setState(() => _screenshots.addAll(files.take(10 - _screenshots.length)));
   }
 

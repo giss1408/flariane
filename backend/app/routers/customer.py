@@ -206,7 +206,7 @@ async def wave_qr(db: AsyncSession = Depends(get_session)) -> Response:
     img = (await get_settings_map(db)).get("wave_qr_image")
     if not img:
         raise NotFound()
-    return Response(base64.b64decode(img["data_b64"]), media_type=img["content_type"], headers={"Cache-Control": "public, max-age=300"})
+    return Response(base64.b64decode(img["data_b64"]), media_type=img["content_type"], headers={"Cache-Control": "public, max-age=3600"})
 
 
 @router.get("/pickup-points", response_model=list[PickupPointOut])

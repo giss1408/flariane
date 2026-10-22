@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import get_settings
 from app import tasks
@@ -64,6 +65,8 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url=None if prod else "/openapi.json",
     )
+    # Mobile data is expensive in Abidjan: compress JSON responses (images are already compressed).
+    app.add_middleware(GZipMiddleware, minimum_size=800)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=s.cors_origins,  # explicit list, never "*"

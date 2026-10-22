@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
 
@@ -37,7 +38,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
   bool _busy = false;
 
   Future<void> _pick() async {
-    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 2000);
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1280); // payment proof: readable, light to upload
     if (f != null) setState(() => _proof = f);
   }
 
@@ -125,7 +126,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                  child: Image.network(ref.read(apiProvider).waveQrUrl, width: 200, height: 200),
+                  child: CachedImage(ref.read(apiProvider).waveQrUrl, width: 200, height: 200),
                 ),
               ),
             _CopyTile(label: 'Numéro ${methods[_method]!.$1}', value: number, onCopy: () => _copy(number, 'Numéro')),
