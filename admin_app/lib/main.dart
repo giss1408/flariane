@@ -11,6 +11,7 @@ import 'features/account/account_screen.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/inbox/inbox_screen.dart';
 import 'features/order/order_screen.dart';
+import 'features/pickup/pickup_desk_screen.dart';
 import 'features/shipments/shipments_screen.dart';
 
 Future<void> main() async {
@@ -87,18 +88,36 @@ class AuthGate extends ConsumerWidget {
   }
 }
 
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    // Pickup agents only get the pickup desk and their account.
+    if (ref.watch(sessionProvider).me?.isPickupAgent ?? false) {
+      return Scaffold(
+        body: IndexedStack(index: _index, children: const [PickupDeskScreen(), AccountScreen()]),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (i) => setState(() => _index = i),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Retraits'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Compte'),
+          ],
+        ),
+      );
+    }
+    return _fullShell();
+  }
+
+  Widget _fullShell() => Scaffold(
         body: IndexedStack(index: _index, children: const [InboxScreen(), ShipmentsScreen(), AccountScreen()]),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,

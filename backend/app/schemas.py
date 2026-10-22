@@ -452,7 +452,7 @@ class PickupPointIn(In):
 class AdminUserIn(In):
     email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, pattern=r"^[^@\s]+@[^@\s]+$")]
     name: Str80
-    role: Literal["VIEWER", "OPERATOR", "SUPER_ADMIN"]
+    role: Literal["PICKUP", "VIEWER", "OPERATOR", "SUPER_ADMIN"]
     password: Annotated[str, StringConstraints(min_length=12, max_length=200)]
 
 

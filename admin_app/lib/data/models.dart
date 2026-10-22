@@ -452,4 +452,35 @@ class AdminMe {
   final int deviceId;
 
   bool get canOperate => role == 'OPERATOR' || role == 'SUPER_ADMIN';
+  bool get isPickupAgent => role == 'PICKUP';
+}
+
+class PickupDeskOrder {
+  PickupDeskOrder({
+    required this.id,
+    required this.ref,
+    required this.status,
+    required this.store,
+    required this.customerName,
+    required this.phoneMasked,
+    required this.pickupPoint,
+  });
+
+  factory PickupDeskOrder.fromJson(Map<String, dynamic> j) => PickupDeskOrder(
+        id: j['id'] as int,
+        ref: j['public_ref'] as String,
+        status: j['status'] as String,
+        store: j['store'] as String? ?? 'SHEIN',
+        customerName: j['customer_name'] as String?,
+        phoneMasked: j['customer_phone_masked'] as String? ?? '',
+        pickupPoint: j['pickup_point'] == null ? null : PickupPoint.fromJson(j['pickup_point'] as Map<String, dynamic>),
+      );
+
+  final int id;
+  final String ref;
+  final String status;
+  final String store;
+  final String? customerName;
+  final String phoneMasked;
+  final PickupPoint? pickupPoint;
 }

@@ -6,7 +6,7 @@ import '../../core/session.dart';
 import '../../widgets/common.dart';
 import 'backoffice_screens.dart';
 
-const roleLabels = {'VIEWER': 'Lecture seule', 'OPERATOR': 'Opérateur', 'SUPER_ADMIN': 'Super admin'};
+const roleLabels = {'PICKUP': 'Agent de retrait', 'VIEWER': 'Lecture seule', 'OPERATOR': 'Opérateur', 'SUPER_ADMIN': 'Super admin'};
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -43,8 +43,8 @@ class AccountScreen extends ConsumerWidget {
             ),
           ]),
         ),
-        const SectionTitle('Gestion'),
-        Card(
+        if (!(me?.isPickupAgent ?? false)) const SectionTitle('Gestion'),
+        if (!(me?.isPickupAgent ?? false)) Card(
           child: Column(children: [
             _link(context, Icons.insights_rounded, 'Résumé', const ReportScreen()),
             _link(context, Icons.undo_rounded, 'Remboursements', const RefundsScreen()),

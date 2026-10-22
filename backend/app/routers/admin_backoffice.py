@@ -37,7 +37,19 @@ from app.schemas import (
     TempPasswordOut,
 )
 from app.security.crypto import encrypt, hash_password
-from app.security.deps import AdminContext, client_ip, require_role
+from fastapi import HTTPException
+
+from app.enums import ROLE_RANK
+from app.security.deps import AdminContext, client_ip, current_admin, require_role
+
+
+def require_pickup_or_viewer():  # type: ignore[no-untyped-def]
+    async def dep(admin: AdminContext = Depends(current_admin)) -> AdminContext:
+        if admin.role == AdminRole.PICKUP or ROLE_RANK[admin.role] >= ROLE_RANK[AdminRole.VIEWER]:
+            return admin
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    return dep
 from app.security.tokens import revoke_device_tokens, utcnow
 from app.services import customer_auth, operations
 from app.services import location as loc
@@ -258,7 +270,7 @@ async def update_settings(data: SettingsIn, request: Request, admin: AdminContex
 
 
 @router.get("/pickup-points", response_model=list[PickupPointOut])
-async def list_points(_: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[PickupPoint]:
+async def list_points(_: AdminContext = Depends(require_pickup_or_viewer()), db: AsyncSession = Depends(get_session)) -> list[PickupPoint]:
     return list((await db.scalars(select(PickupPoint).order_by(PickupPoint.name))).all())
 
 

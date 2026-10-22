@@ -53,9 +53,11 @@ class ShipmentStatus(StrEnum):
 
 
 class AdminRole(StrEnum):
+    PICKUP = "PICKUP"  # pickup-point agent: only arrived/ready parcels, pickup actions
     VIEWER = "VIEWER"
     OPERATOR = "OPERATOR"
     SUPER_ADMIN = "SUPER_ADMIN"
 
 
-ROLE_RANK = {AdminRole.VIEWER: 0, AdminRole.OPERATOR: 1, AdminRole.SUPER_ADMIN: 2}
+# PICKUP ranks below VIEWER: it can't read orders, quotes or payments; only the pickup endpoints.
+ROLE_RANK = {AdminRole.PICKUP: -1, AdminRole.VIEWER: 0, AdminRole.OPERATOR: 1, AdminRole.SUPER_ADMIN: 2}

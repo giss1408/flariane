@@ -84,6 +84,17 @@ async def current_admin(
     return AdminContext(user=user, device=device)
 
 
+def require_pickup_access() -> Callable[..., Coroutine[Any, Any, AdminContext]]:
+    """Pickup agents and operators (and above): the pickup desk actions."""
+
+    async def dependency(admin: AdminContext = Depends(current_admin)) -> AdminContext:
+        if admin.role != AdminRole.PICKUP and ROLE_RANK[admin.role] < ROLE_RANK[AdminRole.OPERATOR]:
+            raise HTTPException(status_code=403, detail="forbidden")
+        return admin
+
+    return dependency
+
+
 def require_role(minimum: AdminRole) -> Callable[..., Coroutine[Any, Any, AdminContext]]:
     async def dependency(admin: AdminContext = Depends(current_admin)) -> AdminContext:
         if ROLE_RANK[admin.role] < ROLE_RANK[minimum]:

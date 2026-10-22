@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
@@ -9,7 +10,7 @@ from sqlalchemy.orm import selectinload, undefer
 
 from app.db import get_session
 from app.enums import AdminRole, OrderStatus, QuoteStatus
-from app.errors import Conflict, NotFound
+from app.errors import Conflict, DomainError, Forbidden, NotFound
 from app.integrations import storage
 from app.models import (
     Customer,
@@ -47,8 +48,9 @@ from app.schemas import (
     StatusEventOut,
     StorePurchaseOut,
 )
-from app.security.crypto import decrypt, mask_phone
-from app.security.deps import AdminContext, client_ip, require_role
+from app.security.crypto import decrypt, mask_phone, phone_hash
+from app.security.deps import AdminContext, client_ip, require_pickup_access, require_role
+from app.services import customer_auth
 from app.services import location as loc
 from app.services import wa_messages as wa
 from app.services import operations, quotes
@@ -59,6 +61,7 @@ from app.services.settings import get_settings_map
 router = APIRouter(prefix="/admin/orders", tags=["admin-orders"], dependencies=[Depends(admin_limited)])
 viewer = Depends(require_role(AdminRole.VIEWER))
 operator = Depends(require_role(AdminRole.OPERATOR))
+pickup_desk = Depends(require_pickup_access())
 
 TABS: dict[str, list[OrderStatus]] = {
     "to_quote": [OrderStatus.QUOTE_REQUESTED],
@@ -182,13 +185,58 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
     )
 
 
+class PickupOrderOut(BaseModel):
+    id: int
+    public_ref: str
+    status: str
+    store: str
+    customer_name: str | None
+    customer_phone_masked: str
+    pickup_point: PickupPointOut | None
+    status_changed_at: datetime
+
+
+@router.get("/pickup-desk", response_model=list[PickupOrderOut])
+async def pickup_desk_search(
+    q: str | None = Query(default=None, max_length=30),
+    _: AdminContext = pickup_desk,
+    db: AsyncSession = Depends(get_session),
+) -> list[PickupOrderOut]:
+    """Parcels arrived or ready for pickup. `q` = order reference (FLR-…) or the customer's phone."""
+    stmt = (
+        select(Order, Customer)
+        .join(Customer, Customer.id == Order.customer_id)
+        .where(Order.status.in_([OrderStatus.ARRIVED, OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP]))
+    )
+    term = (q or "").strip()
+    if term:
+        try:
+            ph = phone_hash(customer_auth.normalize_ci_phone(term))
+            stmt = stmt.where(Customer.phone_hash == ph)
+        except DomainError:
+            stmt = stmt.where(Order.public_ref.ilike(f"%{term.upper()}%"))
+    else:
+        stmt = stmt.where(Order.status != OrderStatus.PICKED_UP)
+    rows = (await db.execute(stmt.order_by(Order.status_changed_at.desc()).limit(100))).all()
+    out = []
+    for o, c in rows:
+        point = await db.get(PickupPoint, o.pickup_point_id) if o.pickup_point_id else None
+        phone = decrypt(c.phone_enc) if c.phone_enc else ""
+        out.append(PickupOrderOut(
+            id=o.id, public_ref=o.public_ref, status=o.status, store=o.store, customer_name=c.display_name,
+            customer_phone_masked=mask_phone(phone) if phone else "",
+            pickup_point=PickupPointOut.model_validate(point) if point else None, status_changed_at=o.status_changed_at,
+        ))
+    return out
+
+
 @router.get("/{order_id}", response_model=AdminOrderDetailOut)
 async def detail(order_id: int, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> AdminOrderDetailOut:
     return await _detail(db, order_id)
 
 
 @router.post("/{order_id}/reveal-phone")
-async def reveal_phone(order_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+async def reveal_phone(order_id: int, request: Request, admin: AdminContext = pickup_desk, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
     order = await db.get(Order, order_id)
     customer = await db.get(Customer, order.customer_id) if order else None
     if customer is None or customer.phone_enc is None:
@@ -244,7 +292,7 @@ async def cancel_item(order_id: int, item_id: int, data: CancelItemIn, request: 
 
 
 @router.post("/{order_id}/ready-for-pickup")
-async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = pickup_desk, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
     code = await operations.mark_ready_for_pickup(db, order_id, data.pickup_point_id, admin.id, client_ip(request))
     await db.commit()
     return {"code": code}
@@ -281,8 +329,10 @@ class WhatsAppMessageIn(BaseModel):
 
 
 @router.post("/{order_id}/whatsapp")
-async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Request, admin: AdminContext = pickup_desk, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
     """Pre-written message + wa.me link: the admin sends it from their own WhatsApp."""
+    if admin.role == AdminRole.PICKUP and data.kind != "pickup":
+        raise Forbidden("forbidden")
     order = await db.get(Order, order_id)
     customer = await db.get(Customer, order.customer_id) if order else None
     if order is None or customer is None or customer.phone_enc is None:
@@ -300,6 +350,6 @@ async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Requ
 
 
 @router.post("/{order_id}/pickup", status_code=204)
-async def confirm_pickup(order_id: int, data: PickupConfirmIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
+async def confirm_pickup(order_id: int, data: PickupConfirmIn, request: Request, admin: AdminContext = pickup_desk, db: AsyncSession = Depends(get_session)) -> None:
     await operations.confirm_pickup(db, order_id, data.code, admin.id, client_ip(request))
     await db.commit()

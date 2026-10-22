@@ -254,3 +254,35 @@ async def test_manual_mobile_money_payment(client: AsyncClient, customer: dict, 
 
     assert (await client.post(f"/admin/orders/{oid}/confirm-payment", json={"transaction_ref": "OM123"}, headers=admin.headers)).status_code == 204
     assert (await client.get(f"/orders/{ref}", headers=customer)).json()["status"] == "PAID"
+
+
+async def test_pickup_agent_role(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from tests.conftest import make_admin
+
+    agent = await make_admin(role="PICKUP", email="desk@flariane.ci")
+    _, oid, items = await _paid(client, customer, admin, pickup_point)
+    await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH7", "paid_amount": "29.99", "currency": "EUR", "checked_item_ids": items}, headers=admin.headers)
+    sid = (await client.post("/admin/shipments", json={"label": "S"}, headers=admin.headers)).json()["id"]
+    await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
+    await client.post(f"/admin/shipments/{sid}/depart", json={}, headers=admin.headers)
+    await client.post(f"/admin/shipments/{sid}/arrive", headers=admin.headers)
+
+    # Desk sees arrived parcels; search by phone (any format) or by reference.
+    assert [o["id"] for o in (await client.get("/admin/orders/pickup-desk", headers=agent.headers)).json()] == [oid]
+    by_phone = (await client.get("/admin/orders/pickup-desk", params={"q": "07 01 02 03 04"}, headers=agent.headers)).json()
+    assert by_phone[0]["id"] == oid and by_phone[0]["customer_phone_masked"] == "+225 07 •• •• 04"
+    ref = by_phone[0]["public_ref"]
+    assert (await client.get("/admin/orders/pickup-desk", params={"q": ref[-4:]}, headers=agent.headers)).json()[0]["id"] == oid
+
+    # Pickup actions allowed.
+    assert (await client.get("/admin/pickup-points", headers=agent.headers)).status_code == 200
+    code = (await client.post(f"/admin/orders/{oid}/ready-for-pickup", json={}, headers=agent.headers)).json()["code"]
+    assert (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "pickup", "code": code}, headers=agent.headers)).status_code == 200
+    assert (await client.post(f"/admin/orders/{oid}/reveal-phone", headers=agent.headers)).status_code == 200
+    assert (await client.post(f"/admin/orders/{oid}/pickup", json={"code": code}, headers=agent.headers)).status_code == 204
+
+    # Everything else refused.
+    for method, url in [("get", "/admin/orders"), ("get", f"/admin/orders/{oid}"), ("get", "/admin/settings"),
+                        ("get", "/admin/shipments"), ("get", "/admin/reports/summary"), ("get", f"/admin/orders/{oid}/payment-proof")]:
+        assert (await getattr(client, method)(url, headers=agent.headers)).status_code == 403, url
+    assert (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "quote"}, headers=agent.headers)).status_code == 403

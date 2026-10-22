@@ -241,6 +241,7 @@ class AdminUsersScreen extends ConsumerWidget {
               DropdownButtonFormField<String>(
                 value: role,
                 items: const [
+                  DropdownMenuItem(value: 'PICKUP', child: Text('Agent de retrait')),
                   DropdownMenuItem(value: 'VIEWER', child: Text('Lecture seule')),
                   DropdownMenuItem(value: 'OPERATOR', child: Text('Opérateur')),
                   DropdownMenuItem(value: 'SUPER_ADMIN', child: Text('Super admin')),

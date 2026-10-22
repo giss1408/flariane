@@ -110,6 +110,11 @@ class AdminApi {
   Future<String> resetCustomerPassword(int customerId) => client.call(
       (d) => d.post('/admin/customers/$customerId/reset-password'), (j) => (j as Map)['temporary_password'] as String);
 
+  Future<List<PickupDeskOrder>> pickupDesk({String? query}) => client.call(
+        (d) => d.get('/admin/orders/pickup-desk', queryParameters: {if (query != null && query.isNotEmpty) 'q': query}),
+        (j) => (j as List).cast<Map<String, dynamic>>().map(PickupDeskOrder.fromJson).toList(),
+      );
+
   Future<String> revealPhone(int orderId) =>
       client.call((d) => d.post('/admin/orders/$orderId/reveal-phone'), (j) => (j as Map)['phone'] as String);
 
