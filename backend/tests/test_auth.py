@@ -225,7 +225,7 @@ async def test_reset_admin_recovers_login(client: AsyncClient, admin: AdminFixtu
     from app.config import get_settings
 
     monkeypatch.setattr(get_settings(), "setup_token", "tok")
-    pw = "Ul+H\\/8A?=l{=7hNk[Q7\\@PH0"  # backslashes and symbols survive the round trip
+    pw = "Te+st\\/9B?=x{=4mQp[R2\\@ZZ1"  # dummy: backslashes and symbols survive the round trip
     body = {"email": admin.user.email, "name": "Admin", "role": "SUPER_ADMIN", "password": pw}
     assert (await client.post("/setup/reset-admin", json=body)).status_code == 403
     r = await client.post("/setup/reset-admin", json=body, headers={"x-setup-token": "tok"})
@@ -303,11 +303,18 @@ async def test_phone_verification_by_whatsapp_code(client: AsyncClient, admin: A
     assert (await client.get("/admin/customers/unverified", headers=admin.headers)).json() == []
 
 
-async def test_reject_fake_registration(client: AsyncClient, admin: AdminFixture) -> None:
+async def test_wrong_number_rejected_then_corrected(client: AsyncClient, admin: AdminFixture) -> None:
     r = await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026"})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     cid = (await client.get("/admin/customers/unverified", headers=admin.headers)).json()[0]["id"]
     assert (await client.post(f"/admin/customers/{cid}/reject", headers=admin.headers)).status_code == 204
-    assert (await client.get("/me", headers=h)).status_code == 401
-    # The number is free again for its real owner.
-    assert (await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026"})).status_code == 201
+    me = (await client.get("/me", headers=h)).json()
+    assert me["phone_rejected"] is True and me["phone_verified"] is False
+    assert (await client.get("/admin/customers/unverified", headers=admin.headers)).json() == []
+    # The number is free again for its real owner…
+    assert (await client.post("/auth/register", json={"phone": "0102030405", "password": "autre-mdp-2026"})).status_code == 201
+    # …so she can't take it back, but can enter her correct one.
+    assert (await client.put("/me/phone", json={"phone": "0102030405"}, headers=h)).status_code == 409
+    me = (await client.put("/me/phone", json={"phone": "0102030499"}, headers=h)).json()
+    assert me["phone_rejected"] is False and me["phone_masked"] == "+225 01 •• •• 99"
+    assert any(c["id"] == cid for c in (await client.get("/admin/customers/unverified", headers=admin.headers)).json())

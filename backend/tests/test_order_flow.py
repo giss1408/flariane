@@ -330,3 +330,9 @@ async def test_customer_never_sees_euros(client: AsyncClient, customer: dict, ad
     await client.post(f"/admin/orders/{oid}/quotes/1/send", json={}, headers=admin.headers)
     quote = (await client.get(f"/orders/{ref}", headers=customer)).json()["quote"]
     assert quote["total_xof"] == 37733 and quote["cart_source_amount"] is None and quote["cart_source_currency"] is None
+
+
+async def test_attention_counts(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    await create_order(client, customer, pickup_point)
+    a = (await client.get("/admin/orders/attention", headers=admin.headers)).json()
+    assert a["to_quote"] == 1 and a["to_buy"] == 0 and a["registrations_to_verify"] == 0

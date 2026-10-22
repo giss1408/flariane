@@ -151,6 +151,9 @@ class CustomerApi {
   Future<Me> updateMe({String? name}) =>
       _call(() => dio.patch('/me', data: {'display_name': name}), (j) => Me.fromJson(j as Map<String, dynamic>));
 
+  Future<Me> changePhone(String phone) =>
+      _call(() => dio.put('/me/phone', data: {'phone': phone}), (j) => Me.fromJson(j as Map<String, dynamic>));
+
   Future<Me> verifyPhone(String code) =>
       _call(() => dio.post('/me/verify-phone', data: {'code': code}), (j) => Me.fromJson(j as Map<String, dynamic>));
 

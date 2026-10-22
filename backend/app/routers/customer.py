@@ -8,7 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db import get_session
+from app.db import get_session, on_commit
+from app.tasks import dispatch
 from app.enums import OrderStatus, PaymentStatus, QuoteStatus
 from app.errors import BadRequest, Conflict, Forbidden, NotFound
 from app.integrations import storage
@@ -27,6 +28,7 @@ from app.schemas import (
     ChangeRequestIn,
     CustomerOut,
     ChangePasswordIn,
+    ChangePhoneIn,
     CustomerUpdateIn,
     VerifyPhoneIn,
     LocationIn,
@@ -40,7 +42,7 @@ from app.schemas import (
     QuoteOut,
     StatusEventOut,
 )
-from app.security.crypto import decrypt, mask_phone
+from app.security.crypto import decrypt, encrypt, mask_phone, phone_hash
 from app.security.deps import client_ip
 from app.security.tokens import utcnow
 from app.services import customer_auth, notify, phone_verification, quotes
@@ -62,6 +64,7 @@ def _customer_out(c: Customer) -> CustomerOut:
         phone_masked=mask_phone(phone) if phone else "", must_change_password=c.must_change_password,
         location=_location_out(c.location_commune, c.location_enc),
         phone_verified=c.phone_verified_at is not None,
+        phone_rejected=c.phone_rejected_at is not None,
     )
 
 
@@ -88,6 +91,25 @@ async def update_me(data: CustomerUpdateIn, customer: Customer = authed, db: Asy
         customer.display_name = data.display_name
     if data.locale is not None:
         customer.locale = data.locale
+    await db.commit()
+    return _customer_out(customer)
+
+
+@router.put("/me/phone", response_model=CustomerOut)
+async def change_phone(data: ChangePhoneIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    """Correct a wrong number before it's verified. Back into the admins' verification list."""
+    if customer.phone_verified_at is not None:
+        raise Conflict("already_verified")
+    phone = customer_auth.normalize_ci_phone(data.phone)
+    ph = phone_hash(phone)
+    other = await db.scalar(select(Customer.id).where(Customer.phone_hash == ph, Customer.id != customer.id))
+    if other is not None:
+        raise Conflict("phone_taken")
+    customer.phone_enc, customer.phone_hash, customer.phone_rejected_at = encrypt(phone), ph, None
+    customer.verify_code_hash = customer.verify_code_expires_at = None
+    customer.verify_attempts = 0
+    await audit(db, actor_type="customer", actor_id=customer.id, action="customer.phone_changed", ip=client_ip(request))
+    on_commit(db, lambda: dispatch("push_admins", event="customer_registered", order_ref=f"#{customer.id}", order_id=0))
     await db.commit()
     return _customer_out(customer)
 

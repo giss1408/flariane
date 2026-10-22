@@ -45,6 +45,8 @@ class Customer(TimestampMixin, Base):
     verify_code_hash: Mapped[str | None] = mapped_column(String(64))
     verify_code_expires_at: Mapped[datetime | None] = _ts()
     verify_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Set when an admin couldn't verify the number: it is released and she must enter a correct one.
+    phone_rejected_at: Mapped[datetime | None] = _ts()
     # Where she lives in Abidjan, for dispatch planning. Commune in clear (grouping);
     # quartier, landmark and GPS encrypted as JSON (AES-GCM), like the phone number.
     location_commune: Mapped[str | None] = mapped_column(String(40), index=True)

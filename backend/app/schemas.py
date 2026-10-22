@@ -46,6 +46,10 @@ class ChangePasswordIn(In):
     new_password: Password
 
 
+class ChangePhoneIn(In):
+    phone: Annotated[str, StringConstraints(max_length=30)]
+
+
 class VerifyPhoneIn(In):
     code: Annotated[str, StringConstraints(pattern=r"^\d{6}$")]
 
@@ -138,6 +142,7 @@ class CustomerOut(Out):
     phone_masked: str
     must_change_password: bool = False
     phone_verified: bool = True
+    phone_rejected: bool = False  # the admin couldn't verify it: ask for a correct number
     location: LocationOut | None = None
 
 

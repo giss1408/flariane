@@ -9,9 +9,10 @@ import '../../widgets/logo.dart';
 
 /// Shown after sign-up until the number is confirmed with the code Flariane sends on WhatsApp.
 class VerifyPhoneScreen extends ConsumerStatefulWidget {
-  const VerifyPhoneScreen({super.key, required this.phoneMasked});
+  const VerifyPhoneScreen({super.key, required this.phoneMasked, this.rejected = false});
 
   final String phoneMasked;
+  final bool rejected; // the team couldn't verify this number
 
   @override
   ConsumerState<VerifyPhoneScreen> createState() => _VerifyPhoneScreenState();
@@ -38,8 +39,62 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
     }
   }
 
+  Future<void> _changeNumber() async {
+    final c = TextEditingController();
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ton bon numéro WhatsApp'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')), LengthLimitingTextInputFormatter(17)],
+          decoration: const InputDecoration(hintText: '07 01 02 03 04'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (phone == null || phone.isEmpty) return;
+    try {
+      await ref.read(apiProvider).changePhone(phone);
+      ref.invalidate(meProvider);
+      setState(() => _error = null);
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => widget.rejected ? _rejected() : _waiting();
+
+  Widget _rejected() => Scaffold(
+        appBar: FlarianeHeader(subtitle: 'Vérification', showBack: false, actions: [
+          TextButton(onPressed: () => ref.read(authProvider.notifier).logout(), child: const Text('Déconnexion')),
+        ]),
+        body: ListView(padding: const EdgeInsets.all(24), children: [
+          const Icon(Icons.error_outline_rounded, size: 56, color: AppColors.danger),
+          const SizedBox(height: 16),
+          Text('Numéro non vérifié', style: display(28), textAlign: TextAlign.center),
+          const SizedBox(height: 10),
+          const Text(
+            'Nous n’avons pas pu vérifier ton numéro sur WhatsApp (numéro faux ou sans WhatsApp). '
+            'Indique ton bon numéro WhatsApp pour recevoir ton code.',
+            textAlign: TextAlign.center,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger)),
+          ],
+          const SizedBox(height: 24),
+          FilledButton(onPressed: _changeNumber, child: const Text('Saisir mon bon numéro')),
+        ]),
+      );
+
+  Widget _waiting() => Scaffold(
         appBar: FlarianeHeader(subtitle: 'Vérification', showBack: false, actions: [
           TextButton(onPressed: () => ref.read(authProvider.notifier).logout(), child: const Text('Déconnexion')),
         ]),
@@ -79,6 +134,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted),
             ),
+            TextButton(onPressed: _changeNumber, child: const Text('Mon numéro est faux ? Le corriger')),
           ]),
         ),
       );

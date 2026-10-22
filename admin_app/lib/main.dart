@@ -4,20 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_lock.dart';
-import 'core/push.dart';
 import 'core/session.dart';
 import 'core/theme.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/auth_screens.dart';
+import 'core/attention.dart';
 import 'features/inbox/inbox_screen.dart';
-import 'features/order/order_screen.dart';
 import 'features/pickup/pickup_desk_screen.dart';
 import 'features/shipments/shipments_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('fr');
-  await PushService.init();
   runApp(const ProviderScope(child: FlarianeAdminApp()));
 }
 
@@ -47,13 +45,6 @@ class _FlarianeAdminAppState extends ConsumerState<FlarianeAdminApp> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(sessionProvider, (prev, next) {
-      if (next.status == SessionStatus.loggedIn && prev?.status != SessionStatus.loggedIn) {
-        PushService.register(ref.read(adminApiProvider), (orderId) {
-          navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => OrderScreen(orderId: orderId)));
-        });
-      }
-    });
     return MaterialApp(
       title: 'Flariane Admin',
       navigatorKey: navigatorKey,
@@ -97,6 +88,20 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+  late final AttentionPoller _poller = AttentionPoller(ref);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(_poller);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_poller);
+    _poller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,16 +122,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     return _fullShell();
   }
 
-  Widget _fullShell() => Scaffold(
+  Widget _fullShell() {
+    final waiting = ref.watch(attentionProvider).valueOrNull?.total ?? 0;
+    return Scaffold(
         body: IndexedStack(index: _index, children: const [InboxScreen(), ShipmentsScreen(), AccountScreen()]),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Commandes'),
-            NavigationDestination(icon: Icon(Icons.local_shipping_outlined), selectedIcon: Icon(Icons.local_shipping), label: 'Expéditions'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Compte'),
+          destinations: [
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: waiting > 0,
+                label: Text('$waiting'),
+                child: const Icon(Icons.receipt_long_outlined),
+              ),
+              selectedIcon: Badge(isLabelVisible: waiting > 0, label: Text('$waiting'), child: const Icon(Icons.receipt_long)),
+              label: 'Commandes',
+            ),
+            const NavigationDestination(icon: Icon(Icons.local_shipping_outlined), selectedIcon: Icon(Icons.local_shipping), label: 'Expéditions'),
+            const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Compte'),
           ],
         ),
       );
+  }
 }

@@ -86,7 +86,7 @@ class _PasswordGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(meProvider).valueOrNull;
     if (me?.mustChangePassword == true) return const ChangePasswordScreen(forced: true);
-    if (me != null && !me.phoneVerified) return VerifyPhoneScreen(phoneMasked: me.phoneMasked);
+    if (me != null && !me.phoneVerified) return VerifyPhoneScreen(phoneMasked: me.phoneMasked, rejected: me.phoneRejected);
     return const HomeScreen();
   }
 }

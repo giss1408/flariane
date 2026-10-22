@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, undefer
 
@@ -183,6 +183,26 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         history=[StatusEventOut.model_validate(h) for h in history],
         shipment_id=shipment_id,
     )
+
+
+@router.get("/attention")
+async def attention(_: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> dict[str, int]:
+    """What waits for an admin, polled by the app (no push service)."""
+    async def count(stmt) -> int:  # type: ignore[no-untyped-def]
+        return int(await db.scalar(stmt) or 0)
+
+    return {
+        "to_quote": await count(select(func.count()).select_from(Order).where(Order.status == OrderStatus.QUOTE_REQUESTED)),
+        "to_buy": await count(select(func.count()).select_from(Order).where(Order.status == OrderStatus.PAID)),
+        "payments_to_confirm": await count(
+            select(func.count()).select_from(Payment).where(Payment.status == "PENDING", Payment.status_reason == "declared")
+        ),
+        "registrations_to_verify": await count(
+            select(func.count()).select_from(Customer).where(
+                Customer.phone_verified_at.is_(None), Customer.anonymised_at.is_(None), Customer.phone_enc.is_not(None))
+        ),
+        "to_hand_over": await count(select(func.count()).select_from(Order).where(Order.status == OrderStatus.ARRIVED)),
+    }
 
 
 class PickupOrderOut(BaseModel):

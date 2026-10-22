@@ -125,7 +125,8 @@ async def whatsapp_test(data: WhatsAppTestIn, request: Request, admin: AdminCont
 @router.get("/customers/unverified", response_model=list[UnverifiedCustomerOut])
 async def unverified_customers(_: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> list[UnverifiedCustomerOut]:
     rows = (await db.scalars(
-        select(Customer).where(Customer.phone_verified_at.is_(None), Customer.anonymised_at.is_(None)).order_by(Customer.created_at)
+        select(Customer).where(Customer.phone_verified_at.is_(None), Customer.anonymised_at.is_(None), Customer.phone_enc.is_not(None))
+        .order_by(Customer.created_at)
     )).all()
     return [
         UnverifiedCustomerOut(id=c.id, display_name=c.display_name, phone_masked=mask_phone(decrypt(c.phone_enc)) if c.phone_enc else "",
@@ -152,14 +153,16 @@ async def send_verification_code(customer_id: int, request: Request, admin: Admi
 
 @router.post("/customers/{customer_id}/reject", status_code=204)
 async def reject_registration(customer_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> None:
-    """Unverified registration that isn't genuine (number not on WhatsApp, no answer): anonymise it."""
+    """The number couldn't be verified (not on WhatsApp, wrong, no answer): release it and tell her
+    in the app to enter a correct one. Her account is kept."""
     customer = await db.get(Customer, customer_id)
     if customer is None:
         raise NotFound()
     if customer.phone_verified_at is not None:
         raise Conflict("already_verified")
-    customer.display_name = customer.phone_enc = customer.phone_hash = customer.password_hash = None
-    customer.anonymised_at = utcnow()
+    customer.phone_enc = customer.phone_hash = None
+    customer.verify_code_hash = customer.verify_code_expires_at = None
+    customer.phone_rejected_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="customer.registration_rejected", entity="customer", entity_id=customer.id, ip=client_ip(request))
     await db.commit()
 

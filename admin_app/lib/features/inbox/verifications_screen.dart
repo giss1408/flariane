@@ -83,7 +83,7 @@ class VerificationsScreen extends ConsumerWidget {
                             ),
                             TextButton(
                               onPressed: () async {
-                                if (!await confirm(context, title: 'Refuser cette inscription ?', body: 'Le compte est supprimé ; le numéro pourra se réinscrire.', ok: 'Refuser')) return;
+                                if (!await confirm(context, title: 'Refuser cette inscription ?', body: 'La cliente verra que son numéro n’a pas pu être vérifié et pourra en saisir un autre.', ok: 'Refuser')) return;
                                 try {
                                   await ref.read(adminApiProvider).rejectRegistration(c['id'] as int);
                                   ref.invalidate(unverifiedProvider);
