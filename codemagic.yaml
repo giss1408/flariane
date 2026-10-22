@@ -29,10 +29,12 @@ workflows:
       flutter: 3.24.2
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.regisse.flariane
+      # CERTIFICATE_PRIVATE_KEY: the RSA key behind the distribution
+      # certificate, kept as a secret in this Codemagic environment group.
+      groups:
+        - flariane_signing
       vars:
+        BUNDLE_ID: com.regisse.flariane
         APP_STORE_APPLE_ID: "6825787211" # App Store Connect → the app → App Information → Apple ID (numeric)
         API_BASE_URL: https://flariane-api.onrender.com
     scripts:
@@ -40,8 +42,17 @@ workflows:
         script: |
           flutter pub get
           cd ios && pod install --repo-update
+      # Creates the distribution certificate and App Store profile on the first
+      # run (through the API key), then reuses them.
       - name: Signing profiles
-        script: xcode-project use-profiles
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Tests
         script: flutter test
         ignore_failure: false
