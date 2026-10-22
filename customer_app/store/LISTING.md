@@ -1,6 +1,6 @@
 # Fiche magasin — Flariane (application cliente)
 
-Identifiant : `ci.flariane.flariane` (Android et iOS) · Version : 1.0.0 (1) · Catégorie : **Shopping**
+Identifiant : `com.regisse.flariane` (Android et iOS) · Version : 1.0.0 (1) · Catégorie : **Shopping**
 Pays : Côte d'Ivoire (+ France si tu veux tester depuis l'Europe) · Langue principale : **Français**
 Confidentialité : https://flariane-api.onrender.com/legal/confidentialite
 Suppression de compte : https://flariane-api.onrender.com/legal/suppression-compte
