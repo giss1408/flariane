@@ -11,9 +11,9 @@ from tests.conftest import AdminFixture, login_customer, make_admin
 
 
 async def test_register_then_login(client: AsyncClient) -> None:
-    r = await client.post("/auth/register", json={"phone": "07 01 02 03 04", "password": "bonjour-2026", "display_name": "Awa"})
+    r = await client.post("/auth/register", json={"phone": "07 01 02 03 04", "password": "bonjour-2026", "display_name": "Awa", "consent": True})
     assert r.status_code == 201 and r.json()["refresh_token"]
-    r = await client.post("/auth/register", json={"phone": "+2250701020304", "password": "autre-mot-de-passe"})
+    r = await client.post("/auth/register", json={"phone": "+2250701020304", "password": "autre-mot-de-passe", "consent": True})
     assert r.status_code == 409 and r.json()["detail"] == "phone_taken"
     r = await client.post("/auth/login", json={"phone": "0701020304", "password": "bonjour-2026"})
     assert r.status_code == 200
@@ -23,19 +23,19 @@ async def test_register_then_login(client: AsyncClient) -> None:
 
 async def test_weak_password_rejected(client: AsyncClient) -> None:
     for pw in ("short", "11111111"):
-        r = await client.post("/auth/register", json={"phone": "0701020304", "password": pw})
+        r = await client.post("/auth/register", json={"phone": "0701020304", "password": pw, "consent": True})
         assert r.status_code == 400 and r.json()["detail"] == "weak_password"
 
 
 async def test_login_locks_after_five_failures_per_phone(client: AsyncClient) -> None:
-    await client.post("/auth/register", json={"phone": "0701020304", "password": "bonjour-2026"})
+    await client.post("/auth/register", json={"phone": "0701020304", "password": "bonjour-2026", "consent": True})
     for _ in range(5):
         r = await client.post("/auth/login", json={"phone": "0701020304", "password": "wrong-password"})
         assert r.status_code == 401 and r.json()["detail"] == "invalid_credentials"
     r = await client.post("/auth/login", json={"phone": "0701020304", "password": "bonjour-2026"})
     assert r.status_code == 429 and r.json()["detail"] == "login_locked"
     # Another number is unaffected (CGNAT: many customers share one IP).
-    await client.post("/auth/register", json={"phone": "0501020304", "password": "bonjour-2026"})
+    await client.post("/auth/register", json={"phone": "0501020304", "password": "bonjour-2026", "consent": True})
     assert (await client.post("/auth/login", json={"phone": "0501020304", "password": "bonjour-2026"})).status_code == 200
 
 
@@ -65,7 +65,7 @@ async def test_admin_reset_and_customer_change_password(client: AsyncClient, adm
 
 
 async def test_web_refresh_cookie_rotation_and_reuse_detection(client: AsyncClient) -> None:
-    r = await client.post("/auth/register", json={"phone": "0701020304", "password": "bonjour-2026", "client": "web"})
+    r = await client.post("/auth/register", json={"phone": "0701020304", "password": "bonjour-2026", "client": "web", "consent": True})
     assert r.json()["refresh_token"] is None  # web: token only in the HttpOnly cookie
     first = r.cookies["flr_rt"]
 
@@ -282,7 +282,7 @@ async def test_phone_verification_by_whatsapp_code(client: AsyncClient, admin: A
     from app import tasks
     from tests.conftest import CART_SHARE
 
-    r = await client.post("/auth/register", json={"phone": "0507080910", "password": "bonjour-2026", "display_name": "Aya"})
+    r = await client.post("/auth/register", json={"phone": "0507080910", "password": "bonjour-2026", "display_name": "Aya", "consent": True})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     assert tasks.RECORDED[-1][1]["event"] == "customer_registered"
     assert (await client.get("/me", headers=h)).json()["phone_verified"] is False
@@ -304,7 +304,7 @@ async def test_phone_verification_by_whatsapp_code(client: AsyncClient, admin: A
 
 
 async def test_wrong_number_rejected_then_corrected(client: AsyncClient, admin: AdminFixture) -> None:
-    r = await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026"})
+    r = await client.post("/auth/register", json={"phone": "0102030405", "password": "bonjour-2026", "consent": True})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     cid = (await client.get("/admin/customers/unverified", headers=admin.headers)).json()[0]["id"]
     assert (await client.post(f"/admin/customers/{cid}/reject", headers=admin.headers)).status_code == 204
@@ -312,9 +312,27 @@ async def test_wrong_number_rejected_then_corrected(client: AsyncClient, admin: 
     assert me["phone_rejected"] is True and me["phone_verified"] is False
     assert (await client.get("/admin/customers/unverified", headers=admin.headers)).json() == []
     # The number is free again for its real owner…
-    assert (await client.post("/auth/register", json={"phone": "0102030405", "password": "autre-mdp-2026"})).status_code == 201
+    assert (await client.post("/auth/register", json={"phone": "0102030405", "password": "autre-mdp-2026", "consent": True})).status_code == 201
     # …so she can't take it back, but can enter her correct one.
     assert (await client.put("/me/phone", json={"phone": "0102030405"}, headers=h)).status_code == 409
     me = (await client.put("/me/phone", json={"phone": "0102030499"}, headers=h)).json()
     assert me["phone_rejected"] is False and me["phone_masked"] == "+225 01 •• •• 99"
     assert any(c["id"] == cid for c in (await client.get("/admin/customers/unverified", headers=admin.headers)).json())
+
+
+async def test_consent_required_and_recorded(client: AsyncClient) -> None:
+    r = await client.post("/auth/register", json={"phone": "0108080808", "password": "bonjour-2026"})
+    assert r.status_code == 400 and r.json()["detail"] == "consent_required"
+    r = await client.post("/auth/register", json={"phone": "0108080808", "password": "bonjour-2026", "consent": True})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert (await client.get("/me", headers=h)).json()["consent_required"] is False
+    # An account without consent (created before the tick box) is asked once.
+    from sqlalchemy import update
+
+    from app.db import SessionLocal
+    from app.models import Customer
+    async with SessionLocal() as db:
+        await db.execute(update(Customer).values(consent_version=None))
+        await db.commit()
+    assert (await client.get("/me", headers=h)).json()["consent_required"] is True
+    assert (await client.post("/me/consent", headers=h)).json()["consent_required"] is False

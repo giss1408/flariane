@@ -9,10 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.errors import BadRequest, Conflict, DomainError, TooManyRequests
 from app.models import Customer
 from app.ratelimit import limiter
+from app.security.tokens import utcnow
 from app.security.crypto import encrypt, hash_password, phone_hash, random_token, verify_password
 
 # Ivorian mobile numbers since 2021: 10 digits, 01 (Moov), 05 (MTN), 07 (Orange).
 _LOCAL_CI = re.compile(r"^0[157]\d{8}$")
+# Bump when the privacy policy or the consent wording changes: customers are asked again.
+CONSENT_VERSION = "2026-10-22"
 FAILED_LOGIN_LIMIT = parse("5/15minutes")  # per phone number: CGNAT makes IP limits useless
 _DUMMY_HASH = hash_password(random_token())
 
@@ -67,7 +70,8 @@ async def register(db: AsyncSession, raw_phone: str, password: str, display_name
     ph = phone_hash(phone)
     if await db.scalar(select(Customer.id).where(Customer.phone_hash == ph)):
         raise Conflict("phone_taken")
-    customer = Customer(phone_enc=encrypt(phone), phone_hash=ph, display_name=display_name, password_hash=hash_password(password))
+    customer = Customer(phone_enc=encrypt(phone), phone_hash=ph, display_name=display_name, password_hash=hash_password(password),
+                        consent_at=utcnow(), consent_version=CONSENT_VERSION)
     db.add(customer)
     await db.flush()
     return customer

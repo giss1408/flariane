@@ -65,6 +65,7 @@ def _customer_out(c: Customer) -> CustomerOut:
         location=_location_out(c.location_commune, c.location_enc),
         phone_verified=c.phone_verified_at is not None,
         phone_rejected=c.phone_rejected_at is not None,
+        consent_required=c.consent_version != customer_auth.CONSENT_VERSION,
     )
 
 
@@ -91,6 +92,15 @@ async def update_me(data: CustomerUpdateIn, customer: Customer = authed, db: Asy
         customer.display_name = data.display_name
     if data.locale is not None:
         customer.locale = data.locale
+    await db.commit()
+    return _customer_out(customer)
+
+
+@router.post("/me/consent", response_model=CustomerOut)
+async def give_consent(request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    """Existing accounts (or after a policy change) accept once; date and policy version are kept."""
+    customer.consent_at, customer.consent_version = utcnow(), customer_auth.CONSENT_VERSION
+    await audit(db, actor_type="customer", actor_id=customer.id, action="customer.consent", after={"version": customer_auth.CONSENT_VERSION}, ip=client_ip(request))
     await db.commit()
     return _customer_out(customer)
 

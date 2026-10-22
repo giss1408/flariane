@@ -112,7 +112,7 @@ class CustomerApi {
   }
 
   Future<void> register(String phone, String password, {String? name}) =>
-      _session('/auth/register', {'phone': phone, 'password': password, 'display_name': name});
+      _session('/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true});
 
   Future<void> login(String phone, String password) => _session('/auth/login', {'phone': phone, 'password': password});
 
@@ -150,6 +150,8 @@ class CustomerApi {
 
   Future<Me> updateMe({String? name}) =>
       _call(() => dio.patch('/me', data: {'display_name': name}), (j) => Me.fromJson(j as Map<String, dynamic>));
+
+  Future<Me> giveConsent() => _call(() => dio.post('/me/consent'), (j) => Me.fromJson(j as Map<String, dynamic>));
 
   Future<Me> changePhone(String phone) =>
       _call(() => dio.put('/me/phone', data: {'phone': phone}), (j) => Me.fromJson(j as Map<String, dynamic>));

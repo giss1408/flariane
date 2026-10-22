@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../../widgets/consent_tick.dart';
 import '../../widgets/logo.dart';
 
 /// Sign in or create an account with an Ivorian phone number and a password.
@@ -25,6 +26,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _creating = false;
   bool _busy = false;
   bool _obscure = true;
+  bool _consent = false;
   String? _error;
 
   Future<void> _submit() async {
@@ -115,13 +117,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         validator: (v) => v != _password.text ? 'Les mots de passe diffèrent' : null,
                       ),
                     ],
+                    if (_creating) ...[
+                      const SizedBox(height: 12),
+                      ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(_error!, style: const TextStyle(color: AppColors.danger)),
                     ],
                     const SizedBox(height: 24),
                     FilledButton(
-                      onPressed: _busy ? null : _submit,
+                      onPressed: _busy || (_creating && !_consent) ? null : _submit,
                       child: _busy
                           ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
                           : Text(_creating ? 'Créer mon compte' : 'Se connecter'),

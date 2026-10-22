@@ -31,6 +31,8 @@ Password = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 class RegisterIn(In):
     phone: Annotated[str, StringConstraints(max_length=30)]
     password: Password
+    # Required tick box: privacy policy + WhatsApp contact about orders.
+    consent: bool = False
     display_name: Str80 | None = None
     client: Literal["web", "app"] = "app"
 
@@ -143,6 +145,7 @@ class CustomerOut(Out):
     must_change_password: bool = False
     phone_verified: bool = True
     phone_rejected: bool = False  # the admin couldn't verify it: ask for a correct number
+    consent_required: bool = False  # never consented, or the policy changed since
     location: LocationOut | None = None
 
 

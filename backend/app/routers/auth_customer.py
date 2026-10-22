@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import get_session, on_commit
 from app.tasks import dispatch
-from app.errors import DomainError
+from app.errors import BadRequest, DomainError
 from app.ratelimit import ip_limited
 from app.schemas import LoginIn, RefreshIn, RegisterIn, TokenOut
 from app.security.deps import client_ip
@@ -52,6 +52,8 @@ def _tokens(customer_id: int, refresh: str, client: str, response: Response) -> 
 
 @router.post("/register", response_model=TokenOut, status_code=201)
 async def register(data: RegisterIn, request: Request, response: Response, db: AsyncSession = Depends(get_session)) -> TokenOut:
+    if not data.consent:
+        raise BadRequest("consent_required")
     customer = await customer_auth.register(db, data.phone, data.password, data.display_name)
     refresh = await issue_refresh_token(db, "customer", customer.id)
     await audit(db, actor_type="customer", actor_id=customer.id, action="auth.registered", ip=client_ip(request))

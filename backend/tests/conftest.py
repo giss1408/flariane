@@ -123,7 +123,7 @@ PASSWORD = "awa-secret-2026"
 
 
 async def login_customer(client: AsyncClient, phone: str = PHONE, name: str = "Awa Koné") -> dict[str, str]:
-    r = await client.post("/auth/register", json={"phone": phone, "password": PASSWORD, "display_name": name})
+    r = await client.post("/auth/register", json={"phone": phone, "password": PASSWORD, "display_name": name, "consent": True})
     assert r.status_code == 201, r.text
     # Most tests start from a verified number (the verification flow has its own test).
     from sqlalchemy import update
