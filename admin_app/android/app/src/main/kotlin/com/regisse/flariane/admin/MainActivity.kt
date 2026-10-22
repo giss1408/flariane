@@ -1,4 +1,4 @@
-package ci.flariane.flariane_admin
+package com.regisse.flariane.admin
 
 import android.os.Bundle
 import android.view.WindowManager

@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "ci.flariane.flariane"
+    namespace = "com.regisse.flariane"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ci.flariane.flariane"
+        applicationId = "com.regisse.flariane"
         minSdk = 23 // flutter_secure_storage
         targetSdk = 35 // Google Play requirement (Android 15)
         versionCode = flutter.versionCode

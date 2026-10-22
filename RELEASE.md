@@ -22,7 +22,7 @@ Sur Render (`flariane-api` → Environment) :
 Ce Mac (macOS 13, Xcode 15.2) **ne peut pas soumettre** : Apple exige Xcode 16+ (SDK iOS 18).
 Options : un Mac sous macOS 14+, ou un service de build cloud (Codemagic, gratuit pour démarrer).
 1. Compte Apple Developer (99 $/an) : https://developer.apple.com
-2. App Store Connect → nouvelle app, bundle ID `ci.flariane.flariane`.
+2. App Store Connect → nouvelle app, bundle ID `com.regisse.flariane`.
 3. Sur un Mac à jour : `cd customer_app && flutter build ipa --release` puis Transporter / Xcode Organizer.
 4. Fiche : `customer_app/store/LISTING.md` (sous-titre, mots-clés, confidentialité, compte de démo).
 5. À prévoir côté iOS : l'extension de partage (« Partager → Flariane » depuis SHEIN/Temu) n'existe pas encore ;

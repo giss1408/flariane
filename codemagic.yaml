@@ -7,7 +7,7 @@
 #   1. Add the GitHub repository giss1408/flariane.
 #   2. Team settings → Integrations → Developer Portal → connect an App Store
 #      Connect API key (App Manager role) and name it "flariane-asc".
-#   3. App Store Connect: create the app with bundle ID ci.flariane.flariane.
+#   3. App Store Connect: create the app with bundle ID com.regisse.flariane.
 # Then start the "customer-ios" workflow, by hand or by pushing a tag
 # customer-v* (e.g. git tag customer-v1.0.0 && git push origin customer-v1.0.0).
 
@@ -31,7 +31,7 @@ workflows:
       cocoapods: default
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: ci.flariane.flariane
+        bundle_identifier: com.regisse.flariane
       vars:
         APP_STORE_APPLE_ID: "" # App Store Connect → the app → App Information → Apple ID (numeric)
         API_BASE_URL: https://flariane-api.onrender.com
