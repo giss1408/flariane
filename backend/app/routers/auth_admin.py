@@ -60,6 +60,17 @@ def _tokens(user: AdminUser, device: AdminDevice, refresh: str) -> TokenOut:
     return TokenOut(access_token=access, expires_in=get_settings().access_token_minutes * 60, refresh_token=refresh)
 
 
+async def _bootstrap_allowed(db: AsyncSession, user: AdminUser) -> bool:
+    """Bootstrap: a super admin's device approves itself while no approved device exists, since
+    nobody else could approve it."""
+    if user.role != "SUPER_ADMIN":
+        return False
+    approved = await db.scalar(
+        select(func.count()).select_from(AdminDevice).where(AdminDevice.approved_at.is_not(None), AdminDevice.revoked_at.is_(None))
+    )
+    return not approved
+
+
 @router.post("/login", response_model=AdminLoginOut, dependencies=[Depends(ip_limited)])
 async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends(get_session)) -> AdminLoginOut:
     ip = client_ip(request)
@@ -83,11 +94,7 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         db.add(device)
         await db.flush()
         await audit(db, actor_type="admin", actor_id=user.id, action="device.registered", entity="admin_device", entity_id=device.id, ip=ip)
-        # Bootstrap: the very first device of a super admin approves itself (nobody else could).
-        no_approved_device = not await db.scalar(
-            select(func.count()).select_from(AdminDevice).where(AdminDevice.approved_at.is_not(None), AdminDevice.revoked_at.is_(None))
-        )
-        if not (no_approved_device and user.role == "SUPER_ADMIN"):
+        if not await _bootstrap_allowed(db, user):
             await db.commit()
             return AdminLoginOut(status="device_pending", device_id=device.id, device_secret=secret)
         device.approved_at, device.approved_by = utcnow(), user.id
@@ -110,8 +117,13 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         await db.commit()
         raise HTTPException(status_code=403, detail="device_revoked")
     if device.approved_at is None:
-        await db.commit()
-        return AdminLoginOut(status="device_pending", device_id=device.id)
+        # A phone saved while another device was approved: once none is left (revoked, or
+        # reset-admin), it is in the same place as a brand-new one and nobody else could approve it.
+        if not await _bootstrap_allowed(db, user):
+            await db.commit()
+            return AdminLoginOut(status="device_pending", device_id=device.id)
+        device.approved_at, device.approved_by = utcnow(), user.id
+        await audit(db, actor_type="admin", actor_id=user.id, action="device.auto_approved_bootstrap", entity="admin_device", entity_id=device.id, ip=ip)
 
     user.last_login_at = device.last_seen_at = utcnow()
     refresh = await issue_refresh_token(db, "admin", user.id, device.id)

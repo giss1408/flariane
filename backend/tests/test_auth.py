@@ -207,6 +207,36 @@ async def test_second_device_still_needs_approval(client: AsyncClient, admin: Ad
     assert r.json()["status"] == "device_pending"
 
 
+async def test_pending_phone_of_super_admin_is_approved_once_no_device_is_left(client: AsyncClient, admin: AdminFixture) -> None:
+    # The phone registered while another device was approved, so it waits...
+    boss = await make_admin(email="boss@flariane.ci")
+    async with SessionLocal() as db:
+        await db.execute(update(AdminDevice).where(AdminDevice.admin_user_id == boss.user.id).values(revoked_at=utcnow()))
+        await db.commit()
+    r = await _login(client, boss, {"name": "Galaxy", "platform": "android"})
+    assert r["status"] == "device_pending"
+    saved = {"device_id": r["device_id"], "device_secret": r["device_secret"], "name": "Galaxy", "platform": "android"}
+
+    # ...then every approved device is gone (revoked, or reset-admin): the same saved phone signs in,
+    # as a brand-new one would. Nobody else is left to approve it.
+    async with SessionLocal() as db:
+        await db.execute(update(AdminDevice).where(AdminDevice.approved_at.is_not(None)).values(revoked_at=utcnow()))
+        await db.commit()
+    r = await _login(client, boss, saved, totp_at=int(time.time()) + 30)
+    assert r["status"] == "ok" and r["tokens"]["access_token"]
+
+
+async def test_pending_phone_of_operator_stays_pending(client: AsyncClient, admin: AdminFixture) -> None:
+    other = await make_admin(role="OPERATOR", email="op@flariane.ci")
+    r = await _login(client, other, {"name": "Pixel", "platform": "android"})
+    saved = {"device_id": r["device_id"], "device_secret": r["device_secret"], "name": "Pixel", "platform": "android"}
+    async with SessionLocal() as db:
+        await db.execute(update(AdminDevice).where(AdminDevice.approved_at.is_not(None)).values(revoked_at=utcnow()))
+        await db.commit()
+    r = await _login(client, other, saved, totp_at=int(time.time()) + 30)
+    assert r["status"] == "device_pending"
+
+
 async def test_setup_retires_legacy_dev_admin(client: AsyncClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     from app.config import get_settings
 
