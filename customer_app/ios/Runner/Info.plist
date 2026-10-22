@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Ajouter ta position à ton adresse de livraison à Abidjan</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Ajouter ta position à ton adresse de livraison à Abidjan. Flariane ne l'utilise que lorsque l'application est ouverte.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Joindre la capture de ton panier ou de ton paiement</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
