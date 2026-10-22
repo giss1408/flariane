@@ -42,8 +42,8 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
           Text('Ton accord', style: display(28), textAlign: TextAlign.center),
           const SizedBox(height: 10),
           const Text(
-            'Nous utilisons ton numéro pour ton compte et pour te contacter sur WhatsApp au sujet de tes commandes '
-            '(devis, paiement, retrait). Nous ne le partageons pas et tu peux supprimer ton compte à tout moment.',
+            'Ton numéro de téléphone sert à traiter tes commandes : ton compte, tes devis, ton paiement et ton retrait, '
+            'avec des messages WhatsApp à leur sujet. Nous ne le partageons pas et tu peux supprimer ton compte à tout moment.',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),

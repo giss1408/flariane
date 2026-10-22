@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/providers.dart';
 import '../core/theme.dart';
 
-/// Required consent: privacy policy + being contacted on WhatsApp about orders (law 2013-450).
+/// Required consent: use of the phone number to process orders (law 2013-450).
 class ConsentTick extends StatelessWidget {
   const ConsentTick({super.key, required this.value, required this.onChanged});
 
@@ -20,14 +20,14 @@ class ConsentTick extends StatelessWidget {
             padding: const EdgeInsets.only(top: 12),
             child: Text.rich(
               TextSpan(style: const TextStyle(height: 1.4), children: [
-                const TextSpan(text: 'J’accepte la '),
+                const TextSpan(text: 'J’accepte que Flariane utilise mon numéro de téléphone pour traiter mes commandes, conformément à la '),
                 TextSpan(
                   text: 'politique de confidentialité',
                   style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, decoration: TextDecoration.underline),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
                 ),
-                const TextSpan(text: ' et d’être contactée sur WhatsApp au sujet de mes commandes.'),
+                const TextSpan(text: '.'),
               ]),
             ),
           ),
