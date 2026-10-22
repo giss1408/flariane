@@ -247,3 +247,30 @@ async def test_admin_users_reset_and_remove(client: AsyncClient, admin: AdminFix
     assert (await client.post(f"/admin/users/{other.user.id}/deactivate", headers=admin.headers)).status_code == 200
     emails = [u["email"] for u in (await client.get("/admin/users", headers=admin.headers)).json()]
     assert "op@flariane.ci" not in emails
+
+
+async def test_admin_without_totp_needs_approved_device(client: AsyncClient, admin: AdminFixture) -> None:
+    r = await client.post("/admin/users", json={"email": "desk2@flariane.ci", "name": "Desk", "role": "PICKUP",
+                                                "password": "a-long-password-123", "totp_required": False}, headers=admin.headers)
+    assert r.status_code == 201 and r.json()["totp_uri"] is None and r.json()["totp_required"] is False
+    uid = r.json()["id"]
+    login = {"email": "desk2@flariane.ci", "password": "a-long-password-123", "device": {"name": "P", "platform": "android"}}
+    r = (await client.post("/admin/auth/login", json=login)).json()
+    assert r["status"] == "device_pending"  # no code, but the phone still needs approval
+    dev = {"device_id": r["device_id"], "device_secret": r["device_secret"], "name": "P", "platform": "android"}
+    await client.post(f"/admin/devices/{r['device_id']}/approve", headers=admin.headers)
+    r = (await client.post("/admin/auth/login", json={**login, "device": dev})).json()
+    assert r["status"] == "ok"
+    # Wrong password still refused.
+    assert (await client.post("/admin/auth/login", json={**login, "password": "wrong-password!!", "device": dev})).status_code == 401
+    # Turning the code back on makes it mandatory again.
+    await client.post(f"/admin/users/{uid}/totp", json={"required": True}, headers=admin.headers)
+    assert (await client.post("/admin/auth/login", json={**login, "device": dev})).status_code == 401
+
+
+async def test_super_admin_always_needs_totp(client: AsyncClient, admin: AdminFixture) -> None:
+    r = await client.post("/admin/users", json={"email": "sa@flariane.ci", "name": "SA", "role": "SUPER_ADMIN",
+                                                "password": "a-long-password-123", "totp_required": False}, headers=admin.headers)
+    assert r.json()["totp_required"] is True and r.json()["totp_uri"]
+    r = await client.post(f"/admin/users/{admin.user.id}/totp", json={"required": False}, headers=admin.headers)
+    assert r.status_code == 400

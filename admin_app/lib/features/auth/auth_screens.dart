@@ -85,11 +85,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _totp,
-                      decoration: const InputDecoration(labelText: 'Code à 6 chiffres (authentificateur)'),
+                      decoration: const InputDecoration(labelText: 'Code à 6 chiffres (si ton compte en a un)'),
                       keyboardType: TextInputType.number,
                       autofillHints: const [AutofillHints.oneTimeCode],
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-                      validator: (v) => RegExp(r'^\d{6}$').hasMatch(v ?? '') ? null : '6 chiffres',
+                      validator: (v) => (v ?? '').isEmpty || RegExp(r'^\d{6}$').hasMatch(v!) ? null : '6 chiffres',
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     if (_error != null) ...[

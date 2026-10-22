@@ -56,6 +56,8 @@ class AdminUser(TimestampMixin, Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     totp_secret_enc: Mapped[bytes] = mapped_column(LargeBinary)
     totp_last_step: Mapped[int] = mapped_column(BigInteger, default=0)  # blocks replay of a used code
+    # False: email + password only, and only from an approved device. Always True for super admins.
+    totp_required: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     role: Mapped[str] = mapped_column(String(16))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = _ts()

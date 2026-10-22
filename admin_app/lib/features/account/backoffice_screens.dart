@@ -225,6 +225,7 @@ class AdminUsersScreen extends ConsumerWidget {
     final name = TextEditingController();
     final password = TextEditingController();
     var role = 'OPERATOR';
+    var totpRequired = true;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -248,6 +249,15 @@ class AdminUsersScreen extends ConsumerWidget {
                 ],
                 onChanged: (v) => setState(() => role = v ?? role),
               ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: role == 'SUPER_ADMIN' || totpRequired,
+                onChanged: role == 'SUPER_ADMIN' ? null : (v) => setState(() => totpRequired = v ?? true),
+                title: const Text('Code d’authentification requis'),
+                subtitle: Text(role == 'SUPER_ADMIN'
+                    ? 'Toujours requis pour un super admin'
+                    : 'Sans code : connexion par mot de passe, seulement depuis un téléphone approuvé'),
+              ),
             ]),
           ),
           actions: [
@@ -260,9 +270,13 @@ class AdminUsersScreen extends ConsumerWidget {
     if (ok != true || !context.mounted) return;
     try {
       final uri = await ref.read(adminApiProvider).createAdminUser(
-          {'email': email.text.trim(), 'name': name.text.trim(), 'password': password.text, 'role': role});
+          {'email': email.text.trim(), 'name': name.text.trim(), 'password': password.text, 'role': role, 'totp_required': totpRequired});
       reload();
       if (!context.mounted) return;
+      if (uri == null) {
+        showInfo(context, 'Administrateur créé (sans code). Approuve son téléphone dans Appareils après sa première connexion.');
+        return;
+      }
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -290,12 +304,17 @@ class AdminUsersScreen extends ConsumerWidget {
         fab: (context, reload) => FloatingActionButton(onPressed: () => _create(context, ref, reload), child: const Icon(Icons.person_add)),
         tile: (context, u, reload) => ListTile(
           title: Text('${u['name']} · ${u['role']}'),
-          subtitle: Text('${u['email']}'),
+          subtitle: Text('${u['email']}${u['totp_required'] == false ? ' · sans code' : ''}'),
           trailing: u['id'] == ref.read(sessionProvider).me?.id
               ? const Text('Vous')
               : PopupMenuButton<String>(
                   onSelected: (action) async {
                     final api = ref.read(adminApiProvider);
+                    if (action == 'totp_on' || action == 'totp_off') {
+                      await _act(context, () => api.setTotpRequired(u['id'] as int, action == 'totp_on'), reload,
+                          done: action == 'totp_on' ? 'Code désormais requis.' : 'Code plus requis (téléphone approuvé obligatoire).');
+                      return;
+                    }
                     if (action == 'remove') {
                       if (await confirm(context, title: 'Supprimer ${u['name']} ?', body: 'Son accès est coupé immédiatement sur tous ses appareils.', ok: 'Supprimer')) {
                         if (context.mounted) await _act(context, () => api.deactivateAdminUser(u['id'] as int), reload, done: 'Administrateur supprimé.');
@@ -315,13 +334,15 @@ class AdminUsersScreen extends ConsumerWidget {
                             const SizedBox(height: 12),
                             const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w700)),
                             SelectableText(c['password'] as String, style: const TextStyle(fontSize: 18)),
-                            const SizedBox(height: 8),
-                            const Text('Clé d’authentification', style: TextStyle(fontWeight: FontWeight.w700)),
-                            SelectableText(c['totp_secret'] as String),
+                            if (c['totp_secret'] != null) ...[
+                              const SizedBox(height: 8),
+                              const Text('Clé d’authentification', style: TextStyle(fontWeight: FontWeight.w700)),
+                              SelectableText(c['totp_secret'] as String),
+                            ],
                           ]),
                           actions: [
                             TextButton(
-                              onPressed: () => Clipboard.setData(ClipboardData(text: 'Mot de passe : ${c['password']}\nClé : ${c['totp_secret']}')),
+                              onPressed: () => Clipboard.setData(ClipboardData(text: 'Mot de passe : ${c['password']}${c['totp_secret'] == null ? '' : '\nClé : ${c['totp_secret']}'}')),
                               child: const Text('Copier'),
                             ),
                             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
@@ -332,9 +353,13 @@ class AdminUsersScreen extends ConsumerWidget {
                       if (context.mounted) showError(context, e);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'reset', child: Text('Nouveaux identifiants')),
-                    PopupMenuItem(value: 'remove', child: Text('Supprimer', style: TextStyle(color: AppColors.danger))),
+                  itemBuilder: (_) => [
+                    if (u['role'] != 'SUPER_ADMIN')
+                      u['totp_required'] == false
+                          ? const PopupMenuItem(value: 'totp_on', child: Text('Exiger le code'))
+                          : const PopupMenuItem(value: 'totp_off', child: Text('Ne plus exiger le code')),
+                    const PopupMenuItem(value: 'reset', child: Text('Nouveaux identifiants')),
+                    const PopupMenuItem(value: 'remove', child: Text('Supprimer', style: TextStyle(color: AppColors.danger))),
                   ],
                 ),
         ),

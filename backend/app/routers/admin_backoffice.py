@@ -35,6 +35,7 @@ from app.schemas import (
     ReportSummaryOut,
     SettingsIn,
     TempPasswordOut,
+    TotpRequiredIn,
 )
 from app.security.crypto import encrypt, hash_password
 from fastapi import HTTPException
@@ -195,8 +196,10 @@ async def reset_credentials(user_id: int, request: Request, admin: AdminContext 
         await revoke_device_tokens(db, device.id)
     await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.credentials_reset", entity="admin_user", entity_id=user.id, ip=client_ip(request))
     await db.commit()
-    return {"email": user.email, "password": password, "totp_secret": secret,
-            "totp_uri": pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin")}
+    out = {"email": user.email, "password": password}
+    if user.totp_required:
+        out |= {"totp_secret": secret, "totp_uri": pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin")}
+    return out
 
 
 @router.post("/users", response_model=AdminUserCreatedOut, status_code=201)
@@ -204,13 +207,30 @@ async def create_user(data: AdminUserIn, request: Request, admin: AdminContext =
     if await db.scalar(select(AdminUser).where(AdminUser.email == data.email)):
         raise Conflict("email_taken")
     secret = pyotp.random_base32()
-    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=hash_password(data.password), totp_secret_enc=encrypt(secret))
+    totp_required = data.totp_required or data.role == "SUPER_ADMIN"
+    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=hash_password(data.password),
+                     totp_secret_enc=encrypt(secret), totp_required=totp_required)
     db.add(user)
     await db.flush()
     await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.created", entity="admin_user", entity_id=user.id, after={"role": data.role}, ip=client_ip(request))
     await db.commit()
-    uri = pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin")
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin") if totp_required else None
     return AdminUserCreatedOut(**AdminUserOut.model_validate(user).model_dump(), totp_uri=uri)
+
+
+@router.post("/users/{user_id}/totp", response_model=AdminUserOut)
+async def set_totp_required(user_id: int, data: TotpRequiredIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> AdminUser:
+    """Require (or not) the authenticator code for this admin. Super admins always need it."""
+    user = await db.get(AdminUser, user_id)
+    if user is None or not user.active:
+        raise NotFound()
+    if not data.required and user.role == "SUPER_ADMIN":
+        raise BadRequest("super_admin_needs_totp")
+    user.totp_required = data.required
+    await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.totp_required", entity="admin_user", entity_id=user.id,
+                after={"required": data.required}, ip=client_ip(request))
+    await db.commit()
+    return user
 
 
 @router.post("/users/{user_id}/deactivate", response_model=AdminUserOut)

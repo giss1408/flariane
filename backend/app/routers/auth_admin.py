@@ -43,6 +43,8 @@ def _bad_login() -> HTTPException:
 
 
 def _check_totp(user: AdminUser, code: str) -> bool:
+    if not code:
+        return False
     totp = pyotp.TOTP(decrypt(user.totp_secret_enc))
     now = int(time.time())
     for offset in (-1, 0, 1):  # tolerate 30 s clock drift
@@ -66,7 +68,9 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
 
     user = await db.scalar(select(AdminUser).where(AdminUser.email == data.email).with_for_update())
     password_ok = verify_password(user.password_hash if user else _DUMMY_HASH, data.password)
-    if user is None or not user.active or not password_ok or not _check_totp(user, data.totp):
+    # Same answer whatever failed (unknown email, password or code): no hint for an attacker.
+    totp_ok = user is not None and (_check_totp(user, data.totp) if user.totp_required else True)
+    if user is None or not user.active or not password_ok or not totp_ok:
         await audit(db, actor_type="admin", actor_id=user.id if user else None, action="auth.login_failed", ip=ip)
         await db.commit()
         raise _bad_login()

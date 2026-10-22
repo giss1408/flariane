@@ -72,7 +72,7 @@ class DeviceIn(In):
 class AdminLoginIn(In):
     email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, max_length=200)]
     password: Annotated[str, StringConstraints(max_length=200)]
-    totp: Annotated[str, StringConstraints(pattern=r"^\d{6}$")]
+    totp: Annotated[str, StringConstraints(pattern=r"^(\d{6})?$")] = ""  # empty for admins without a code
     device: DeviceIn
 
 
@@ -454,6 +454,7 @@ class AdminUserIn(In):
     name: Str80
     role: Literal["PICKUP", "VIEWER", "OPERATOR", "SUPER_ADMIN"]
     password: Annotated[str, StringConstraints(min_length=12, max_length=200)]
+    totp_required: bool = True  # forced True for SUPER_ADMIN
 
 
 class AdminUserOut(Out):
@@ -463,10 +464,15 @@ class AdminUserOut(Out):
     role: str
     active: bool
     last_login_at: datetime | None
+    totp_required: bool = True
 
 
 class AdminUserCreatedOut(AdminUserOut):
-    totp_uri: str  # shown once, to scan in an authenticator app
+    totp_uri: str | None = None  # shown once, to scan in an authenticator app (when a code is required)
+
+
+class TotpRequiredIn(In):
+    required: bool
 
 
 class AdminDeviceOut(Out):

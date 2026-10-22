@@ -41,7 +41,7 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'a@flariane.ci');
     await tester.enterText(find.widgetWithText(TextFormField, 'Mot de passe'), 'pw');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Code à 6 chiffres (authentificateur)'), '12a3');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Code à 6 chiffres (si ton compte en a un)'), '12a3');
     await tester.tap(find.text('Se connecter'));
     await tester.pump();
     expect(find.text('6 chiffres'), findsOneWidget);

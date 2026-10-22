@@ -220,8 +220,12 @@ class AdminApi {
       (d) => id == null ? d.post('/admin/pickup-points', data: body) : d.put('/admin/pickup-points/$id', data: body), (_) {});
 
   Future<List<Map<String, dynamic>>> adminUsers() => _list('/admin/users');
-  Future<String> createAdminUser(Map<String, dynamic> body) =>
-      client.call((d) => d.post('/admin/users', data: body), (j) => (j as Map)['totp_uri'] as String);
+  /// Returns the authenticator URI, or null when this admin signs in without a code.
+  Future<String?> createAdminUser(Map<String, dynamic> body) =>
+      client.call((d) => d.post('/admin/users', data: body), (j) => (j as Map)['totp_uri'] as String?);
+
+  Future<void> setTotpRequired(int id, bool required) =>
+      client.call((d) => d.post('/admin/users/$id/totp', data: {'required': required}), (_) {});
   Future<Map<String, dynamic>> resetAdminCredentials(int id) =>
       client.call((d) => d.post('/admin/users/$id/reset-credentials'), (j) => j as Map<String, dynamic>);
   Future<void> deactivateAdminUser(int id) => client.call((d) => d.post('/admin/users/$id/deactivate'), (_) {});
