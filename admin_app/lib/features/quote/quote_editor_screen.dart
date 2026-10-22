@@ -11,6 +11,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/store_badge.dart';
 import '../../widgets/whatsapp.dart';
 import '../order/order_screen.dart';
 import 'quote_draft.dart';
@@ -137,7 +138,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
     final order = widget.order;
     final change = order.pendingChangeRequest;
     return Scaffold(
-      appBar: AppBar(title: Text('Devis · ${order.publicRef}')),
+      appBar: AppBar(title: Row(children: [Text('Devis · ${order.publicRef}  '), StoreBadge(order.store, small: true)])),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -155,11 +156,13 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
           SectionTitle('Capture du panier ${order.storeName}'),
           _ScreenshotBox(url: _screenshotUrl, busy: _uploading, onPick: _pickScreenshot, store: order.storeName),
           const SectionTitle('Montants'),
-          _AmountField(
-            label: 'Prix ${order.storeName} du panier *',
-            initial: _model.cartPriceXof,
+          TextFormField(
+            initialValue: _model.cartPriceEur ?? '',
+            decoration: InputDecoration(labelText: 'Prix ${order.storeName} du panier *', suffixText: '€', helperText: 'En euros, comme affiché dans le panier'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
             onChanged: (v) {
-              _model.cartPriceXof = v;
+              _model.cartPriceEur = v;
               _changed();
             },
           ),
@@ -205,7 +208,7 @@ class _QuoteEditorScreenState extends ConsumerState<QuoteEditorScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Panier ${fcfa(_saved!.itemsXof)} + transport ${fcfa(_saved!.freightXof)}',
+                  'Panier ${_saved!.cartEuros ?? ''} = ${fcfa(_saved!.itemsXof)} + transport ${fcfa(_saved!.freightXof)}',
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),

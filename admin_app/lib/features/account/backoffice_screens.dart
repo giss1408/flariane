@@ -289,17 +289,53 @@ class AdminUsersScreen extends ConsumerWidget {
         fab: (context, reload) => FloatingActionButton(onPressed: () => _create(context, ref, reload), child: const Icon(Icons.person_add)),
         tile: (context, u, reload) => ListTile(
           title: Text('${u['name']} · ${u['role']}'),
-          subtitle: Text('${u['email']}${u['active'] == true ? '' : ' · désactivé'}'),
-          trailing: u['active'] == true && u['id'] != ref.read(sessionProvider).me?.id
-              ? TextButton(
-                  onPressed: () async {
-                    if (await confirm(context, title: 'Désactiver ?', body: 'Tous ses appareils perdent l’accès.', ok: 'Désactiver')) {
-                      if (context.mounted) await _act(context, () => ref.read(adminApiProvider).deactivateAdminUser(u['id'] as int), reload);
+          subtitle: Text('${u['email']}'),
+          trailing: u['id'] == ref.read(sessionProvider).me?.id
+              ? const Text('Vous')
+              : PopupMenuButton<String>(
+                  onSelected: (action) async {
+                    final api = ref.read(adminApiProvider);
+                    if (action == 'remove') {
+                      if (await confirm(context, title: 'Supprimer ${u['name']} ?', body: 'Son accès est coupé immédiatement sur tous ses appareils.', ok: 'Supprimer')) {
+                        if (context.mounted) await _act(context, () => api.deactivateAdminUser(u['id'] as int), reload, done: 'Administrateur supprimé.');
+                      }
+                      return;
+                    }
+                    if (!await confirm(context, title: 'Nouveaux identifiants ?', body: 'Un nouveau mot de passe et une nouvelle clé d’authentification sont créés. Ses appareils sont déconnectés.', ok: 'Générer')) return;
+                    try {
+                      final c = await api.resetAdminCredentials(u['id'] as int);
+                      if (!context.mounted) return;
+                      await showDialog<void>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Nouveaux identifiants'),
+                          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Text('Affichés une seule fois. Transmets-les de façon sûre.'),
+                            const SizedBox(height: 12),
+                            const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SelectableText(c['password'] as String, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(height: 8),
+                            const Text('Clé d’authentification', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SelectableText(c['totp_secret'] as String),
+                          ]),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Clipboard.setData(ClipboardData(text: 'Mot de passe : ${c['password']}\nClé : ${c['totp_secret']}')),
+                              child: const Text('Copier'),
+                            ),
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
+                          ],
+                        ),
+                      );
+                    } catch (e) {
+                      if (context.mounted) showError(context, e);
                     }
                   },
-                  child: const Text('Désactiver', style: TextStyle(color: AppColors.danger)),
-                )
-              : null,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'reset', child: Text('Nouveaux identifiants')),
+                    PopupMenuItem(value: 'remove', child: Text('Supprimer', style: TextStyle(color: AppColors.danger))),
+                  ],
+                ),
         ),
       );
 }

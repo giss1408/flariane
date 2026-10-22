@@ -194,6 +194,7 @@ def _quote_out(q, screenshot_url: str | None = None) -> QuoteOut:  # type: ignor
         expires_at=q.expires_at, sent_at=q.sent_at,
         lines=[QuoteLineOut.model_validate(line) for line in q.lines],
         screenshot_url=screenshot_url,
+        # Customers see FCFA only: the store's euro price stays internal.
     )
 
 
@@ -281,7 +282,7 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
 @router.get("/orders", response_model=list[OrderSummaryOut])
 async def list_orders(customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> list[OrderSummaryOut]:
     rows = (await db.scalars(select(Order).where(Order.customer_id == customer.id).order_by(Order.created_at.desc()).limit(100))).all()
-    return [OrderSummaryOut(public_ref=o.public_ref, status=o.status, total_xof=o.total_xof, created_at=o.created_at, status_changed_at=o.status_changed_at) for o in rows]
+    return [OrderSummaryOut(public_ref=o.public_ref, status=o.status, store=o.store, total_xof=o.total_xof, created_at=o.created_at, status_changed_at=o.status_changed_at) for o in rows]
 
 
 @router.get("/orders/{ref}", response_model=OrderDetailOut)

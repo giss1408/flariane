@@ -11,6 +11,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/store_badge.dart';
 import 'pay_screen.dart';
 import '../../widgets/logo.dart';
 
@@ -59,7 +60,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
     final order = ref.watch(orderProvider(widget.orderRef));
     order.whenData(_syncPolling);
     return Scaffold(
-      appBar: FlarianeHeader(subtitle: 'Commande ${widget.orderRef}'),
+      appBar: FlarianeHeader(subtitle: 'Commande ${widget.orderRef}', actions: [
+        if (order.valueOrNull != null) Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: StoreBadge(order.value!.store))),
+      ]),
       body: order.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(orderProvider(widget.orderRef))),

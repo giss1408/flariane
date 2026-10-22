@@ -59,19 +59,21 @@ class PickupPoint {
 }
 
 class OrderSummary {
-  OrderSummary({required this.ref, required this.status, required this.totalXof, required this.createdAt});
+  OrderSummary({required this.ref, required this.status, required this.totalXof, required this.createdAt, this.store = 'SHEIN'});
 
   factory OrderSummary.fromJson(Map<String, dynamic> j) => OrderSummary(
         ref: j['public_ref'] as String,
         status: j['status'] as String,
         totalXof: _int(j['total_xof']),
         createdAt: _date(j['created_at'])!,
+        store: j['store'] as String? ?? 'SHEIN',
       );
 
   final String ref;
   final String status;
   final int? totalXof;
   final DateTime createdAt;
+  final String store;
 }
 
 class QuoteLine {
@@ -134,7 +136,6 @@ class Quote {
   final DateTime? expiresAt;
   final List<QuoteLine> lines;
   final String? screenshotUrl;
-
   bool isOpen(DateTime now) => status == 'SENT' && expiresAt != null && expiresAt!.isAfter(now);
 }
 

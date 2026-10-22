@@ -164,6 +164,9 @@ class Quote(TimestampMixin, Base):
     fx_rates: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)  # {"EUR": "655.957"}
     admin_note: Mapped[str | None] = mapped_column(Text)
     validity_hours: Mapped[int] = mapped_column(Integer, default=48)
+    # Cart mode: the store price as entered (e.g. 49.90 EUR), converted into items_xof.
+    cart_source_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    cart_source_currency: Mapped[str | None] = mapped_column(String(3))
     expires_at: Mapped[datetime | None] = _ts()  # set when sent
     created_by: Mapped[int] = mapped_column(ForeignKey("admin_users.id"))
     sent_at: Mapped[datetime | None] = _ts()

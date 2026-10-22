@@ -94,39 +94,48 @@ void main() {
     expect(store.values[Keys.refreshToken], 'refresh');
   });
 
-  test('cold start with a session requires unlock, then refreshes', () async {
+  test('cold start with a remembered session goes straight in', () async {
     store.values.addAll({Keys.deviceId: '7', Keys.deviceSecret: 'sekret', Keys.refreshToken: 'r1'});
-    expect((await settle()).status, SessionStatus.locked);
-
     when(() => api.refresh(refreshToken: 'r1', deviceId: 7, deviceSecret: 'sekret')).thenAnswer((_) async => Tokens('a2', 'r2'));
     when(() => api.me()).thenAnswer((_) async => me);
-
-    unlocker.allow = false;
-    expect(await container.read(sessionProvider.notifier).unlock(), isFalse);
-    expect(container.read(sessionProvider).status, SessionStatus.locked);
-
-    unlocker.allow = true;
-    expect(await container.read(sessionProvider.notifier).unlock(), isTrue);
+    container.read(sessionProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(container.read(sessionProvider).status, SessionStatus.loggedIn);
     expect(store.values[Keys.refreshToken], 'r2');
   });
 
+  test('after background lock, biometrics are required', () async {
+    store.values.addAll({Keys.deviceId: '7', Keys.deviceSecret: 'sekret', Keys.refreshToken: 'r1'});
+    when(() => api.refresh(refreshToken: any(named: 'refreshToken'), deviceId: any(named: 'deviceId'), deviceSecret: any(named: 'deviceSecret')))
+        .thenAnswer((_) async => Tokens('a2', 'r2'));
+    when(() => api.me()).thenAnswer((_) async => me);
+    container.read(sessionProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    container.read(sessionProvider.notifier).lock();
+    unlocker.allow = false;
+    expect(await container.read(sessionProvider.notifier).unlock(), isFalse);
+    unlocker.allow = true;
+    expect(await container.read(sessionProvider.notifier).unlock(), isTrue);
+    expect(container.read(sessionProvider).status, SessionStatus.loggedIn);
+  });
+
   test('offline refresh keeps the session locked instead of logging out', () async {
     store.values.addAll({Keys.deviceId: '7', Keys.deviceSecret: 'sekret', Keys.refreshToken: 'r1'});
-    await settle();
     when(() => api.refresh(refreshToken: any(named: 'refreshToken'), deviceId: any(named: 'deviceId'), deviceSecret: any(named: 'deviceSecret')))
         .thenThrow(ApiException(null, 'network'));
-    expect(await container.read(sessionProvider.notifier).unlock(), isFalse);
+    container.read(sessionProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(container.read(sessionProvider).status, SessionStatus.locked);
     expect(container.read(sessionProvider).status, SessionStatus.locked);
     expect(store.values[Keys.refreshToken], 'r1');
   });
 
   test('revoked device: refresh fails, device credentials are forgotten', () async {
     store.values.addAll({Keys.deviceId: '7', Keys.deviceSecret: 'sekret', Keys.refreshToken: 'r1'});
-    await settle();
     when(() => api.refresh(refreshToken: any(named: 'refreshToken'), deviceId: any(named: 'deviceId'), deviceSecret: any(named: 'deviceSecret')))
         .thenThrow(ApiException(401, 'device_invalid'));
-    expect(await container.read(sessionProvider.notifier).unlock(), isFalse);
+    container.read(sessionProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(container.read(sessionProvider).status, SessionStatus.loggedOut);
     expect(store.values.containsKey(Keys.deviceSecret), isFalse);
     expect(store.values.containsKey(Keys.refreshToken), isFalse);

@@ -74,8 +74,19 @@ class SessionController extends Notifier<SessionState> {
       state = SessionState(SessionStatus.loggedOut, email: email);
       return;
     }
-    // A stored session still requires biometrics on cold start.
-    state = SessionState(SessionStatus.locked, email: email);
+    // Remembered session: reopen directly (biometrics only after time in the background).
+    switch (await _refresh()) {
+      case RefreshOutcome.ok:
+        try {
+          await _loadMe();
+        } on ApiException {
+          state = SessionState(SessionStatus.locked, email: email, message: 'Pas de connexion. Réessayez.');
+        }
+      case RefreshOutcome.offline:
+        state = SessionState(SessionStatus.locked, email: email, message: 'Pas de connexion. Réessayez.');
+      case RefreshOutcome.expired:
+        await _expire('Session expirée. Reconnectez-vous.');
+    }
   }
 
   static String get _platform {

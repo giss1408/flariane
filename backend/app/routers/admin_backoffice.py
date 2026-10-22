@@ -163,7 +163,28 @@ async def revoke_device(device_id: int, request: Request, admin: AdminContext = 
 
 @router.get("/users", response_model=list[AdminUserOut])
 async def users(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> list[AdminUser]:
-    return list((await db.scalars(select(AdminUser).order_by(AdminUser.id))).all())
+    # Removed (deactivated) admins are hidden; they stay in the database for the history.
+    return list((await db.scalars(select(AdminUser).where(AdminUser.active.is_(True)).order_by(AdminUser.id))).all())
+
+
+@router.post("/users/{user_id}/reset-credentials")
+async def reset_credentials(user_id: int, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
+    """Passwords are one-way hashed and can't be shown. This issues a new password and a new
+    authenticator key (shown once), and signs out all their devices."""
+    import secrets
+
+    user = await db.get(AdminUser, user_id)
+    if user is None or not user.active:
+        raise NotFound()
+    password = "-".join(secrets.token_urlsafe(4) for _ in range(3))
+    secret = pyotp.random_base32()
+    user.password_hash, user.totp_secret_enc, user.totp_last_step = hash_password(password), encrypt(secret), 0
+    for device in (await db.scalars(select(AdminDevice).where(AdminDevice.admin_user_id == user.id))).all():
+        await revoke_device_tokens(db, device.id)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.credentials_reset", entity="admin_user", entity_id=user.id, ip=client_ip(request))
+    await db.commit()
+    return {"email": user.email, "password": password, "totp_secret": secret,
+            "totp_uri": pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="Flariane Admin")}
 
 
 @router.post("/users", response_model=AdminUserCreatedOut, status_code=201)

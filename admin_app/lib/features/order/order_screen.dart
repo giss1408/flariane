@@ -9,6 +9,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/store_badge.dart';
 import '../../widgets/whatsapp.dart';
 import '../purchase/purchase_screen.dart';
 import '../quote/quote_editor_screen.dart';
@@ -113,6 +114,8 @@ class _Header extends ConsumerWidget {
           padding: const EdgeInsets.all(14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
+              StoreBadge(order.store),
+              const SizedBox(width: 10),
               Expanded(child: Text(order.customerName ?? 'Client', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
               StatusChip(order.status),
             ]),
@@ -303,7 +306,7 @@ class _QuoteSummary extends StatelessWidget {
                 ]),
               ),
             const Divider(),
-            AmountRow(q.isCartMode ? 'Panier ${order.storeName}' : 'Articles', q.itemsXof),
+            AmountRow(q.isCartMode ? 'Panier ${order.storeName}${q.cartEuros == null ? '' : ' (${q.cartEuros})'}' : 'Articles', q.itemsXof),
             AmountRow('Transport', q.freightXof),
             if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
             if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),

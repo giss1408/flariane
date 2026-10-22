@@ -6,6 +6,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/store_badge.dart';
 import '../order/order_screen.dart';
 
 class InboxTab {
@@ -25,8 +26,11 @@ const inboxTabs = [
   InboxTab('done', 'Terminées'),
 ];
 
+/// null = both stores.
+final storeFilterProvider = StateProvider<String?>((_) => null);
+
 final inboxProvider = FutureProvider.autoDispose.family<List<OrderSummary>, String>(
-  (ref, tab) => ref.watch(adminApiProvider).inbox(tab),
+  (ref, tab) => ref.watch(adminApiProvider).inbox(tab, store: ref.watch(storeFilterProvider)),
 );
 
 /// What must happen next for orders in each tab: every step is explicit.
@@ -52,6 +56,16 @@ class InboxScreen extends ConsumerWidget {
         appBar: AppBar(
           title: const Text('Commandes'),
           actions: [
+            PopupMenuButton<String>(
+              tooltip: 'Filtrer par magasin',
+              icon: Icon(ref.watch(storeFilterProvider) == null ? Icons.filter_list_rounded : Icons.filter_alt_rounded),
+              onSelected: (v) => ref.read(storeFilterProvider.notifier).state = v == 'ALL' ? null : v,
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'ALL', child: Text('SHEIN et Temu')),
+                PopupMenuItem(value: 'SHEIN', child: Text('SHEIN seulement')),
+                PopupMenuItem(value: 'TEMU', child: Text('Temu seulement')),
+              ],
+            ),
             IconButton(
               tooltip: 'Rechercher une référence',
               icon: const Icon(Icons.search_rounded),
@@ -126,6 +140,8 @@ class OrderTile extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
+                  StoreBadge(order.store, small: true),
+                  const SizedBox(width: 8),
                   Text(order.publicRef, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                   if (order.hasChangeRequest) ...[
                     const SizedBox(width: 8),

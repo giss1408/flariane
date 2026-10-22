@@ -23,7 +23,7 @@ from app.services import notify
 from app.services.audit import audit
 from app.services.links import extract_shein_urls, product_id_from_url, store_of
 from app.services.orders import lock_order, transition_order
-from app.services.pricing import LineInput, compute_quote, default_customs, default_freight
+from app.services.pricing import LineInput, compute_quote, default_customs, default_freight, to_xof
 from app.services.settings import get_settings_map
 
 ACTIVE_PAYMENT = (PaymentStatus.INITIATED, PaymentStatus.PENDING, PaymentStatus.SUCCEEDED, PaymentStatus.HELD)
@@ -65,7 +65,7 @@ async def save_draft(db: AsyncSession, order_id: int, data: QuoteDraftIn, admin_
         raise Conflict("order_not_quotable", order.status)
 
     settings = await get_settings_map(db)
-    if data.cart_price_xof is not None:
+    if data.cart_price_xof is not None or data.cart_price is not None:
         return await _save_cart_draft(db, order, data, admin_id, settings)
     if not data.items:
         raise BadRequest("empty_quote")
@@ -171,10 +171,19 @@ async def _draft_for(db: AsyncSession, order: Order, admin_id: int) -> Quote:
 
 async def _save_cart_draft(db: AsyncSession, order: Order, data: QuoteDraftIn, admin_id: int, settings: dict[str, Any]) -> tuple[Quote, dict[str, Any]]:
     quote = await _draft_for(db, order, admin_id)
+    if data.cart_price is not None:
+        fx = {**settings["fx_rates"], "XOF": "1"}
+        if data.cart_currency not in fx:
+            raise BadRequest("missing_fx_rate", data.cart_currency)
+        cart_xof = to_xof(Decimal(data.cart_price), data.cart_currency, fx)
+        quote.cart_source_amount, quote.cart_source_currency = Decimal(data.cart_price), data.cart_currency
+    else:
+        cart_xof = data.cart_price_xof or 0
+        quote.cart_source_amount, quote.cart_source_currency = Decimal(cart_xof), "XOF"
     freight = data.freight_xof if data.freight_xof is not None else int(settings["freight_default_xof"])
     customs = data.customs_xof or 0
-    quote.items_xof, quote.freight_xof, quote.customs_xof, quote.fee_xof = data.cart_price_xof, freight, customs, data.fee_xof
-    quote.total_xof = (data.cart_price_xof or 0) + freight + customs + data.fee_xof
+    quote.items_xof, quote.freight_xof, quote.customs_xof, quote.fee_xof = cart_xof, freight, customs, data.fee_xof
+    quote.total_xof = cart_xof + freight + customs + data.fee_xof
     quote.fx_rates, quote.admin_note, quote.expires_at = dict(settings["fx_rates"]), data.admin_note, None
     quote.validity_hours = data.validity_hours or int(settings["quote_validity_hours"])
     await db.flush()

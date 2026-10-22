@@ -80,6 +80,8 @@ def admin_quote_out(q: Quote, min_fee: int, screenshot_url: str | None = None) -
         answered_at=q.answered_at, min_fee_xof=min_fee, fee_below_minimum=q.fee_xof < min_fee,
         lines=[QuoteLineOut.model_validate(line) for line in q.lines],
         screenshot_url=screenshot_url,
+        cart_source_amount=q.cart_source_amount,
+        cart_source_currency=q.cart_source_currency,
     )
 
 
@@ -87,10 +89,13 @@ def admin_quote_out(q: Quote, min_fee: int, screenshot_url: str | None = None) -
 async def inbox(
     tab: Literal["to_quote", "quoted", "to_buy", "to_ship", "in_transit", "pickups", "refunds", "done", "all"] = "to_quote",
     q: str | None = Query(default=None, max_length=20),
+    store: Literal["SHEIN", "TEMU"] | None = None,
     _: AdminContext = viewer,
     db: AsyncSession = Depends(get_session),
 ) -> list[AdminOrderSummaryOut]:
     stmt = select(Order, Customer.display_name).join(Customer, Customer.id == Order.customer_id)
+    if store:
+        stmt = stmt.where(Order.store == store)
     if q:
         stmt = stmt.where(Order.public_ref.ilike(f"%{q.strip().upper()}%"))
     elif tab != "all":
@@ -113,7 +118,7 @@ async def inbox(
         change_requested = {oid for oid, st in latest if st == QuoteStatus.CHANGE_REQUESTED}
     return [
         AdminOrderSummaryOut(
-            id=o.id, public_ref=o.public_ref, status=o.status, customer_name=name, total_xof=o.total_xof,
+            id=o.id, public_ref=o.public_ref, status=o.status, store=o.store, customer_name=name, total_xof=o.total_xof,
             created_at=o.created_at, status_changed_at=o.status_changed_at, has_change_request=o.id in change_requested,
         )
         for o, name in rows

@@ -56,8 +56,9 @@ enum RefreshOutcome { ok, expired, offline }
 /// Customer API. Access token in memory; refresh token in Keychain/Keystore, rotated on use.
 class CustomerApi {
   CustomerApi({required String baseUrl, required this.tokens, Dio? dio, Dio? authDio})
-      : dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 60))),
-        _auth = authDio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 15))) {
+      // Free hosting sleeps when idle and can take ~1 min to wake up.
+      : dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))),
+        _auth = authDio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))) {
     this.dio.interceptors.add(QueuedInterceptorsWrapper(
           onRequest: (o, h) {
             if (accessToken != null) o.headers['Authorization'] = 'Bearer $accessToken';

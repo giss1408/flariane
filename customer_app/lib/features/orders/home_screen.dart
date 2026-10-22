@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/store_badge.dart';
 import '../../widgets/departure_ticket.dart';
 import '../../widgets/logo.dart';
 import '../../widgets/wax.dart';
@@ -211,7 +212,11 @@ class _ActiveOrderCard extends StatelessWidget {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(statusLabels[order.status] ?? order.status, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text(order.ref, style: const TextStyle(color: AppColors.muted)),
+                  Row(children: [
+                    StoreBadge(order.store, small: true),
+                    const SizedBox(width: 6),
+                    Text(order.ref, style: const TextStyle(color: AppColors.muted)),
+                  ]),
                 ]),
               ),
               if (order.totalXof != null) Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -323,7 +328,11 @@ class _OrderRow extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: CircleAvatar(radius: 6, backgroundColor: color),
         minLeadingWidth: 12,
-        title: Text(order.ref, style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Row(children: [
+          StoreBadge(order.store, small: true),
+          const SizedBox(width: 8),
+          Text(order.ref, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ]),
         subtitle: Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
         trailing: Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w600)),
       ),

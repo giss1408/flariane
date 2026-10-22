@@ -25,7 +25,13 @@ class AdminApi {
   AdminApi(this.client, {Dio? authDio})
       // Refresh goes through a bare Dio: refreshing inside the main client's queued error
       // interceptor would deadlock if the refresh itself failed.
-      : _authDio = authDio ?? Dio(BaseOptions(baseUrl: client.dio.options.baseUrl, contentType: 'application/json'));
+      : _authDio = authDio ??
+            Dio(BaseOptions(
+              baseUrl: client.dio.options.baseUrl,
+              contentType: 'application/json',
+              connectTimeout: const Duration(seconds: 60),
+              receiveTimeout: const Duration(seconds: 60),
+            ));
 
   final ApiClient client;
   final Dio _authDio;
@@ -93,8 +99,8 @@ class AdminApi {
   Future<void> setPushToken(String token) =>
       client.call((d) => d.post('/admin/auth/push-token', data: {'push_token': token}), (_) {});
 
-  Future<List<OrderSummary>> inbox(String tab, {String? search}) => client.call(
-        (d) => d.get('/admin/orders', queryParameters: {'tab': tab, if (search != null && search.isNotEmpty) 'q': search}),
+  Future<List<OrderSummary>> inbox(String tab, {String? search, String? store}) => client.call(
+        (d) => d.get('/admin/orders', queryParameters: {'tab': tab, if (search != null && search.isNotEmpty) 'q': search, if (store != null) 'store': store}),
         (j) => (j as List).cast<Map<String, dynamic>>().map(OrderSummary.fromJson).toList(),
       );
 
@@ -211,6 +217,8 @@ class AdminApi {
   Future<List<Map<String, dynamic>>> adminUsers() => _list('/admin/users');
   Future<String> createAdminUser(Map<String, dynamic> body) =>
       client.call((d) => d.post('/admin/users', data: body), (j) => (j as Map)['totp_uri'] as String);
+  Future<Map<String, dynamic>> resetAdminCredentials(int id) =>
+      client.call((d) => d.post('/admin/users/$id/reset-credentials'), (j) => j as Map<String, dynamic>);
   Future<void> deactivateAdminUser(int id) => client.call((d) => d.post('/admin/users/$id/deactivate'), (_) {});
 
   /// VIEWER+

@@ -8,6 +8,7 @@ class OrderSummary {
     required this.id,
     required this.publicRef,
     required this.status,
+    this.store = 'SHEIN',
     required this.customerName,
     required this.totalXof,
     required this.createdAt,
@@ -19,6 +20,7 @@ class OrderSummary {
         id: j['id'] as int,
         publicRef: j['public_ref'] as String,
         status: j['status'] as String,
+        store: j['store'] as String? ?? 'SHEIN',
         customerName: j['customer_name'] as String?,
         totalXof: _int(j['total_xof']),
         createdAt: _date(j['created_at'])!,
@@ -29,6 +31,7 @@ class OrderSummary {
   final int id;
   final String publicRef;
   final String status;
+  final String store;
   final String? customerName;
   final int? totalXof;
   final DateTime createdAt;
@@ -162,6 +165,8 @@ class Quote {
     required this.feeBelowMinimum,
     required this.lines,
     this.screenshotUrl,
+    this.cartSourceAmount,
+    this.cartSourceCurrency,
   });
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -182,6 +187,8 @@ class Quote {
         feeBelowMinimum: j['fee_below_minimum'] as bool? ?? false,
         lines: _list(j['lines'], QuoteLine.fromJson),
         screenshotUrl: j['screenshot_url'] as String?,
+        cartSourceAmount: j['cart_source_amount']?.toString(),
+        cartSourceCurrency: j['cart_source_currency'] as String?,
       );
 
   final int id;
@@ -201,8 +208,13 @@ class Quote {
   final bool feeBelowMinimum;
   final List<QuoteLine> lines;
   final String? screenshotUrl;
+  final String? cartSourceAmount; // e.g. "49.90"
+  final String? cartSourceCurrency; // e.g. EUR
 
   bool get isCartMode => lines.isEmpty;
+
+  /// "49,90 €" when the cart was priced in euros.
+  String? get cartEuros => cartSourceCurrency == 'EUR' && cartSourceAmount != null ? '${cartSourceAmount!.replaceAll('.', ',')} €' : null;
 }
 
 class ChangeRequest {

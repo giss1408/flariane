@@ -234,3 +234,16 @@ async def test_reset_admin_recovers_login(client: AsyncClient, admin: AdminFixtu
     r = await client.post("/admin/auth/login", json={"email": admin.user.email, "password": pw,
                                                       "totp": pyotp.TOTP(r.json()["totp_secret"]).now(), "device": {"name": "P", "platform": "android"}})
     assert r.json()["status"] == "ok"
+
+
+async def test_admin_users_reset_and_remove(client: AsyncClient, admin: AdminFixture) -> None:
+    other = await make_admin(role="OPERATOR", email="op@flariane.ci")
+    r = await client.post(f"/admin/users/{other.user.id}/reset-credentials", headers=admin.headers)
+    creds = r.json()
+    assert r.status_code == 200 and creds["password"] and creds["totp_secret"]
+    r = await client.post("/admin/auth/login", json={"email": "op@flariane.ci", "password": creds["password"],
+                                                      "totp": pyotp.TOTP(creds["totp_secret"]).now(), "device": {"name": "x", "platform": "android"}})
+    assert r.status_code == 200
+    assert (await client.post(f"/admin/users/{other.user.id}/deactivate", headers=admin.headers)).status_code == 200
+    emails = [u["email"] for u in (await client.get("/admin/users", headers=admin.headers)).json()]
+    assert "op@flariane.ci" not in emails

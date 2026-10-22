@@ -12,7 +12,8 @@ class ApiException implements Exception {
   final String? detail;
 
   String get message {
-    if (status == null) return 'Connexion impossible. Vérifiez le réseau.';
+    if (code == 'unknown') return 'Erreur inattendue : ${detail ?? ''}';
+    if (status == null) return 'Connexion impossible (serveur injoignable ou en train de démarrer). Réessayez dans une minute.';
     return errorMessages[code] ?? 'Erreur ($code).';
   }
 
@@ -44,8 +45,9 @@ class ApiClient {
       : dio = dio ??
             Dio(BaseOptions(
               baseUrl: baseUrl,
-              connectTimeout: const Duration(seconds: 15),
-              receiveTimeout: const Duration(seconds: 30),
+              // Free hosting sleeps when idle and can take ~1 min to wake up.
+              connectTimeout: const Duration(seconds: 60),
+              receiveTimeout: const Duration(seconds: 60),
               contentType: 'application/json',
             )) {
     this.dio.interceptors.add(QueuedInterceptorsWrapper(

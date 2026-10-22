@@ -170,6 +170,8 @@ class QuoteOut(Out):
     sent_at: datetime | None
     lines: list[QuoteLineOut]
     screenshot_url: str | None = None  # SHEIN cart as quoted (cart mode)
+    cart_source_amount: Decimal | None = None  # e.g. 49.90
+    cart_source_currency: str | None = None  # e.g. EUR
 
 
 class StatusEventOut(Out):
@@ -196,6 +198,7 @@ class PaymentOut(BaseModel):
 class OrderSummaryOut(BaseModel):
     public_ref: str
     status: str
+    store: str = "SHEIN"
     total_xof: int | None
     created_at: datetime
     status_changed_at: datetime
@@ -253,6 +256,9 @@ class QuoteDraftIn(In):
     proven by a cart screenshot; quote = cart + transport. Item mode: one line per article."""
 
     cart_price_xof: Annotated[int, Field(ge=0, le=50_000_000)] | None = None
+    # Preferred: the cart price as shown by SHEIN/Temu, in euros; converted with the EUR rate.
+    cart_price: Annotated[Decimal, Field(ge=0, le=100_000, decimal_places=2)] | None = None
+    cart_currency: Currency = "EUR"
     items: list[DraftItemIn] = Field(default_factory=list, max_length=100)
     freight_xof: Annotated[int, Field(ge=0, le=10_000_000)] | None = None
     customs_xof: Annotated[int, Field(ge=0, le=10_000_000)] | None = None
@@ -301,6 +307,7 @@ class AdminOrderSummaryOut(BaseModel):
     id: int
     public_ref: str
     status: str
+    store: str = "SHEIN"
     customer_name: str | None
     total_xof: int | None
     created_at: datetime

@@ -54,7 +54,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   late final PurchaseChecklist _checklist = PurchaseChecklist(_quote);
   final _ref = TextEditingController();
   final _amount = TextEditingController();
-  late String _currency = _quote.isCartMode ? 'XOF' : 'EUR';
+  String _currency = 'EUR';
   bool _busy = false;
 
   @override
@@ -163,7 +163,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                     alignment: Alignment.topCenter),
               ),
             const SizedBox(height: 8),
-            Text('Panier ${order.storeName} accepté : ${fcfa(_quote.itemsXof)}',
+            Text('Panier ${order.storeName} accepté : ${_quote.cartEuros ?? ''} (${fcfa(_quote.itemsXof)})',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
           ] else ...[
             Card(

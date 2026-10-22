@@ -62,13 +62,13 @@ def decode_access_token(token: str, expected: SubjectType) -> AccessClaims:
 
 def _refresh_lifetime(typ: SubjectType) -> timedelta:
     s = get_settings()
-    return timedelta(days=s.customer_refresh_days) if typ == "customer" else timedelta(hours=s.admin_refresh_hours)
+    return timedelta(days=s.customer_refresh_days if typ == "customer" else s.admin_refresh_days)
 
 
 async def issue_refresh_token(
     db: AsyncSession, typ: SubjectType, subject_id: int, device_id: int | None = None
 ) -> str:
-    """Start a new token family (on login). Admin families end after 12 h: full re-login with TOTP."""
+    """Start a new token family (on login)."""
     token = random_token()
     now = utcnow()
     life = _refresh_lifetime(typ)
@@ -112,8 +112,8 @@ async def rotate_refresh_token(db: AsyncSession, typ: SubjectType, token: str) -
 
     row.rotated_at = now
     new_token = random_token()
-    # Customers get a sliding window; admin families keep their fixed 12 h end.
-    expires = now + _refresh_lifetime(typ) if typ == "customer" else row.family_expires_at
+    # Sliding window for everyone: each use renews the session (admins: 30 days).
+    expires = now + _refresh_lifetime(typ)
     db.add(
         RefreshToken(
             subject_type=typ,

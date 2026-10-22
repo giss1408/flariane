@@ -71,25 +71,27 @@ void main() {
   group('QuoteDraftModel', () {
     test('new order starts empty and is invalid', () {
       final m = QuoteDraftModel.fromOrder(OrderDetail.fromJson(orderJson()));
-      expect(m.cartPriceXof, isNull);
+      expect(m.cartPriceEur, isNull);
       expect(m.isValid, isFalse);
     });
 
-    test('a correction starts from the last sent quote', () {
-      final m = QuoteDraftModel.fromOrder(OrderDetail.fromJson(orderJson(quotes: [quoteJson(version: 1, status: 'CHANGE_REQUESTED')])));
-      expect(m.cartPriceXof, 19673);
+    test('a correction starts from the last sent quote in euros', () {
+      final q = {...quoteJson(version: 1, status: 'CHANGE_REQUESTED'), 'cart_source_amount': '49.90', 'cart_source_currency': 'EUR'};
+      final m = QuoteDraftModel.fromOrder(OrderDetail.fromJson(orderJson(quotes: [q])));
+      expect(m.cartPriceEur, '49,90');
       expect(m.freightXof, 9000);
       expect(m.isValid, isTrue);
     });
 
-    test('toJson', () {
-      final j = QuoteDraftModel(cartPriceXof: 32500, note: '  ').toJson();
-      expect(j, {'cart_price_xof': 32500, 'freight_xof': null, 'admin_note': null});
+    test('toJson sends euros with a dot', () {
+      final j = QuoteDraftModel(cartPriceEur: '49,9', note: '  ').toJson();
+      expect(j, {'cart_price': '49.9', 'cart_currency': 'EUR', 'freight_xof': null, 'admin_note': null});
+      expect(QuoteDraftModel(cartPriceEur: 'abc').isValid, isFalse);
+      expect(QuoteDraftModel(cartPriceEur: '0').isValid, isFalse);
     });
 
     test('parseFcfa', () {
       expect(parseFcfa('25 000'), 25000);
-      expect(parseFcfa('25.000'), 25000);
       expect(parseFcfa(''), isNull);
     });
   });

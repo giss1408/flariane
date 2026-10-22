@@ -302,3 +302,31 @@ async def test_temu_order(client: AsyncClient, customer: dict, admin: AdminFixtu
     assert r.status_code == 201 and r.json()["store"] == "TEMU"
     detail = (await client.get(f"/admin/orders/{await order_id(r.json()['public_ref'])}", headers=admin.headers)).json()
     assert detail["store"] == "TEMU"
+
+
+async def test_cart_price_in_euros(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    q = (await client.put(f"/admin/orders/{oid}/quote-draft", json={"cart_price": "49.90", "cart_currency": "EUR"}, headers=admin.headers)).json()
+    assert q["items_xof"] == 32733  # 49.90 x 655.957 = 32732.25 -> rounded up
+    assert q["cart_source_amount"] == "49.90" and q["cart_source_currency"] == "EUR"
+    assert q["total_xof"] == 32733 + 5000
+    shein = (await client.get("/admin/orders?tab=to_quote&store=SHEIN", headers=admin.headers)).json()
+    assert shein[0]["store"] == "SHEIN"
+    assert (await client.get("/admin/orders?tab=to_quote&store=TEMU", headers=admin.headers)).json() == []
+
+
+async def test_customer_never_sees_euros(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    import io
+
+    from PIL import Image
+
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    await client.put(f"/admin/orders/{oid}/quote-draft", json={"cart_price": "49.90"}, headers=admin.headers)
+    buf = io.BytesIO()
+    Image.new("RGB", (20, 20), "red").save(buf, format="PNG")
+    await client.post(f"/admin/orders/{oid}/quote-screenshot", files={"file": ("c.png", buf.getvalue(), "image/png")}, headers=admin.headers)
+    await client.post(f"/admin/orders/{oid}/quotes/1/send", json={}, headers=admin.headers)
+    quote = (await client.get(f"/orders/{ref}", headers=customer)).json()["quote"]
+    assert quote["total_xof"] == 37733 and quote["cart_source_amount"] is None and quote["cart_source_currency"] is None

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     hash_key: str
     access_token_minutes: int = 15
     customer_refresh_days: int = 30
-    admin_refresh_hours: int = 12
+    admin_refresh_days: int = 30  # sliding: renewed at each use; a revoked device loses access at once
 
     # Wave
     wave_mode: Literal["fake", "live"] = "fake"
