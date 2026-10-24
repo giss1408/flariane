@@ -76,7 +76,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
         body: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.hourglass_top_rounded, size: 56, color: AppColors.primary),
+            Icon(Icons.hourglass_top_rounded, size: 56, color: context.pal.accent),
             const SizedBox(height: 16),
             Text('Preuve envoyée !', style: display(26)),
             const SizedBox(height: 8),
@@ -95,14 +95,14 @@ class _PayScreenState extends ConsumerState<PayScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(publicInfoProvider)),
         data: (_) => ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: [
-          const Text('À payer', style: TextStyle(color: AppColors.muted)),
+          Text('À payer', style: TextStyle(color: context.pal.muted)),
           Text(fcfa(widget.amountXof), style: display(36)),
           const SizedBox(height: 18),
           const Text('1. Choisis ton moyen de paiement', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           if (accounts.isEmpty)
-            const Text('Aucun moyen de paiement n’est configuré pour le moment. Contacte-nous sur WhatsApp.',
-                style: TextStyle(color: AppColors.danger))
+            Text('Aucun moyen de paiement n’est configuré pour le moment. Contacte-nous sur WhatsApp.',
+                style: TextStyle(color: context.pal.danger))
           else
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final key in accounts.keys)
@@ -111,8 +111,8 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                   selected: _method == key,
                   onSelected: (_) => setState(() => _method = key),
                   selectedColor: methods[key]?.$2 ?? AppColors.primary,
-                  backgroundColor: Colors.white,
-                  labelStyle: TextStyle(color: _method == key ? Colors.white : AppColors.plum, fontWeight: FontWeight.w700),
+                  backgroundColor: context.pal.card,
+                  labelStyle: TextStyle(color: _method == key ? Colors.white : context.pal.ink, fontWeight: FontWeight.w700),
                   showCheckmark: false,
                 ),
             ]),
@@ -125,7 +125,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(color: context.pal.card, borderRadius: BorderRadius.circular(20)),
                   child: CachedImage(ref.read(apiProvider).waveQrUrl, width: 200, height: 200),
                 ),
               ),
@@ -140,15 +140,15 @@ class _PayScreenState extends ConsumerState<PayScreen> {
               child: Container(
                 height: _proof == null ? 120 : 260,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.pal.card,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.primary, width: 1.5),
+                  border: Border.all(color: context.pal.accent, width: 1.5),
                 ),
                 child: _proof == null
-                    ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(Icons.add_photo_alternate_outlined, color: AppColors.primary, size: 36),
-                        SizedBox(height: 6),
-                        Text('Ajouter la capture du paiement', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(Icons.add_photo_alternate_outlined, color: context.pal.accent, size: 36),
+                        const SizedBox(height: 6),
+                        const Text('Ajouter la capture du paiement', style: TextStyle(fontWeight: FontWeight.w600)),
                       ])
                     : ClipRRect(borderRadius: BorderRadius.circular(17), child: Image.file(File(_proof!.path), fit: BoxFit.cover, width: double.infinity)),
               ),
@@ -183,12 +183,12 @@ class _CopyTile extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Material(
-          color: Colors.white,
+          color: context.pal.card,
           borderRadius: BorderRadius.circular(16),
           child: ListTile(
-            title: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+            title: Text(label, style: TextStyle(color: context.pal.muted, fontSize: 13)),
             subtitle: Text(value,
-                style: big ? display(24, color: AppColors.plum) : const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.plum)),
+                style: big ? display(24, color: context.pal.ink) : TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.pal.ink)),
             trailing: IconButton(tooltip: 'Copier', icon: const Icon(Icons.copy_rounded), onPressed: onCopy),
           ),
         ),

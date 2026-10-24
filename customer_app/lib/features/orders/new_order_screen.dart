@@ -104,13 +104,13 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
             'Vérifie tailles et couleurs dans ton panier avant d’envoyer. Les prix affichés à Abidjan peuvent changer au moment de notre commande : ton devis te donnera le prix réel.',
-            style: TextStyle(color: AppColors.warning)),
+            style: TextStyle(color: context.pal.warning)),
         const SizedBox(height: 16),
         Card(
           child: ListTile(
-            leading: const Icon(Icons.place_rounded, color: AppColors.primary),
+            leading: Icon(Icons.place_rounded, color: context.pal.accent),
             title: Text(location == null ? 'Ajoute ton adresse à Abidjan' : 'Livraison : ${location.short}'),
             subtitle: Text(location?.landmark ?? (location == null ? 'Pour préparer la distribution de ton colis' : 'Toucher pour modifier')),
             trailing: const Icon(Icons.chevron_right_rounded),

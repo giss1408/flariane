@@ -100,7 +100,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => _cancel(o),
-                child: const Text('Annuler la commande', style: TextStyle(color: AppColors.danger)),
+                child: Text('Annuler la commande', style: TextStyle(color: context.pal.danger)),
               ),
             ],
           ]),
@@ -152,19 +152,19 @@ class _StatusBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (text, color) = switch (order.status) {
-      'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', AppColors.primary),
-      'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', AppColors.warning),
-      'QUOTED' => ('Votre devis est prêt.', AppColors.primary),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', AppColors.primary),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', AppColors.warning),
-      'AWAITING_PAYMENT' when order.paymentPending => ('Nous confirmons votre paiement Wave…', AppColors.primary),
-      'AWAITING_PAYMENT' => ('Paiement non abouti. Vous pouvez réessayer.', AppColors.warning),
-      'PAID' => ('Paiement reçu. Nous achetons vos articles.', AppColors.success),
-      'READY_FOR_PICKUP' => ('Votre colis vous attend ! Présentez le code reçu sur WhatsApp.', AppColors.success),
-      'CANCELLED' => ('Commande annulée.', AppColors.danger),
-      'REFUND_PENDING' => ('Remboursement en cours.', AppColors.warning),
-      'REFUNDED' => ('Commande remboursée.', AppColors.muted),
-      _ => (statusLabels[order.status] ?? order.status, AppColors.primary),
+      'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', context.pal.accent),
+      'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', context.pal.warning),
+      'QUOTED' => ('Votre devis est prêt.', context.pal.accent),
+      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
+      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
+      'AWAITING_PAYMENT' when order.paymentPending => ('Nous confirmons votre paiement Wave…', context.pal.accent),
+      'AWAITING_PAYMENT' => ('Paiement non abouti. Vous pouvez réessayer.', context.pal.warning),
+      'PAID' => ('Paiement reçu. Nous achetons vos articles.', context.pal.success),
+      'READY_FOR_PICKUP' => ('Votre colis vous attend ! Présentez le code reçu sur WhatsApp.', context.pal.success),
+      'CANCELLED' => ('Commande annulée.', context.pal.danger),
+      'REFUND_PENDING' => ('Remboursement en cours.', context.pal.warning),
+      'REFUNDED' => ('Commande remboursée.', context.pal.muted),
+      _ => (statusLabels[order.status] ?? order.status, context.pal.accent),
     };
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -181,7 +181,7 @@ class _StatusBanner extends ConsumerWidget {
         if (order.paymentDeadline != null && !(order.payment?.declared ?? false)) ...[
           const SizedBox(height: 8),
           Text('À payer avant le ${dateTime(order.paymentDeadline)}, sinon la commande sera annulée.',
-              style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+              style: TextStyle(color: context.pal.danger, fontWeight: FontWeight.w600)),
         ],
         if (order.canRequestRequote) ...[
           const SizedBox(height: 10),
@@ -281,7 +281,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
       Row(children: [
         Text('Devis n°${q.version}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
         const Spacer(),
-        if (q.expiresAt != null && open) Text('valable jusqu’au ${dateTime(q.expiresAt)}', style: const TextStyle(color: AppColors.muted)),
+        if (q.expiresAt != null && open) Text('valable jusqu’au ${dateTime(q.expiresAt)}', style: TextStyle(color: context.pal.muted)),
       ]),
       const SizedBox(height: 8),
       if (q.screenshotUrl != null) ...[
@@ -581,15 +581,15 @@ class PriceAdvice extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(18)),
-        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(Icons.info_outline_rounded, color: AppColors.warning),
-          SizedBox(width: 10),
+        decoration: BoxDecoration(color: context.pal.warningBg, borderRadius: BorderRadius.circular(18)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.info_outline_rounded, color: context.pal.warning),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Les prix affichés dans l’app à Abidjan peuvent différer de ceux au moment de notre commande. '
               'Vérifie bien la capture du panier ci-dessous avant de payer : c’est exactement ce que nous commandons.',
-              style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600, height: 1.4),
+              style: TextStyle(color: context.pal.warning, fontWeight: FontWeight.w600, height: 1.4),
             ),
           ),
         ]),

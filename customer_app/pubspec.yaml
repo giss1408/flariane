@@ -59,6 +59,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^4.0.0
   mocktail: ^1.0.5
+  flutter_native_splash: ^2.4.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -107,3 +108,12 @@ flutter:
 dependency_overrides:
   # Newer geolocator_android needs a newer Flutter Gradle plugin than 3.24 ships.
   geolocator_android: 4.6.1
+
+# Native launch screen (iOS + Android). Regenerate with: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#B5164F"
+  image: assets/splash/logo.png
+  android_12:
+    color: "#B5164F"
+    image: assets/splash/logo.png
+  fullscreen: false

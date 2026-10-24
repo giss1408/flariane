@@ -64,14 +64,14 @@ class OrderStepper extends StatelessWidget {
           child: Row(children: [
             Icon(
               i < current ? Icons.check_circle_rounded : (i == current ? Icons.radio_button_checked : Icons.radio_button_off),
-              color: i <= current ? AppColors.primary : AppColors.muted.withOpacity(0.5),
+              color: i <= current ? context.pal.accent : context.pal.muted.withOpacity(0.5),
               semanticLabel: i < current ? 'terminé' : (i == current ? 'en cours' : 'à venir'),
             ),
             const SizedBox(width: 12),
             Text(label,
                 style: TextStyle(
                   fontWeight: i == current ? FontWeight.w700 : FontWeight.w400,
-                  color: i > current ? AppColors.muted : null,
+                  color: i > current ? context.pal.muted : null,
                 )),
           ]),
         ),

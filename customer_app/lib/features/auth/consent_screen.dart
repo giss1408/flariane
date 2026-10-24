@@ -37,7 +37,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
           TextButton(onPressed: () => ref.read(authProvider.notifier).logout(), child: const Text('Déconnexion')),
         ]),
         body: ListView(padding: const EdgeInsets.all(24), children: [
-          const Icon(Icons.privacy_tip_rounded, size: 52, color: AppColors.primary),
+          Icon(Icons.privacy_tip_rounded, size: 52, color: context.pal.accent),
           const SizedBox(height: 16),
           Text('Ton accord', style: display(28), textAlign: TextAlign.center),
           const SizedBox(height: 10),

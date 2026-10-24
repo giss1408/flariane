@@ -47,7 +47,7 @@ class DepartureTicket extends StatelessWidget {
           clipper: _TicketClipper(stubWidth: 96),
           child: Container(
             constraints: const BoxConstraints(minHeight: 112),
-            color: Colors.white,
+            color: context.pal.card,
             child: IntrinsicHeight(
               child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -74,14 +74,14 @@ class DepartureTicket extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Row(children: [
+                              Row(children: [
                                 Icon(Icons.flight_takeoff_rounded,
-                                    size: 18, color: AppColors.primary),
-                                SizedBox(width: 6),
+                                    size: 18, color: context.pal.accent),
+                                const SizedBox(width: 6),
                                 Flexible(
                                     child: Text('Prochain départ',
                                         style: TextStyle(
-                                            color: AppColors.muted,
+                                            color: context.pal.muted,
                                             fontSize: 13))),
                               ]),
                               const SizedBox(height: 2),
@@ -96,18 +96,18 @@ class DepartureTicket extends StatelessWidget {
                                 softWrap: true,
                                 style: TextStyle(
                                     color: urgent
-                                        ? AppColors.primary
-                                        : AppColors.plum,
+                                        ? context.pal.accent
+                                        : context.pal.ink,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13.5),
                               ),
                             ]),
                       ),
                     ),
-                    const Padding(
-                        padding: EdgeInsets.only(right: 10),
+                    Padding(
+                        padding: const EdgeInsets.only(right: 10),
                         child: Icon(Icons.chevron_right_rounded,
-                            color: AppColors.muted)),
+                            color: context.pal.muted)),
                   ]),
             ),
           ),

@@ -64,8 +64,8 @@ class AccountScreen extends ConsumerWidget {
               onTap: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
-              title: const Text('Supprimer mon compte', style: TextStyle(color: AppColors.danger)),
+              leading: Icon(Icons.delete_outline_rounded, color: context.pal.danger),
+              title: Text('Supprimer mon compte', style: TextStyle(color: context.pal.danger)),
               subtitle: const Text('Vos données personnelles sont effacées (loi 2013-450).'),
               onTap: () => _delete(context, ref),
             ),
@@ -105,7 +105,7 @@ class AccountScreen extends ConsumerWidget {
         content: const Text('Impossible si une commande est en cours. Cette action est définitive.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Supprimer', style: TextStyle(color: AppColors.danger))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Supprimer', style: TextStyle(color: context.pal.danger))),
         ],
       ),
     );

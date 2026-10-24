@@ -23,7 +23,7 @@ class ConsentTick extends StatelessWidget {
                 const TextSpan(text: 'J’accepte que Flariane utilise mon numéro de téléphone pour traiter mes commandes, conformément à la '),
                 TextSpan(
                   text: 'politique de confidentialité',
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, decoration: TextDecoration.underline),
+                  style: TextStyle(color: context.pal.accent, fontWeight: FontWeight.w700, decoration: TextDecoration.underline),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
                 ),

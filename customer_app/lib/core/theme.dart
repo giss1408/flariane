@@ -87,3 +87,56 @@ ThemeData buildTheme(Brightness brightness) {
     chipTheme: base.chipTheme.copyWith(shape: const StadiumBorder(), side: BorderSide.none),
   );
 }
+
+/// Colours that change with the light/dark theme. Use `context.pal.x` for text, icons and
+/// surfaces; `AppColors` stays for brand fills (wax hero, mango stub, buttons).
+class Palette {
+  const Palette({
+    required this.card,
+    required this.ink,
+    required this.muted,
+    required this.lilac,
+    required this.accent,
+    required this.warning,
+    required this.warningBg,
+    required this.danger,
+    required this.success,
+    required this.tints,
+  });
+
+  final Color card, ink, muted, lilac, accent, warning, warningBg, danger, success;
+  final List<Color> tints; // home "how it works" tiles
+
+  static const light = Palette(
+    card: Colors.white,
+    ink: AppColors.plum,
+    muted: AppColors.muted,
+    lilac: AppColors.lilac,
+    accent: AppColors.primary,
+    warning: AppColors.warning,
+    warningBg: AppColors.warningBg,
+    danger: AppColors.danger,
+    success: AppColors.success,
+    tints: [AppColors.lilac, Color(0xFFFFE3EE), AppColors.warningBg, Color(0xFFD9F7EE)],
+  );
+
+  static const dark = Palette(
+    card: Color(0xFF2A1430),
+    ink: Colors.white,
+    muted: Color(0xFFC4A9C8),
+    lilac: Color(0xFF45284B),
+    accent: Color(0xFFFF6F9C),
+    warning: Color(0xFFFFC266),
+    warningBg: Color(0xFF3D2A0E),
+    danger: Color(0xFFFF8A80),
+    success: Color(0xFF5FE0BC),
+    tints: [Color(0xFF3B2141), Color(0xFF45182E), Color(0xFF3D2A0E), Color(0xFF14382F)],
+  );
+}
+
+extension PaletteX on BuildContext {
+  Palette get pal => Theme.of(this).brightness == Brightness.dark ? Palette.dark : Palette.light;
+}
+
+/// Dark theme from 19:00 to 06:00 (phone's local time).
+bool isNight(DateTime now) => now.hour >= 19 || now.hour < 6;

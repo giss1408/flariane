@@ -73,7 +73,7 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             active.isEmpty ? 'Qu’est-ce qui te fait envie cette semaine ?' : 'Voici où en sont tes colis.',
-            style: const TextStyle(color: AppColors.muted, fontSize: 15),
+            style: TextStyle(color: context.pal.muted, fontSize: 15),
           ),
           if (me != null && name == null) ...[
             const SizedBox(height: 12),
@@ -177,7 +177,7 @@ class ProgressSegments extends StatelessWidget {
             height: 6,
             margin: EdgeInsets.only(right: i == steps.length - 1 ? 0 : 4),
             decoration: BoxDecoration(
-              color: i <= current ? AppColors.mint : AppColors.lilac,
+              color: i <= current ? AppColors.mint : context.pal.lilac,
               borderRadius: BorderRadius.circular(3),
             ),
           ),
@@ -211,8 +211,8 @@ class _ActiveOrderCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: AppColors.lilac, borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.inventory_2_rounded, color: AppColors.primary),
+                decoration: BoxDecoration(color: context.pal.lilac, borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.inventory_2_rounded, color: context.pal.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -221,7 +221,7 @@ class _ActiveOrderCard extends StatelessWidget {
                   Row(children: [
                     StoreBadge(order.store, small: true),
                     const SizedBox(width: 6),
-                    Text(order.ref, style: const TextStyle(color: AppColors.muted)),
+                    Text(order.ref, style: TextStyle(color: context.pal.muted)),
                   ]),
                 ]),
               ),
@@ -233,8 +233,8 @@ class _ActiveOrderCard extends StatelessWidget {
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(20)),
-                child: Text(nudge, style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 13)),
+                decoration: BoxDecoration(color: context.pal.warningBg, borderRadius: BorderRadius.circular(20)),
+                child: Text(nudge, style: TextStyle(color: context.pal.warning, fontWeight: FontWeight.w700, fontSize: 13)),
               ),
             ],
           ]),
@@ -253,7 +253,6 @@ class _Steps extends StatelessWidget {
     (Icons.receipt_long_rounded, 'Reçois ton devis', 'en FCFA, sur WhatsApp'),
     (Icons.local_mall_rounded, 'Récupère ton colis', 'payé avec Wave, retiré à Abidjan'),
   ];
-  static const _tints = [AppColors.lilac, Color(0xFFFFE3EE), AppColors.warningBg, Color(0xFFD9F7EE)];
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -267,17 +266,17 @@ class _Steps extends StatelessWidget {
             return Container(
               width: 156,
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: _tints[i], borderRadius: BorderRadius.circular(22)),
+              decoration: BoxDecoration(color: context.pal.tints[i], borderRadius: BorderRadius.circular(22)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Text('${i + 1}', style: display(26, color: AppColors.primary)),
+                  Text('${i + 1}', style: display(26, color: context.pal.accent)),
                   const Spacer(),
-                  Icon(icon, color: AppColors.plum),
+                  Icon(icon, color: context.pal.ink),
                 ]),
                 const Spacer(),
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 2),
-                Text(sub, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                Text(sub, style: TextStyle(color: context.pal.muted, fontSize: 13)),
               ]),
             );
           },
@@ -295,8 +294,8 @@ class _TrustStrip extends StatelessWidget {
             Container(
               width: 46,
               height: 46,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: Icon(icon, color: AppColors.primary),
+              decoration: BoxDecoration(color: context.pal.card, shape: BoxShape.circle),
+              child: Icon(icon, color: context.pal.accent),
             ),
             const SizedBox(height: 6),
             Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
@@ -304,7 +303,7 @@ class _TrustStrip extends StatelessWidget {
         );
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(color: AppColors.lilac.withOpacity(0.6), borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(color: context.pal.lilac.withOpacity(0.6), borderRadius: BorderRadius.circular(22)),
       child: Row(children: [
         item(Icons.account_balance_wallet_rounded, 'Paiement\nWave sécurisé'),
         item(Icons.chat_rounded, 'Suivi sur\nWhatsApp'),
@@ -323,10 +322,10 @@ class _OrderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (order.status) {
-      'PICKED_UP' => AppColors.success,
-      'CANCELLED' || 'REFUNDED' || 'REFUND_PENDING' => AppColors.muted,
+      'PICKED_UP' => context.pal.success,
+      'CANCELLED' || 'REFUNDED' || 'REFUND_PENDING' => context.pal.muted,
       'QUOTED' || 'AWAITING_PAYMENT' || 'READY_FOR_PICKUP' => AppColors.mango,
-      _ => AppColors.primary,
+      _ => context.pal.accent,
     };
     return Card(
       child: ListTile(
@@ -354,14 +353,14 @@ class _EmptyOrders extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppColors.lilac, width: 2),
+          border: Border.all(color: context.pal.lilac, width: 2),
         ),
-        child: const Column(children: [
-          Icon(Icons.shopping_bag_outlined, size: 36, color: AppColors.primary),
-          SizedBox(height: 8),
-          Text('Pas encore de commande', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          SizedBox(height: 4),
-          Text('Partage ton premier panier SHEIN ou Temu pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
+        child: Column(children: [
+          Icon(Icons.shopping_bag_outlined, size: 36, color: context.pal.accent),
+          const SizedBox(height: 8),
+          const Text('Pas encore de commande', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text('Partage ton premier panier SHEIN ou Temu pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
         ]),
       );
 }
@@ -373,7 +372,7 @@ class _LocationNudge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.white,
+        color: context.pal.card,
         borderRadius: BorderRadius.circular(22),
         child: InkWell(
           borderRadius: BorderRadius.circular(22),
@@ -385,16 +384,16 @@ class _LocationNudge extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: const BoxDecoration(color: Color(0xFFD9F7EE), shape: BoxShape.circle),
-                child: const Icon(Icons.place_rounded, color: AppColors.success),
+                child: Icon(Icons.place_rounded, color: context.pal.success),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Où te livrer à Abidjan ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text('Ajoute ta commune et un repère', style: TextStyle(color: AppColors.muted)),
+                  const Text('Où te livrer à Abidjan ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text('Ajoute ta commune et un repère', style: TextStyle(color: context.pal.muted)),
                 ]),
               ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+              Icon(Icons.chevron_right_rounded, color: context.pal.muted),
             ]),
           ),
         ),

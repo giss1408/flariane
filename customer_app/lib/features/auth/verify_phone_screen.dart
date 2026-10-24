@@ -76,7 +76,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
           TextButton(onPressed: () => ref.read(authProvider.notifier).logout(), child: const Text('Déconnexion')),
         ]),
         body: ListView(padding: const EdgeInsets.all(24), children: [
-          const Icon(Icons.error_outline_rounded, size: 56, color: AppColors.danger),
+          Icon(Icons.error_outline_rounded, size: 56, color: context.pal.danger),
           const SizedBox(height: 16),
           Text('Numéro non vérifié', style: display(28), textAlign: TextAlign.center),
           const SizedBox(height: 10),
@@ -87,7 +87,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger)),
+            Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: context.pal.danger)),
           ],
           const SizedBox(height: 24),
           FilledButton(onPressed: _changeNumber, child: const Text('Saisir mon bon numéro')),
@@ -101,7 +101,7 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
         body: RefreshIndicator(
           onRefresh: () async => ref.invalidate(meProvider),
           child: ListView(padding: const EdgeInsets.all(24), children: [
-            const Icon(Icons.mark_chat_read_rounded, size: 56, color: AppColors.success),
+            Icon(Icons.mark_chat_read_rounded, size: 56, color: context.pal.success),
             const SizedBox(height: 16),
             Text('Vérifie ton numéro', style: display(28), textAlign: TextAlign.center),
             const SizedBox(height: 10),
@@ -123,16 +123,16 @@ class _VerifyPhoneScreenState extends ConsumerState<VerifyPhoneScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger)),
+              Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: context.pal.danger)),
             ],
             const SizedBox(height: 20),
             FilledButton(onPressed: _busy ? null : _submit, child: const Text('Valider mon numéro')),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Le code arrive en général dans l’heure, aux horaires d’ouverture. '
               'Rien reçu ? Vérifie que ton numéro est bien sur WhatsApp.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted),
+              style: TextStyle(color: context.pal.muted),
             ),
             TextButton(onPressed: _changeNumber, child: const Text('Mon numéro est faux ? Le corriger')),
           ]),

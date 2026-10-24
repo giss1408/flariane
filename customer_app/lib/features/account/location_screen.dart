@@ -126,9 +126,9 @@ class _LocationScreenState extends ConsumerState<LocationScreen> {
             children: [
               Text('Où es-tu à Abidjan ?', style: display(24)),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                   'On s’en sert pour organiser la distribution des colis à leur arrivée.',
-                  style: TextStyle(color: AppColors.muted)),
+                  style: TextStyle(color: context.pal.muted)),
               const SizedBox(height: 20),
               const Text('Commune',
                   style: TextStyle(fontWeight: FontWeight.w700)),
@@ -140,9 +140,9 @@ class _LocationScreenState extends ConsumerState<LocationScreen> {
                     selected: _commune == c,
                     onSelected: (_) => setState(() => _commune = c),
                     selectedColor: AppColors.primary,
-                    backgroundColor: Colors.white,
+                    backgroundColor: context.pal.card,
                     labelStyle: TextStyle(
-                        color: _commune == c ? Colors.white : AppColors.plum,
+                        color: _commune == c ? Colors.white : context.pal.ink,
                         fontWeight: FontWeight.w600),
                     showCheckmark: false,
                   ),
@@ -169,14 +169,14 @@ class _LocationScreenState extends ConsumerState<LocationScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                    color: AppColors.lilac.withOpacity(0.6),
+                    color: context.pal.lilac.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(18)),
                 child: Row(children: [
                   Icon(
                       _lat != null
                           ? Icons.my_location_rounded
                           : Icons.location_searching_rounded,
-                      color: AppColors.primary),
+                      color: context.pal.accent),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(

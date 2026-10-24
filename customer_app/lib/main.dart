@@ -36,12 +36,27 @@ class FlarianeApp extends ConsumerStatefulWidget {
   ConsumerState<FlarianeApp> createState() => _FlarianeAppState();
 }
 
-class _FlarianeAppState extends ConsumerState<FlarianeApp> {
+class _FlarianeAppState extends ConsumerState<FlarianeApp> with WidgetsBindingObserver {
   StreamSubscription<List<SharedMediaFile>>? _shares;
+  // Dark theme at night (19:00–06:00): checked every minute and when the app comes back.
+  bool _night = isNight(DateTime.now());
+  Timer? _clock;
+
+  void _checkNight() {
+    final night = isNight(DateTime.now());
+    if (night != _night && mounted) setState(() => _night = night);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkNight();
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) => _checkNight());
     // "Partager → Flariane" from the SHEIN app: the shared text carries the cart link.
     void take(List<SharedMediaFile> files) {
       final text = files.where((f) => f.type == SharedMediaType.text || f.type == SharedMediaType.url).map((f) => f.path).join(' ');
@@ -61,6 +76,8 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _clock?.cancel();
     _shares?.cancel();
     super.dispose();
   }
@@ -72,7 +89,8 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> {
       title: 'Flariane',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
-      themeMode: ThemeMode.light, // the bissap & blush palette is designed for light backgrounds
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: _night ? ThemeMode.dark : ThemeMode.light,
       locale: const Locale('fr'),
       supportedLocales: const [Locale('fr'), Locale('en')],
       localizationsDelegates: const [

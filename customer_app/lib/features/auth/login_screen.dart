@@ -123,7 +123,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     if (_error != null) ...[
                       const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                      Text(_error!, style: TextStyle(color: context.pal.danger)),
                     ],
                     const SizedBox(height: 24),
                     FilledButton(
@@ -147,7 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     TextButton(
                       onPressed: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
-                      child: const Text('Confidentialité', style: TextStyle(color: AppColors.muted)),
+                      child: Text('Confidentialité', style: TextStyle(color: context.pal.muted)),
                     ),
                   ]),
                 ),
@@ -233,7 +233,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: AppColors.danger)),
+              Text(_error!, style: TextStyle(color: context.pal.danger)),
             ],
             const SizedBox(height: 24),
             FilledButton(onPressed: _busy ? null : _submit, child: const Text('Enregistrer')),
