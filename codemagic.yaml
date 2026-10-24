@@ -73,3 +73,56 @@ workflows:
         auth: integration
         submit_to_testflight: true
         submit_to_app_store: false
+
+  # Same tag as customer-ios (scripts/release.sh pushes it), so both stores get the build.
+  #
+  # One-time setup:
+  #   1. Google Cloud: create a service account, download its JSON key, enable the
+  #      "Google Play Android Developer API". Play Console → Users and permissions →
+  #      invite the service account e-mail with "Release apps to testing tracks".
+  #   2. Codemagic → Team settings → Code signing identities → Android keystores:
+  #      upload ~/flariane-upload-keystore.jks with reference name "flariane-upload".
+  #   3. Codemagic environment group "flariane_play": GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+  #      = contents of the JSON key (secret).
+  customer-android:
+    name: Customer app – Android → Google Play (closed test)
+    instance_type: linux_x2
+    max_build_duration: 45
+    working_directory: customer_app
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "customer-v*"
+    environment:
+      flutter: 3.24.2
+      java: 17
+      android_signing:
+        - flariane-upload
+      groups:
+        - flariane_play
+      vars:
+        PACKAGE_NAME: com.regisse.flariane
+        PLAY_TRACK: alpha # closed test "Geschlossener Test – Alpha"
+        API_BASE_URL: https://flariane-api.onrender.com
+    scripts:
+      - name: Dependencies
+        script: flutter pub get
+      - name: Tests
+        script: flutter test
+      - name: Build AAB
+        script: |
+          # Build number = highest version code on any Play track + 1, like the iOS build.
+          LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" 2>/dev/null || echo 0)
+          flutter build appbundle --release \
+            --build-number=$((LATEST + 1)) \
+            --dart-define=API_BASE_URL="$API_BASE_URL"
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/mapping/release/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: $PLAY_TRACK
+        # Managed publishing is off, so a completed release goes to Google review by itself.
+        submit_as_draft: false
