@@ -77,6 +77,14 @@ def put(key: str, data: bytes, content_type: str) -> None:
     path.write_bytes(data)
 
 
+def delete(key: str) -> None:
+    s = get_settings()
+    if s.storage_mode == "s3":
+        _s3().delete_object(Bucket=s.s3_bucket, Key=key)
+        return
+    (Path(s.storage_local_dir) / key).unlink(missing_ok=True)
+
+
 def _local_sig(key: str, exp: int) -> str:
     return hmac.new(_key("hash_key"), f"file:{key}:{exp}".encode(), hashlib.sha256).hexdigest()
 

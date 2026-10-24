@@ -6,7 +6,7 @@ from urllib.parse import quote as urlquote
 from app.models import Customer, Order, PickupPoint, Quote
 from app.services.notify import fcfa, first_name, short_datetime
 
-KINDS = ("quote", "payment", "pickup")
+KINDS = ("quote", "payment", "pickup", "wrong_link")
 
 
 def store_name(order: Order) -> str:
@@ -28,6 +28,12 @@ def text_for(kind: str, customer: Customer, order: Order, quote: Quote | None, p
         return (
             f"Merci {name} ! Paiement reçu pour ta commande {order.public_ref} ✅ "
             f"On passe ta commande {store_name(order)}. Tu peux suivre son avancement dans l’app Flariane."
+        )
+    if kind == "wrong_link":
+        return (
+            f"Bonjour {name} 👋 Le lien envoyé pour ta commande {order.public_ref} ne fonctionne pas "
+            f"(ce n’est pas un panier {store_name(order)} valide). On a supprimé cette commande.\n\n"
+            "Ouvre ton panier dans l’app, touche Partager, puis envoie-le à Flariane pour recevoir ton devis."
         )
     assert point is not None and code is not None
     return (

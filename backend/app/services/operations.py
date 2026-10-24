@@ -1,20 +1,28 @@
 """Admin operations after payment: SHEIN purchase, store cancellations, refunds, shipments, pickups."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.enums import ItemStatus, OrderStatus, PaymentStatus, RefundStatus, ShipmentStatus
+from app.db import on_commit
+from app.enums import ItemStatus, OrderStatus, PaymentStatus, QuoteStatus, RefundStatus, ShipmentStatus
 from app.errors import BadRequest, Conflict, NotFound, TooManyRequests
+from app.integrations import storage
 from app.models import (
     Customer,
     Order,
+    OrderAttachment,
     OrderItem,
+    OrderStatusHistory,
     Payment,
     PickupCode,
     PickupPoint,
+    Quote,
+    QuoteChangeRequest,
+    QuoteLine,
     Refund,
     Shipment,
     ShipmentOrder,
@@ -240,6 +248,50 @@ async def refund_held_payment(db: AsyncSession, payment_id: int, admin_id: int, 
         raise Conflict("payment_not_held")
     order = await _locked_order(db, payment.order_id)
     return await create_refund(db, order, payment, payment.amount_xof - await _refunded_so_far(db, payment.id), "Paiement à rembourser", admin_id)
+
+
+# ---------------------------------------------------------------- deletion
+
+UNPAID_DELETE_AFTER = timedelta(days=3)
+_NO_MONEY = (PaymentStatus.INITIATED, PaymentStatus.FAILED, PaymentStatus.EXPIRED)
+
+
+async def delete_order(db: AsyncSession, order_id: int, reason: str, admin_id: int, ip: str | None) -> None:
+    """Hard delete, only where no money moved. `wrong_link`: not quoted yet, any time.
+    `unpaid`: never paid and older than UNPAID_DELETE_AFTER. Only the audit entry remains."""
+    order = await _locked_order(db, order_id)
+    sent = await db.scalar(select(func.count()).select_from(Quote).where(Quote.order_id == order.id, Quote.status != QuoteStatus.DRAFT))
+    if reason == "wrong_link":
+        if order.status != OrderStatus.QUOTE_REQUESTED or sent:
+            raise Conflict("order_already_quoted")
+    else:
+        if order.status not in (OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT, OrderStatus.CANCELLED):
+            raise Conflict("order_paid")
+        if utcnow() - order.created_at < UNPAID_DELETE_AFTER:
+            raise Conflict("order_too_recent")
+    payments = (await db.scalars(select(Payment).where(Payment.order_id == order.id))).all()
+    if any(p.status not in _NO_MONEY for p in payments) or await db.scalar(select(StorePurchase.id).where(StorePurchase.order_id == order.id)):
+        raise Conflict("order_paid")
+
+    quote_ids = select(Quote.id).where(Quote.order_id == order.id).scalar_subquery()
+    attachments = (await db.scalars(select(OrderAttachment).where(OrderAttachment.order_id == order.id))).all()
+    keys = [a.storage_key for a in attachments]
+    for model, cond in (
+        (QuoteLine, QuoteLine.quote_id.in_(quote_ids)),
+        (QuoteChangeRequest, QuoteChangeRequest.quote_id.in_(quote_ids)),
+        (OrderAttachment, OrderAttachment.order_id == order.id),
+        (Payment, Payment.order_id == order.id),
+        (Quote, Quote.order_id == order.id),
+        (OrderItem, OrderItem.order_id == order.id),
+        (OrderStatusHistory, OrderStatusHistory.order_id == order.id),
+        (PickupCode, PickupCode.order_id == order.id),
+        (ShipmentOrder, ShipmentOrder.order_id == order.id),
+    ):
+        await db.execute(sa_delete(model).where(cond))
+    await audit(db, actor_type="admin", actor_id=admin_id, action="order.deleted", entity="order", entity_id=order.id,
+                before={"public_ref": order.public_ref, "status": order.status, "customer_id": order.customer_id}, after={"reason": reason}, ip=ip)
+    await db.delete(order)
+    on_commit(db, lambda: [storage.delete(k) for k in keys])
 
 
 # ---------------------------------------------------------------- shipments

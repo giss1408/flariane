@@ -40,7 +40,13 @@ class OrderScreen extends ConsumerWidget {
     final order = ref.watch(orderProvider(orderId));
     final me = ref.watch(sessionProvider).me;
     return Scaffold(
-      appBar: AppBar(title: Text(order.valueOrNull?.publicRef ?? 'Commande')),
+      appBar: AppBar(
+        title: Text(order.valueOrNull?.publicRef ?? 'Commande'),
+        actions: [
+          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid))
+            _DeleteMenu(order: order.value!),
+        ],
+      ),
       body: order.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(orderProvider(orderId))),
@@ -665,4 +671,46 @@ class _ProofScreen extends ConsumerWidget {
           },
         ),
       );
+}
+
+class _DeleteMenu extends ConsumerWidget {
+  const _DeleteMenu({required this.order});
+
+  final OrderDetail order;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => PopupMenuButton<String>(
+        onSelected: (reason) => _delete(context, ref, reason),
+        itemBuilder: (_) => [
+          if (order.canDeleteWrongLink)
+            const PopupMenuItem(value: 'wrong_link', child: Text('Lien incorrect · supprimer')),
+          if (order.canDeleteUnpaid)
+            const PopupMenuItem(value: 'unpaid', child: Text('Supprimer (non payée)')),
+        ],
+      );
+
+  Future<void> _delete(BuildContext context, WidgetRef ref, String reason) async {
+    final wrongLink = reason == 'wrong_link';
+    final ok = await confirm(
+      context,
+      title: 'Supprimer ${order.publicRef} ?',
+      body: wrongLink
+          ? 'Le lien ne mène pas à un panier ${order.storeName} valide. La commande est supprimée définitivement, '
+              'puis WhatsApp s’ouvre avec un message demandant à la cliente de renvoyer son panier.'
+          : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '
+              '(devis, captures, articles) et disparaît aussi de l’app de la cliente.',
+      ok: 'Supprimer',
+    );
+    if (!ok) return;
+    try {
+      final url = await ref.read(adminApiProvider).deleteOrder(order.id, reason);
+      if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (context.mounted) {
+        showInfo(context, '${order.publicRef} supprimée.');
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
 }

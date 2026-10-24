@@ -166,6 +166,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         id=order.id,
         public_ref=order.public_ref,
         status=order.status,
+        created_at=order.created_at,
         customer_id=customer.id,
         customer_name=customer.display_name,
         customer_phone_masked=mask_phone(phone) if phone else "",
@@ -360,6 +361,26 @@ async def archive_order(order_id: int, request: Request, admin: AdminContext = o
     order.archived_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="order.archived", entity="order", entity_id=order.id, ip=client_ip(request))
     await db.commit()
+
+
+@router.delete("/{order_id}")
+async def delete_order(
+    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid"] = Query(), admin: AdminContext = operator,
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, str | None]:
+    """Permanent deletion (see operations.delete_order). For a wrong link, returns the WhatsApp
+    message telling the customer to send her cart again: written before the order is gone."""
+    order = await db.get(Order, order_id)
+    customer = await db.get(Customer, order.customer_id) if order else None
+    if order is None or customer is None:
+        raise NotFound()
+    url = text = None
+    if reason == "wrong_link" and customer.phone_enc is not None:
+        text = wa.text_for("wrong_link", customer, order, None, None, None)
+        url = wa.wa_link(decrypt(customer.phone_enc), text)
+    await operations.delete_order(db, order_id, reason, admin.id, client_ip(request))
+    await db.commit()
+    return {"url": url, "text": text}
 
 
 @router.post("/{order_id}/whatsapp")

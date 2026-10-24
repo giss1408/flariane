@@ -320,3 +320,52 @@ async def test_archive_delivered_order(client: AsyncClient, customer: dict, admi
     assert len((await client.get("/admin/orders?tab=done", headers=admin.headers)).json()) == 1
     assert (await client.post(f"/admin/orders/{oid}/archive", headers=admin.headers)).status_code == 204
     assert (await client.get("/admin/orders?tab=done", headers=admin.headers)).json() == []
+
+
+async def test_delete_wrong_link_only_before_quote(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from app.models import Order
+
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "wrong_link"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert ref in r.json()["text"] and r.json()["url"].startswith("https://wa.me/")
+    async with SessionLocal() as db:
+        assert await db.get(Order, oid) is None
+
+    _, oid2, _ = await _accepted(client, customer, admin, pickup_point)
+    r = await client.delete(f"/admin/orders/{oid2}", params={"reason": "wrong_link"}, headers=admin.headers)
+    assert r.status_code == 409 and r.json()["detail"] == "order_already_quoted"
+
+
+async def test_delete_unpaid_after_three_days(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from datetime import timedelta
+
+    from app.models import Order
+
+    ref, oid, payment = await _accepted(client, customer, admin, pickup_point)
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)
+    assert r.status_code == 409 and r.json()["detail"] == "order_too_recent"
+    async with SessionLocal() as db:
+        order = await db.get(Order, oid)
+        order.created_at -= timedelta(days=4)  # type: ignore[union-attr]
+        await db.commit()
+    # An open Wave checkout may still be paid: blocked until the deadline task expires it.
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)
+    assert r.status_code == 409 and r.json()["detail"] == "order_paid"
+    async with SessionLocal() as db:
+        for p in (await db.scalars(select(Payment).where(Payment.order_id == oid))).all():
+            p.status = "EXPIRED"
+        await db.commit()
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/orders/{ref}", headers=customer)).status_code == 404
+
+    ref, oid, payment = await _accepted(client, customer, admin, pickup_point)
+    assert await pay(client, payment["launch_url"]) == 200
+    async with SessionLocal() as db:
+        order = await db.get(Order, oid)
+        order.created_at -= timedelta(days=4)  # type: ignore[union-attr]
+        await db.commit()
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)
+    assert r.status_code == 409 and r.json()["detail"] == "order_paid"

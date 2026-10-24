@@ -306,6 +306,7 @@ class OrderDetail {
     required this.id,
     required this.publicRef,
     required this.status,
+    required this.createdAt,
     required this.customerId,
     required this.customerName,
     required this.customerPhoneMasked,
@@ -329,6 +330,7 @@ class OrderDetail {
         id: j['id'] as int,
         publicRef: j['public_ref'] as String,
         status: j['status'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
         customerId: j['customer_id'] as int,
         customerName: j['customer_name'] as String?,
         customerPhoneMasked: j['customer_phone_masked'] as String? ?? '',
@@ -351,6 +353,7 @@ class OrderDetail {
   final int id;
   final String publicRef;
   final String status;
+  final DateTime createdAt;
   final int customerId;
   final String? customerName;
   final String customerPhoneMasked;
@@ -378,6 +381,15 @@ class OrderDetail {
   ChangeRequest? get pendingChangeRequest =>
       latestSent?.status == 'CHANGE_REQUESTED' ? changeRequests.firstOrNull : null;
   List<OrderItem> get activeItems => items.where((i) => i.active).toList();
+
+  /// Not quoted yet: a wrong cart link can be flagged and the order deleted right away.
+  bool get canDeleteWrongLink => status == 'QUOTE_REQUESTED' && latestSent == null;
+
+  /// Never paid (same rule as the server), deletable 3 days after creation.
+  bool get canDeleteUnpaid =>
+      const {'QUOTE_REQUESTED', 'QUOTED', 'AWAITING_PAYMENT', 'CANCELLED'}.contains(status) &&
+      payments.every((p) => const {'INITIATED', 'FAILED', 'EXPIRED'}.contains(p.status)) &&
+      DateTime.now().difference(createdAt) >= const Duration(days: 3);
 }
 
 class Shipment {

@@ -164,6 +164,12 @@ class AdminApi {
         (j) => (j as Map)['url'] as String,
       );
 
+  /// Permanent deletion. [reason]: `wrong_link` | `unpaid`. Returns the wa.me link for a wrong link.
+  Future<String?> deleteOrder(int orderId, String reason) => client.call(
+        (d) => d.delete('/admin/orders/$orderId', queryParameters: {'reason': reason}),
+        (j) => (j as Map)['url'] as String?,
+      );
+
   Future<void> confirmPickup(int orderId, String code) =>
       client.call((d) => d.post('/admin/orders/$orderId/pickup', data: {'code': code}), (_) {});
 

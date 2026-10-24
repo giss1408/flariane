@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 Map<String, dynamic> orderJson({List<Map<String, dynamic>> quotes = const [], List<Map<String, dynamic>> changes = const []}) => {
       'id': 1,
       'public_ref': 'FLR-ABCDE',
+      'created_at': '2026-10-01T10:00:00Z',
       'status': 'QUOTE_REQUESTED',
       'customer_id': 1,
       'customer_name': 'Awa',

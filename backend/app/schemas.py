@@ -356,6 +356,7 @@ class AdminOrderDetailOut(BaseModel):
     id: int
     public_ref: str
     status: str
+    created_at: datetime
     customer_id: int
     customer_name: str | None
     customer_phone_masked: str
