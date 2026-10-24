@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/format.dart';
@@ -548,31 +549,34 @@ class _PrimaryAction extends ConsumerWidget {
   Future<void> _addToShipment(BuildContext context, WidgetRef ref) async {
     final api = ref.read(adminApiProvider);
     try {
-      final open = (await api.shipments()).where((s) => s.status == 'OPEN').toList();
+      // Only real departures (set as "Prochain départ" in settings) take orders.
+      final open = (await api.shipments()).where((s) => s.status == 'OPEN' && s.departureDate != null).toList()
+        ..sort((a, b) => a.departureDate!.compareTo(b.departureDate!));
       if (!context.mounted) return;
       final choice = await showModalBottomSheet<int>(
         context: context,
         builder: (ctx) => SafeArea(
           child: ListView(shrinkWrap: true, children: [
             const ListTile(title: Text('Ajouter à une expédition', style: TextStyle(fontWeight: FontWeight.w700))),
+            if (open.isEmpty)
+              const ListTile(
+                leading: Icon(Icons.info_outline_rounded),
+                title: Text('Aucun départ prévu'),
+                subtitle: Text('Fixez le prochain départ dans Paramètres pour créer l’expédition.'),
+              ),
             for (final s in open)
               ListTile(
-                leading: const Icon(Icons.inventory_2_outlined),
+                leading: const Icon(Icons.flight_takeoff_rounded),
                 title: Text(s.label),
-                subtitle: Text('${s.orderRefs.length} commande(s)'),
+                subtitle: Text('${s.orderRefs.length} commande(s)'
+                    '${s.orderDeadline == null ? '' : ' · commandes jusqu’au ${DateFormat('d MMMM', 'fr').format(s.orderDeadline!)}'}'),
                 onTap: () => Navigator.pop(ctx, s.id),
               ),
-            ListTile(
-              leading: const Icon(Icons.add_rounded),
-              title: const Text('Nouvelle expédition'),
-              onTap: () => Navigator.pop(ctx, -1),
-            ),
           ]),
         ),
       );
       if (choice == null) return;
-      final id = choice == -1 ? (await api.createShipment('Expédition du ${dateTime(DateTime.now()).split(' ').first}')).id : choice;
-      await api.addToShipment(id, [order.id]);
+      await api.addToShipment(choice, [order.id]);
       ref.invalidate(orderProvider(order.id));
       if (context.mounted) showInfo(context, 'Commande ajoutée. Marquez l’expédition comme partie au départ.');
     } catch (e) {

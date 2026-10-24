@@ -170,9 +170,13 @@ class CustomerApi {
   /// Public info (no auth): next departure, payment mode, Wave number.
   Future<Map<String, dynamic>> publicInfo() => _call(() => dio.get('/public/info'), (j) => j as Map<String, dynamic>);
 
-  Future<DateTime?> nextDeparture() async {
-    final v = (await publicInfo())['next_departure_date'] as String?;
-    return v == null ? null : DateTime.parse(v);
+  /// Next departure and the last day to order for it (deadline may be unset).
+  Future<({DateTime departure, DateTime? deadline})?> nextDeparture() async {
+    final info = await publicInfo();
+    final v = info['next_departure_date'] as String?;
+    if (v == null) return null;
+    final d = info['next_order_deadline'] as String?;
+    return (departure: DateTime.parse(v), deadline: d == null ? null : DateTime.parse(d));
   }
 
   String get waveQrUrl => '${dio.options.baseUrl}/public/wave-qr';

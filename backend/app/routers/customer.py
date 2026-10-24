@@ -200,6 +200,7 @@ async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
     settings = await get_settings_map(db)
     return {
         "next_departure_date": settings.get("next_departure_date"),
+        "next_order_deadline": settings.get("next_order_deadline"),
         "payment_mode": settings["payment_mode"],
         "wave_phone": settings.get("wave_phone"),
         "has_wave_qr": bool(settings.get("wave_qr_image")),

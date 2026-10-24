@@ -185,13 +185,13 @@ class AdminApi {
         (j) => (j as List).cast<Map<String, dynamic>>().map(Shipment.fromJson).toList(),
       );
 
-  Future<Shipment> createShipment(String label, {String? forwarder}) => client.call(
-        (d) => d.post('/admin/shipments', data: {'label': label, 'forwarder': forwarder}),
+  Future<Shipment> addToShipment(int shipmentId, List<int> orderIds) => client.call(
+        (d) => d.post('/admin/shipments/$shipmentId/orders', data: {'order_ids': orderIds}),
         (j) => Shipment.fromJson(j as Map<String, dynamic>),
       );
 
-  Future<Shipment> addToShipment(int shipmentId, List<int> orderIds) => client.call(
-        (d) => d.post('/admin/shipments/$shipmentId/orders', data: {'order_ids': orderIds}),
+  Future<Shipment> removeFromShipment(int shipmentId, int orderId) => client.call(
+        (d) => d.delete('/admin/shipments/$shipmentId/orders/$orderId'),
         (j) => Shipment.fromJson(j as Map<String, dynamic>),
       );
 

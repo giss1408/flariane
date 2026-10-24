@@ -49,7 +49,7 @@ class AuthController extends Notifier<AuthStatus> {
 final ordersProvider = FutureProvider.autoDispose<List<OrderSummary>>((ref) => ref.watch(apiProvider).orders());
 final orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, r) => ref.watch(apiProvider).order(r));
 final pickupPointsProvider = FutureProvider.autoDispose<List<PickupPoint>>((ref) => ref.watch(apiProvider).pickupPoints());
-final nextDepartureProvider = FutureProvider.autoDispose<DateTime?>((ref) => ref.watch(apiProvider).nextDeparture());
+final nextDepartureProvider = FutureProvider.autoDispose<({DateTime departure, DateTime? deadline})?>((ref) => ref.watch(apiProvider).nextDeparture());
 final publicInfoProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(apiProvider).publicInfo());
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 

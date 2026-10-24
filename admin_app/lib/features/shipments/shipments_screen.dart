@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../core/session.dart';
@@ -19,7 +20,6 @@ class ShipmentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final shipments = ref.watch(shipmentsProvider);
-    final canOperate = ref.watch(sessionProvider).me?.canOperate ?? false;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expéditions'),
@@ -31,20 +31,16 @@ class ShipmentsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: canOperate
-          ? FloatingActionButton.extended(
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nouvelle'),
-              onPressed: () => _create(context, ref),
-            )
-          : null,
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(shipmentsProvider.future),
         child: shipments.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => ListView(children: [ErrorView(e, onRetry: () => ref.invalidate(shipmentsProvider))]),
           data: (list) => list.isEmpty
-              ? ListView(children: const [SizedBox(height: 120), Center(child: Text('Aucune expédition.'))])
+              ? ListView(children: const [
+                  SizedBox(height: 120),
+                  Center(child: Text('Aucune expédition. Fixez le prochain départ dans Paramètres.', textAlign: TextAlign.center)),
+                ])
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
                   itemCount: list.length,
@@ -68,39 +64,6 @@ class ShipmentsScreen extends ConsumerWidget {
       ),
     );
   }
-
-  Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final label = TextEditingController(text: 'Semaine ${_isoWeek(DateTime.now())}');
-    final forwarder = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nouvelle expédition'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: label, decoration: const InputDecoration(labelText: 'Nom')),
-          const SizedBox(height: 10),
-          TextField(controller: forwarder, decoration: const InputDecoration(labelText: 'Transitaire (optionnel)')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(style: FilledButton.styleFrom(minimumSize: const Size(0, 44)), onPressed: () => Navigator.pop(ctx, true), child: const Text('Créer')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await ref.read(adminApiProvider).createShipment(label.text.trim(), forwarder: forwarder.text.trim().isEmpty ? null : forwarder.text.trim());
-      ref.invalidate(shipmentsProvider);
-    } catch (e) {
-      if (context.mounted) showError(context, e);
-    }
-  }
-}
-
-int _isoWeek(DateTime d) {
-  final thursday = d.add(Duration(days: 4 - (d.weekday == 7 ? 7 : d.weekday)));
-  final firstDay = DateTime(thursday.year, 1, 1);
-  return ((thursday.difference(firstDay).inDays) / 7).floor() + 1;
 }
 
 final _shipmentProvider = FutureProvider.autoDispose.family<Shipment, int>((ref, id) async {
@@ -132,6 +95,8 @@ class ShipmentScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(14),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(shipmentStatusLabels[s.status] ?? s.status, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                if (s.departureDate != null) Text('Départ prévu : ${DateFormat('EEEE d MMMM', 'fr').format(s.departureDate!)}'),
+                if (s.orderDeadline != null) Text('Dernière commande : ${DateFormat('EEEE d MMMM', 'fr').format(s.orderDeadline!)}'),
                 if (s.forwarder != null) Text('Transitaire : ${s.forwarder}'),
                 if (s.trackingRef != null) Text('Suivi : ${s.trackingRef}'),
                 if (s.departedAt != null) Text('Départ : ${dateTime(s.departedAt)}'),
@@ -143,7 +108,20 @@ class ShipmentScreen extends ConsumerWidget {
           Card(
             child: Column(children: [
               if (s.orderRefs.isEmpty) const ListTile(title: Text('Aucune commande')),
-              for (final r in s.orderRefs) ListTile(dense: true, leading: const Icon(Icons.inventory_2_outlined), title: Text(r)),
+              for (final (i, r) in s.orderRefs.indexed)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: Text(r),
+                  // Only while the shipment is still being prepared (server refuses afterwards).
+                  trailing: canOperate && s.status == 'OPEN' && i < s.orderIds.length
+                      ? IconButton(
+                          tooltip: 'Retirer de l’expédition',
+                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.danger),
+                          onPressed: () => _removeOrder(context, ref, s, s.orderIds[i], r),
+                        )
+                      : null,
+                ),
             ]),
           ),
           if (canOperate && s.status == 'OPEN') ...[
@@ -182,6 +160,24 @@ class ShipmentScreen extends ConsumerWidget {
               ),
             ),
     );
+  }
+
+  Future<void> _removeOrder(BuildContext context, WidgetRef ref, Shipment s, int orderId, String orderRef) async {
+    final ok = await confirm(
+      context,
+      title: 'Retirer $orderRef ?',
+      body: 'La commande sortira de « ${s.label} » et ne partira pas avec ce colis. '
+          'Elle devra être ajoutée à un autre départ.',
+      ok: 'Retirer',
+    );
+    if (!ok) return;
+    try {
+      await ref.read(adminApiProvider).removeFromShipment(s.id, orderId);
+      ref.invalidate(_shipmentProvider(shipmentId));
+      if (context.mounted) showInfo(context, '$orderRef retirée de l’expédition.');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
   }
 
   Future<void> _addOrders(BuildContext context, WidgetRef ref, Shipment s) async {

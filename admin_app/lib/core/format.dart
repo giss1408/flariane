@@ -65,6 +65,8 @@ const errorMessages = {
   'pickup_code_locked': 'Trop d’essais : renvoyez un nouveau code au client.',
   'pickup_point_required': 'Choisissez un point de retrait.',
   'shipment_not_open': 'Cette expédition est déjà partie.',
+  'shipment_not_a_departure': 'Ajoutez la commande à une expédition créée depuis « Prochain départ ».',
+  'order_deadline_after_departure': 'La date limite de commande doit être avant le départ.',
   'order_not_purchased': 'Seules les commandes achetées peuvent être expédiées.',
   'order_already_in_shipment': 'Commande déjà dans une expédition.',
   'cart_quote_incomplete': 'Ajoute la capture du panier et son prix.',

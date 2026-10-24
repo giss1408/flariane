@@ -392,11 +392,6 @@ class PurchaseOut(BaseModel):
     estimated_margin_xof: int
 
 
-class ShipmentCreateIn(In):
-    label: Str80
-    forwarder: Str80 | None = None
-
-
 class ShipmentOrdersIn(In):
     order_ids: list[int] = Field(min_length=1, max_length=500)
 
@@ -415,8 +410,11 @@ class ShipmentOut(Out):
     weight_kg: Decimal | None
     cost_xof: int | None
     status: str
+    departure_date: date | None
+    order_deadline: date | None
     departed_at: datetime | None
     arrived_at: datetime | None
+    order_ids: list[int] = []  # same order as order_refs
     order_refs: list[str] = []
 
 
@@ -463,6 +461,7 @@ class SettingsIn(In):
     payment_accounts: dict[Literal["WAVE", "ORANGE", "MOOV"], Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None] | None = None
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     next_departure_date: date | None = None
+    next_order_deadline: date | None = None
 
 
 class PickupPointIn(In):

@@ -81,9 +81,10 @@ class HomeScreen extends ConsumerWidget {
           ],
           const SizedBox(height: 16),
           _WaxHero(onTap: newOrder),
-          if (departure != null && daysUntil(departure, DateTime.now()) >= 0) ...[
+          // Hidden once the order deadline (or the departure itself) has passed.
+          if (departure != null && daysUntil(departure.deadline ?? departure.departure, DateTime.now()) >= 0) ...[
             const SizedBox(height: 12),
-            DepartureTicket(departure: departure, onTap: newOrder),
+            DepartureTicket(departure: departure.departure, deadline: departure.deadline, onTap: newOrder),
           ],
           if (me != null && me.location == null) ...[
             const SizedBox(height: 12),

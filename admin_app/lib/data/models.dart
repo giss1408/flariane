@@ -387,8 +387,11 @@ class Shipment {
     required this.forwarder,
     required this.trackingRef,
     required this.status,
+    required this.departureDate,
+    required this.orderDeadline,
     required this.departedAt,
     required this.arrivedAt,
+    required this.orderIds,
     required this.orderRefs,
   });
 
@@ -398,8 +401,11 @@ class Shipment {
         forwarder: j['forwarder'] as String?,
         trackingRef: j['tracking_ref'] as String?,
         status: j['status'] as String,
+        departureDate: _date(j['departure_date']),
+        orderDeadline: _date(j['order_deadline']),
         departedAt: _date(j['departed_at']),
         arrivedAt: _date(j['arrived_at']),
+        orderIds: ((j['order_ids'] as List?) ?? []).cast<int>(),
         orderRefs: ((j['order_refs'] as List?) ?? []).cast<String>(),
       );
 
@@ -408,8 +414,11 @@ class Shipment {
   final String? forwarder;
   final String? trackingRef;
   final String status;
+  final DateTime? departureDate; // planned "prochain départ"; null on legacy shipments
+  final DateTime? orderDeadline;
   final DateTime? departedAt;
   final DateTime? arrivedAt;
+  final List<int> orderIds; // parallel to orderRefs
   final List<String> orderRefs;
 }
 

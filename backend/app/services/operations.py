@@ -1,5 +1,6 @@
 """Admin operations after payment: SHEIN purchase, store cancellations, refunds, shipments, pickups."""
 
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -244,11 +245,16 @@ async def refund_held_payment(db: AsyncSession, payment_id: int, admin_id: int, 
 # ---------------------------------------------------------------- shipments
 
 
-async def create_shipment(db: AsyncSession, label: str, forwarder: str | None, admin_id: int) -> Shipment:
-    shipment = Shipment(label=label, forwarder=forwarder, status=ShipmentStatus.OPEN)
-    db.add(shipment)
-    await db.flush()
-    await audit(db, actor_type="admin", actor_id=admin_id, action="shipment.created", entity="shipment", entity_id=shipment.id)
+async def ensure_departure_shipment(db: AsyncSession, departure: date, order_deadline: date | None, admin_id: int) -> Shipment:
+    """One shipment per "prochain départ": created when the date is set, deadline kept in sync."""
+    shipment = await db.scalar(select(Shipment).where(Shipment.departure_date == departure).with_for_update())
+    if shipment is None:
+        shipment = Shipment(label=f"Départ du {departure:%d/%m/%Y}", status=ShipmentStatus.OPEN, departure_date=departure)
+        db.add(shipment)
+        await db.flush()
+        await audit(db, actor_type="admin", actor_id=admin_id, action="shipment.created", entity="shipment", entity_id=shipment.id,
+                    after={"departure_date": departure.isoformat()})
+    shipment.order_deadline = order_deadline
     return shipment
 
 
@@ -258,6 +264,9 @@ async def add_orders_to_shipment(db: AsyncSession, shipment_id: int, order_ids: 
         raise NotFound()
     if shipment.status != ShipmentStatus.OPEN:
         raise Conflict("shipment_not_open")
+    if shipment.departure_date is None:
+        # Orders only go into a real departure (one set as "prochain départ").
+        raise Conflict("shipment_not_a_departure")
     for oid in order_ids:
         order = await db.get(Order, oid)
         if order is None or order.status != OrderStatus.PURCHASED:

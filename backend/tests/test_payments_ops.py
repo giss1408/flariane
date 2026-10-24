@@ -185,7 +185,8 @@ async def test_pickup_code_locks_after_five_failures(client: AsyncClient, custom
 
     _, oid, items = await _paid(client, customer, admin, pickup_point)
     await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH4", "paid_amount": "29.99", "currency": "EUR", "checked_item_ids": items}, headers=admin.headers)
-    sid = (await client.post("/admin/shipments", json={"label": "S"}, headers=admin.headers)).json()["id"]
+    await client.put("/admin/settings", json={"next_departure_date": "2030-01-15"}, headers=admin.headers)
+    sid = (await client.get("/admin/shipments", headers=admin.headers)).json()[0]["id"]
     await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
     await client.post(f"/admin/shipments/{sid}/depart", json={}, headers=admin.headers)
     await client.post(f"/admin/shipments/{sid}/arrive", headers=admin.headers)
@@ -262,7 +263,8 @@ async def test_pickup_agent_role(client: AsyncClient, customer: dict, admin: Adm
     agent = await make_admin(role="PICKUP", email="desk@flariane.ci")
     _, oid, items = await _paid(client, customer, admin, pickup_point)
     await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH7", "paid_amount": "29.99", "currency": "EUR", "checked_item_ids": items}, headers=admin.headers)
-    sid = (await client.post("/admin/shipments", json={"label": "S"}, headers=admin.headers)).json()["id"]
+    await client.put("/admin/settings", json={"next_departure_date": "2030-01-15"}, headers=admin.headers)
+    sid = (await client.get("/admin/shipments", headers=admin.headers)).json()[0]["id"]
     await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
     await client.post(f"/admin/shipments/{sid}/depart", json={}, headers=admin.headers)
     await client.post(f"/admin/shipments/{sid}/arrive", headers=admin.headers)

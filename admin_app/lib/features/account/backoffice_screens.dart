@@ -377,6 +377,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _c = <String, TextEditingController>{};
   bool _loaded = false;
   DateTime? _departure;
+  DateTime? _deadline;
   String _paymentMode = 'manual';
   bool _hasWaveQr = false;
 
@@ -411,18 +412,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _c['support_whatsapp'] = TextEditingController(text: s['support_whatsapp'] as String? ?? '');
       final d = s['next_departure_date'] as String?;
       _departure = d == null ? null : DateTime.parse(d);
+      final dl = s['next_order_deadline'] as String?;
+      _deadline = dl == null ? null : DateTime.parse(dl);
       setState(() => _loaded = true);
     }).catchError((Object e) {
       if (mounted) showError(context, e);
     });
   }
 
+  static String _iso(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<DateTime?> _pickDate(DateTime? current, DateTime? last) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastDate = last ?? today.add(const Duration(days: 365));
+    return showDatePicker(
+      context: context,
+      initialDate: current != null && !current.isBefore(today) && !current.isAfter(lastDate) ? current : today,
+      firstDate: today,
+      lastDate: lastDate.isBefore(today) ? today : lastDate,
+    );
+  }
+
+  /// Saved immediately: the dates are what customers see on their home screen.
+  Future<void> _saveDeparture(Map<String, dynamic> body, VoidCallback apply) async {
+    try {
+      await ref.read(adminApiProvider).updateSettings(body);
+      setState(apply);
+      if (mounted) showInfo(context, 'Prochain départ enregistré.');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   Future<void> _save() async {
     final body = <String, dynamic>{
       for (final k in intFields.keys) k: int.tryParse(_c[k]!.text.trim()),
       for (final k in numFields.keys) k: double.tryParse(_c[k]!.text.trim().replaceAll(',', '.')),
-      if (_departure != null)
-        'next_departure_date': '${_departure!.year}-${_departure!.month.toString().padLeft(2, '0')}-${_departure!.day.toString().padLeft(2, '0')}',
+      if (_departure != null) 'next_departure_date': _iso(_departure!),
+      if (_deadline != null) 'next_order_deadline': _iso(_deadline!),
       'payment_mode': _paymentMode,
       if (_c['support_whatsapp']!.text.trim().isNotEmpty) 'support_whatsapp': _c['support_whatsapp']!.text.trim(),
       'payment_accounts': {
@@ -446,30 +474,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             : ListView(padding: const EdgeInsets.all(16), children: [
                 const SectionTitle('Prochain départ (affiché aux clientes)'),
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.flight_takeoff_rounded),
-                    title: Text(_departure == null ? 'Aucune date' : DateFormat('EEEE d MMMM yyyy', 'fr').format(_departure!)),
-                    subtitle: const Text('Toucher pour choisir'),
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _departure != null && _departure!.isAfter(now) ? _departure! : now,
-                        firstDate: now,
-                        lastDate: now.add(const Duration(days: 365)),
-                      );
-                      if (picked == null) return;
-                      setState(() => _departure = picked);
-                      // Saved immediately: the date is what customers see on their home screen.
-                      final iso = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                      try {
-                        await ref.read(adminApiProvider).updateSettings({'next_departure_date': iso});
-                        if (context.mounted) showInfo(context, 'Prochain départ enregistré.');
-                      } catch (e) {
-                        if (context.mounted) showError(context, e);
-                      }
-                    },
-                  ),
+                  child: Column(children: [
+                    ListTile(
+                      leading: const Icon(Icons.flight_takeoff_rounded),
+                      title: Text(_departure == null ? 'Aucune date' : DateFormat('EEEE d MMMM yyyy', 'fr').format(_departure!)),
+                      subtitle: const Text('Date de départ · crée l’expédition'),
+                      onTap: () async {
+                        final picked = await _pickDate(_departure, null);
+                        if (picked == null) return;
+                        // A new departure needs its own deadline: the server clears the old one.
+                        final changed = picked != _departure;
+                        await _saveDeparture({'next_departure_date': _iso(picked)}, () {
+                          _departure = picked;
+                          if (changed) _deadline = null;
+                        });
+                      },
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      enabled: _departure != null,
+                      leading: const Icon(Icons.event_busy_rounded),
+                      title: Text(_deadline == null ? 'Dernière commande : non fixée' : 'Dernière commande : ${DateFormat('EEEE d MMMM', 'fr').format(_deadline!)}'),
+                      subtitle: const Text('Date limite pour commander pour ce départ'),
+                      onTap: () async {
+                        final picked = await _pickDate(_deadline, _departure);
+                        if (picked == null) return;
+                        await _saveDeparture({'next_departure_date': _iso(_departure!), 'next_order_deadline': _iso(picked)}, () => _deadline = picked);
+                      },
+                    ),
+                  ]),
                 ),
                 const SectionTitle('Support WhatsApp'),
                 TextField(

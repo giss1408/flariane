@@ -16,22 +16,31 @@ String countdownLabel(int days) => switch (days) {
     };
 
 /// Boarding-pass style card: mango stub with the countdown, perforation, then the date.
+/// With a [deadline], the countdown is to the last order day, not the departure.
 class DepartureTicket extends StatelessWidget {
   const DepartureTicket(
-      {super.key, required this.departure, required this.onTap, this.today});
+      {super.key,
+      required this.departure,
+      required this.onTap,
+      this.deadline,
+      this.today});
 
   final DateTime departure;
+  final DateTime? deadline;
   final VoidCallback onTap;
   final DateTime? today;
 
   @override
   Widget build(BuildContext context) {
-    final days = daysUntil(departure, today ?? DateTime.now());
+    final days = daysUntil(deadline ?? departure, today ?? DateTime.now());
     final urgent = days <= 3;
+    final deadlineText = deadline == null
+        ? null
+        : 'Commande avant le ${DateFormat('EEEE d MMMM', 'fr').format(deadline!)}';
     return Semantics(
       button: true,
       label:
-          'Prochain départ le ${DateFormat('d MMMM', 'fr').format(departure)}, commander',
+          'Prochain départ le ${DateFormat('d MMMM', 'fr').format(departure)}${deadlineText == null ? '' : ', $deadlineText'}, commander',
       child: GestureDetector(
         onTap: onTap,
         child: ClipPath(
@@ -80,9 +89,10 @@ class DepartureTicket extends StatelessWidget {
                                   style: display(24)),
                               const SizedBox(height: 2),
                               Text(
-                                urgent
-                                    ? 'Dernière chance, commande vite !'
-                                    : 'Commande vite pour être dans ce colis !',
+                                deadlineText ??
+                                    (urgent
+                                        ? 'Dernière chance, commande vite !'
+                                        : 'Commande vite pour être dans ce colis !'),
                                 softWrap: true,
                                 style: TextStyle(
                                     color: urgent

@@ -31,6 +31,8 @@ DEFAULTS: dict[str, Any] = {
     "freight_default_xof": 5000,
     # Next weekly shipment leaving for Abidjan (ISO date), shown to customers. None hides the card.
     "next_departure_date": None,
+    # Last day customers can order for that departure (ISO date), shown to customers.
+    "next_order_deadline": None,
 }
 
 

@@ -72,11 +72,23 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
     assert r.status_code == 200, r.text
     assert r.json()["estimated_margin_xof"] == 2500
 
-    # Shipment.
-    r = await client.post("/admin/shipments", json={"label": "Semaine 43"}, headers=admin.headers)
-    sid = r.json()["id"]
+    # Shipment: created by setting the next departure, with its order deadline.
+    r = await client.put("/admin/settings", json={"next_departure_date": "2030-01-15", "next_order_deadline": "2030-01-20"}, headers=admin.headers)
+    assert r.status_code == 400 and r.json()["detail"] == "order_deadline_after_departure"
+    r = await client.put("/admin/settings", json={"next_departure_date": "2030-01-15", "next_order_deadline": "2030-01-10"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert (await client.get("/public/info")).json()["next_order_deadline"] == "2030-01-10"
+    r = await client.get("/admin/shipments", headers=admin.headers)
+    assert len(r.json()) == 1 and r.json()[0]["departure_date"] == "2030-01-15" and r.json()[0]["order_deadline"] == "2030-01-10"
+    sid = r.json()[0]["id"]
+    # Saving the same departure again doesn't create a second shipment.
+    await client.put("/admin/settings", json={"next_departure_date": "2030-01-15"}, headers=admin.headers)
+    assert len((await client.get("/admin/shipments", headers=admin.headers)).json()) == 1
     r = await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
-    assert r.json()["order_refs"] == [ref]
+    assert r.json()["order_refs"] == [ref] and r.json()["order_ids"] == [oid]
+    r = await client.delete(f"/admin/shipments/{sid}/orders/{oid}", headers=admin.headers)
+    assert r.status_code == 200 and r.json()["order_refs"] == []
+    await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
     r = await client.post(f"/admin/shipments/{sid}/depart", json={"tracking_ref": "AWB1", "weight_kg": "1.2"}, headers=admin.headers)
     assert r.json()["status"] == "IN_TRANSIT"
     r = await client.post(f"/admin/shipments/{sid}/arrive", headers=admin.headers)

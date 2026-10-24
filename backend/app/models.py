@@ -1,6 +1,6 @@
 """Domain model. All money is integer XOF (no minor unit). Enum columns are plain strings."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -277,6 +278,9 @@ class Shipment(TimestampMixin, Base):
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     cost_xof: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(16), default="OPEN")
+    # Set from the "prochain départ" setting: one shipment per planned departure.
+    departure_date: Mapped[date | None] = mapped_column(Date, unique=True)
+    order_deadline: Mapped[date | None] = mapped_column(Date)
     departed_at: Mapped[datetime | None] = _ts()
     arrived_at: Mapped[datetime | None] = _ts()
 

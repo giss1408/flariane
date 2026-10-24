@@ -326,10 +326,21 @@ async def upload_wave_qr(request: Request, file: UploadFile = File(...), admin: 
 async def update_settings(data: SettingsIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
     before = _public_settings(await get_settings_map(db))
     changes = data.model_dump(exclude_none=True, mode="json")
+    departure = data.next_departure_date or (date.fromisoformat(before["next_departure_date"]) if before.get("next_departure_date") else None)
+    departure_changed = data.next_departure_date is not None and data.next_departure_date.isoformat() != before.get("next_departure_date")
+    deadline = data.next_order_deadline
+    if deadline is None and not departure_changed and before.get("next_order_deadline"):
+        deadline = date.fromisoformat(before["next_order_deadline"])
+    if deadline is not None and (departure is None or deadline > departure):
+        raise BadRequest("order_deadline_after_departure")
+    if departure_changed and data.next_order_deadline is None:
+        changes["next_order_deadline"] = None  # a new departure needs its own deadline
     if "fx_rates" in changes:
         changes["fx_rates"] = {**before["fx_rates"], **{k: str(v) for k, v in changes["fx_rates"].items()}, "XOF": "1"}
     for key, value in changes.items():
         await set_setting(db, key, value, admin.id)
+    if departure is not None and ({"next_departure_date", "next_order_deadline"} & changes.keys()):
+        await operations.ensure_departure_shipment(db, departure, deadline, admin.id)
     await audit(db, actor_type="admin", actor_id=admin.id, action="settings.updated", before={k: before[k] for k in changes}, after=changes, ip=client_ip(request))
     await db.commit()
     return _public_settings(await get_settings_map(db))

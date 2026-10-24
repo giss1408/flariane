@@ -7,7 +7,7 @@ from app.enums import AdminRole
 from app.errors import NotFound
 from app.models import Order, Shipment, ShipmentOrder
 from app.ratelimit import admin_limited
-from app.schemas import ShipmentCreateIn, ShipmentDepartIn, ShipmentOrdersIn, ShipmentOut
+from app.schemas import ShipmentDepartIn, ShipmentOrdersIn, ShipmentOut
 from app.security.deps import AdminContext, client_ip, require_role
 from app.services import operations
 
@@ -17,13 +17,14 @@ operator = Depends(require_role(AdminRole.OPERATOR))
 
 
 async def _out(db: AsyncSession, shipment: Shipment) -> ShipmentOut:
-    refs = (
-        await db.scalars(
-            select(Order.public_ref).join(ShipmentOrder, ShipmentOrder.order_id == Order.id).where(ShipmentOrder.shipment_id == shipment.id)
+    rows = (
+        await db.execute(
+            select(Order.id, Order.public_ref).join(ShipmentOrder, ShipmentOrder.order_id == Order.id).where(ShipmentOrder.shipment_id == shipment.id)
         )
     ).all()
     out = ShipmentOut.model_validate(shipment)
-    out.order_refs = list(refs)
+    out.order_ids = [r.id for r in rows]
+    out.order_refs = [r.public_ref for r in rows]
     return out
 
 
@@ -31,13 +32,6 @@ async def _out(db: AsyncSession, shipment: Shipment) -> ShipmentOut:
 async def list_shipments(_: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[ShipmentOut]:
     rows = (await db.scalars(select(Shipment).order_by(Shipment.id.desc()).limit(50))).all()
     return [await _out(db, s) for s in rows]
-
-
-@router.post("", response_model=ShipmentOut, status_code=201)
-async def create(data: ShipmentCreateIn, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> ShipmentOut:
-    shipment = await operations.create_shipment(db, data.label, data.forwarder, admin.id)
-    await db.commit()
-    return await _out(db, shipment)
 
 
 @router.get("/{shipment_id}", response_model=ShipmentOut)
