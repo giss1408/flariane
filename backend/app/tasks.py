@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app import db as db_module
 from app.config import get_settings
 from app.enums import PaymentStatus, QuoteStatus
-from app.integrations import push, whatsapp
+from app.integrations import ntfy, push, whatsapp
 from app.models import AdminDevice, AdminUser, Customer, Notification, Payment, Quote
 from app.security.crypto import decrypt
 from app.security.tokens import utcnow
@@ -61,8 +61,16 @@ ADMIN_EVENTS = {
 }
 
 
+# Money events ring louder on ntfy (5 = max, 3 = default).
+NTFY_PRIORITY = {"payment_received": 4, "payment_declared": 4, "payment_held": 5}
+
+
 async def push_admins(event: str, order_ref: str, order_id: int) -> None:
     title, body = ADMIN_EVENTS[event]
+    try:
+        await ntfy.send(title, body.format(ref=order_ref), priority=NTFY_PRIORITY.get(event, 3))
+    except Exception:  # an alert channel never blocks the FCM pushes
+        log.exception("ntfy alert failed for %s", event)
     async with session_factory() as db:
         devices = (
             await db.scalars(
