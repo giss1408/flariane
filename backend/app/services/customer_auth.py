@@ -2,6 +2,7 @@
 
 import re
 
+from anyio import to_thread
 from limits import parse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,9 +69,10 @@ async def register(db: AsyncSession, raw_phone: str, password: str, display_name
     phone = normalize_ci_phone(raw_phone)
     check_password_strength(password)
     ph = phone_hash(phone)
+    password_hash = await to_thread.run_sync(hash_password, password)  # argon2 is CPU-bound: keep the event loop free
     if await db.scalar(select(Customer.id).where(Customer.phone_hash == ph)):
         raise Conflict("phone_taken")
-    customer = Customer(phone_enc=encrypt(phone), phone_hash=ph, display_name=display_name, password_hash=hash_password(password),
+    customer = Customer(phone_enc=encrypt(phone), phone_hash=ph, display_name=display_name, password_hash=password_hash,
                         consent_at=utcnow(), consent_version=CONSENT_VERSION)
     db.add(customer)
     await db.flush()
@@ -85,7 +87,7 @@ async def login(db: AsyncSession, raw_phone: str, password: str) -> Customer:
         raise TooManyRequests("login_locked")
     customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
     # Always run one hash check so response time doesn't reveal which numbers have accounts.
-    ok = verify_password(customer.password_hash if customer and customer.password_hash else _DUMMY_HASH, password)
+    ok = await to_thread.run_sync(verify_password, customer.password_hash if customer and customer.password_hash else _DUMMY_HASH, password)
     if customer is None or customer.anonymised_at is not None or not customer.password_hash or not ok:
         limiter().hit(FAILED_LOGIN_LIMIT, key)
         raise InvalidCredentials("invalid_credentials")

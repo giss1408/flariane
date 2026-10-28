@@ -41,6 +41,11 @@ envVarGroups:
         value: log
       - key: FLR_PUSH_MODE
         value: log
+      # Admin alerts via the ntfy app: set a long random topic (+ token if the topic is reserved).
+      - key: FLR_NTFY_TOPIC
+        sync: false
+      - key: FLR_NTFY_TOKEN
+        sync: false
       - key: FLR_TASK_MODE
         value: celery
       - key: FLR_STORAGE_MODE

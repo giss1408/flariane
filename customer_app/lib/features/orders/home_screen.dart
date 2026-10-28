@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/departure_ticket.dart';
+import '../../widgets/help.dart';
 import '../../widgets/logo.dart';
 import '../../widgets/wax.dart';
 import '../account/account_screen.dart';
@@ -52,23 +53,19 @@ class HomeScreen extends ConsumerWidget {
         showBack: false,
         actions: [
           IconButton(
-            tooltip: 'Poser une question sur WhatsApp',
-            icon: const Icon(Icons.chat_outlined),
-            onPressed: () => askOnWhatsApp(context, ref),
-          ),
-          IconButton(
             tooltip: 'Mon compte',
             icon: const Icon(Icons.person_outline_rounded),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen())),
           ),
         ],
       ),
+      floatingActionButton: const AskButton(),
       body: RefreshIndicator(
         onRefresh: () {
           ref.invalidate(nextDepartureProvider);
           return ref.refresh(ordersProvider.future);
         },
-        child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
+        child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
           Text(name == null ? 'Salut 👋' : 'Salut $name 👋', style: display(28)),
           const SizedBox(height: 4),
           Text(
@@ -81,6 +78,8 @@ class HomeScreen extends ConsumerWidget {
           ],
           const SizedBox(height: 16),
           _WaxHero(onTap: newOrder),
+          const SizedBox(height: 12),
+          const _HelpRow(),
           // Hidden once the order deadline (or the departure itself) has passed.
           if (departure != null && daysUntil(departure.deadline ?? departure.departure, DateTime.now()) >= 0) ...[
             const SizedBox(height: 12),
@@ -116,6 +115,39 @@ class HomeScreen extends ConsumerWidget {
         ]),
       ),
     );
+  }
+}
+
+/// First-timers often don't know where SHEIN/Temu hide "share", or how to reach us.
+class _HelpRow extends StatelessWidget {
+  const _HelpRow();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tile(IconData icon, String title, String sub, VoidCallback onTap) => Expanded(
+          child: Material(
+            color: context.pal.card,
+            borderRadius: BorderRadius.circular(22),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(icon, color: context.pal.accent),
+                  const SizedBox(height: 8),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(sub, style: TextStyle(color: context.pal.muted, fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+        );
+    return Row(children: [
+      tile(Icons.ios_share_rounded, 'Partager mon panier', 'SHEIN ou Temu, pas à pas', () => showShareHelp(context)),
+      const SizedBox(width: 10),
+      tile(Icons.help_outline_rounded, 'Poser une question', 'Comment joindre l’équipe', () => showAskHelp(context)),
+    ]);
   }
 }
 

@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     fcm_project_id: str = ""
     fcm_service_account_json: str = ""
 
+    # Admin alerts via ntfy (no Firebase needed). Empty topic = disabled. Use a long random topic.
+    ntfy_url: str = "https://ntfy.sh"
+    ntfy_topic: str = ""
+    ntfy_token: str = ""
+
     # File storage for cart screenshots
     storage_mode: Literal["local", "s3"] = "local"
     storage_local_dir: str = "./var/uploads"
