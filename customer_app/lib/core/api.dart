@@ -218,4 +218,7 @@ class CustomerApi {
   Future<void> requote(String ref) => _call(() => dio.post('/orders/$ref/requote'), (_) {});
 
   Future<void> cancel(String ref) => _call(() => dio.post('/orders/$ref/cancel'), (_) {});
+
+  /// Clears a finished order from her own list (the business keeps the order).
+  Future<void> hideOrder(String ref) => _call(() => dio.post('/orders/$ref/hide'), (_) {});
 }

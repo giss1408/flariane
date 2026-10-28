@@ -51,6 +51,16 @@ final orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, r) 
 final pickupPointsProvider = FutureProvider.autoDispose<List<PickupPoint>>((ref) => ref.watch(apiProvider).pickupPoints());
 final nextDepartureProvider = FutureProvider.autoDispose<({DateTime departure, DateTime? deadline})?>((ref) => ref.watch(apiProvider).nextDeparture());
 final publicInfoProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(apiProvider).publicInfo());
+
+/// Offers the team switched on. A failure just means no banner: never block the home screen on it.
+final offersProvider = FutureProvider.autoDispose<List<Offer>>((ref) async {
+  try {
+    final info = await ref.watch(publicInfoProvider.future);
+    return [for (final o in (info['offers'] as List?) ?? const []) Offer.fromJson(o as Map<String, dynamic>)];
+  } catch (_) {
+    return const [];
+  }
+});
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 
 /// Text shared into the app from SHEIN (Partager → Flariane), waiting to prefill a new order.

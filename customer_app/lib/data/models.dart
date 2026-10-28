@@ -82,6 +82,23 @@ class OrderSummary {
   final String store;
 }
 
+/// A promotion the Flariane team shows on the home screen ("-10 % sur tes 20 premières commandes").
+class Offer {
+  Offer({required this.id, required this.title, this.message = '', this.endsAt});
+
+  factory Offer.fromJson(Map<String, dynamic> j) => Offer(
+        id: j['id'] as int,
+        title: j['title'] as String,
+        message: j['message'] as String? ?? '',
+        endsAt: _date(j['ends_at'])?.toLocal(),
+      );
+
+  final int id;
+  final String title;
+  final String message;
+  final DateTime? endsAt;
+}
+
 class QuoteLine {
   QuoteLine({required this.itemId, required this.title, this.size, this.color, required this.qty, required this.lineTotalXof});
 

@@ -10,6 +10,7 @@ import '../../widgets/store_badge.dart';
 import '../../widgets/departure_ticket.dart';
 import '../../widgets/help.dart';
 import '../../widgets/logo.dart';
+import '../../widgets/offer_banner.dart';
 import '../../widgets/wax.dart';
 import '../account/account_screen.dart';
 import '../account/location_screen.dart';
@@ -45,8 +46,31 @@ class HomeScreen extends ConsumerWidget {
       ref.invalidate(ordersProvider);
     }
 
+    Future<void> removeFromList(OrderSummary o) async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Retirer ${o.ref} ?'),
+          content: const Text('Elle disparaîtra de ta liste. Flariane garde l’historique si tu as besoin d’aide.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Garder')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Retirer')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      try {
+        await ref.read(apiProvider).hideOrder(o.ref);
+        ref.invalidate(ordersProvider);
+        if (context.mounted) showInfo(context, 'Commande retirée de ta liste.');
+      } catch (e) {
+        if (context.mounted) showError(context, e);
+      }
+    }
+
     final list = orders.valueOrNull ?? const <OrderSummary>[];
     final active = list.where((o) => !_finished.contains(o.status)).toList();
+    final offers = ref.watch(offersProvider).valueOrNull ?? const <Offer>[];
 
     return Scaffold(
       appBar: FlarianeHeader(
@@ -63,6 +87,7 @@ class HomeScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () {
           ref.invalidate(nextDepartureProvider);
+          ref.invalidate(publicInfoProvider); // offers come with it
           return ref.refresh(ordersProvider.future);
         },
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
@@ -77,6 +102,10 @@ class HomeScreen extends ConsumerWidget {
             const _NameCard(),
           ],
           const SizedBox(height: 16),
+          for (final offer in offers.take(3)) ...[
+            OfferBanner(offer: offer, onTap: newOrder),
+            const SizedBox(height: 16),
+          ],
           _WaxHero(onTap: newOrder),
           const SizedBox(height: 12),
           const _HelpRow(),
@@ -110,7 +139,18 @@ class HomeScreen extends ConsumerWidget {
             error: (e, _) => [ErrorView(e, onRetry: () => ref.invalidate(ordersProvider))],
             data: (all) => all.isEmpty
                 ? [const _EmptyOrders()]
-                : [for (final o in all) Padding(padding: const EdgeInsets.only(bottom: 8), child: _OrderRow(order: o, onTap: () => open(o.ref)))],
+                : [
+                    for (final o in all)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _OrderRow(
+                          order: o,
+                          onTap: () => open(o.ref),
+                          // Finished orders (collected, cancelled, refunded) can be cleared from the list.
+                          onRemove: _finished.contains(o.status) ? () => removeFromList(o) : null,
+                        ),
+                      ),
+                  ],
           ),
         ]),
       ),
@@ -349,10 +389,11 @@ class _TrustStrip extends StatelessWidget {
 }
 
 class _OrderRow extends StatelessWidget {
-  const _OrderRow({required this.order, required this.onTap});
+  const _OrderRow({required this.order, required this.onTap, this.onRemove});
 
   final OrderSummary order;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +415,15 @@ class _OrderRow extends StatelessWidget {
           Text(order.ref, style: const TextStyle(fontWeight: FontWeight.w700)),
         ]),
         subtitle: Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
-        trailing: Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w600)),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (onRemove != null)
+            IconButton(
+              tooltip: 'Retirer de ma liste',
+              icon: Icon(Icons.delete_outline_rounded, color: context.pal.muted),
+              onPressed: onRemove,
+            ),
+        ]),
       ),
     );
   }
