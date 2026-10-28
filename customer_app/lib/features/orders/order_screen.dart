@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
+import '../../widgets/delivery_estimate.dart';
 import '../../widgets/help.dart';
 import '../../widgets/store_badge.dart';
 import 'pay_screen.dart';
@@ -302,6 +303,8 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         Text('« ${q.note} »', style: const TextStyle(fontStyle: FontStyle.italic)),
       ],
       if (open) ...[
+        const SizedBox(height: 8),
+        DeliveryEstimate(store: widget.order.store, storeName: widget.order.storeName),
         const SizedBox(height: 8),
         CheckboxListTile(
           value: _sizesChecked,

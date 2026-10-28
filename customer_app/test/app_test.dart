@@ -5,6 +5,7 @@ import 'package:flariane/core/theme.dart';
 import 'package:flariane/data/models.dart';
 import 'package:flariane/features/orders/new_order_screen.dart';
 import 'package:flariane/features/orders/order_screen.dart';
+import 'package:flariane/widgets/delivery_estimate.dart';
 import 'package:flariane/widgets/departure_ticket.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -97,7 +98,10 @@ void main() {
     await tester.scrollUntilVisible(pay, 200);
     expect(tester.widget<FilledButton>(pay).onPressed, isNull);
 
-    await tester.tap(find.text('J’ai vérifié mon panier (tailles, couleurs)'));
+    final tick = find.text('J’ai vérifié mon panier (tailles, couleurs)');
+    await tester.ensureVisible(tick); // clear of the floating question button
+    await tester.pumpAndSettle();
+    await tester.tap(tick);
     await tester.pump();
     expect(tester.widget<FilledButton>(pay).onPressed, isNotNull);
     expect(find.text('Modifier ma commande'), findsOneWidget);
@@ -109,5 +113,15 @@ void main() {
     expect(countdownLabel(12), 'J-12');
     expect(countdownLabel(1), 'Demain');
     expect(countdownLabel(0), 'C’est aujourd’hui');
+  });
+
+  test('Abidjan arrival: store delivery, then next departure (or the one after), then 6 weeks', () {
+    final today = DateTime(2026, 11, 2);
+    // SHEIN reaches Germany 9–14 Nov: in time for a 20 Nov departure either way.
+    expect(abidjanArrival('SHEIN', today, DateTime(2026, 11, 20)), (DateTime(2027, 1, 1), DateTime(2027, 1, 1)));
+    // Departure on 10 Nov: the slowest parcel misses it and waits a week.
+    expect(abidjanArrival('TEMU', today, DateTime(2026, 11, 10)), (DateTime(2026, 12, 22), DateTime(2027, 1, 5)));
+    // No departure planned yet: assume a week's wait in Germany.
+    expect(abidjanArrival('SHEIN', today, null), (DateTime(2026, 12, 28), DateTime(2027, 1, 2)));
   });
 }
