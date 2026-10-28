@@ -11,7 +11,7 @@
 # - disk is wiped on every deploy/restart: uploaded cart screenshots don't survive
 services:
   - type: web
-    name: flariane-api
+    name: flariane-api-test
     runtime: python
     rootDir: backend
     plan: free
@@ -38,7 +38,7 @@ services:
       - key: FLR_SETUP_TOKEN
         generateValue: true
       - key: FLR_API_BASE_URL
-        value: https://flariane-api.onrender.com # change if Render assigns another URL
+        value: https://flariane-api-test.onrender.com # must match the service URL Render assigns
       - key: FLR_ENV
         value: staging
       - key: FLR_DEV_ROUTES
