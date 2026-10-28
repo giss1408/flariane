@@ -17,11 +17,22 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: customer_app
+    # Builds run on pushes to integration (testing) and main (production candidates),
+    # and on customer-v* tags (scripts/release.sh). Other branches never build.
     triggering:
       events:
+        - push
         - tag
+      branch_patterns:
+        - pattern: "main"
+          include: true
+          source: true
+        - pattern: "integration"
+          include: true
+          source: true
       tag_patterns:
         - pattern: "customer-v*"
+          include: true
     integrations:
       app_store_connect: flariane-asc
     environment:
@@ -89,11 +100,22 @@ workflows:
     instance_type: linux_x2
     max_build_duration: 45
     working_directory: customer_app
+    # Builds run on pushes to integration (testing) and main (production candidates),
+    # and on customer-v* tags (scripts/release.sh). Other branches never build.
     triggering:
       events:
+        - push
         - tag
+      branch_patterns:
+        - pattern: "main"
+          include: true
+          source: true
+        - pattern: "integration"
+          include: true
+          source: true
       tag_patterns:
         - pattern: "customer-v*"
+          include: true
     environment:
       flutter: 3.24.2
       java: 17

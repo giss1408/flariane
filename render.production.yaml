@@ -1,4 +1,7 @@
 # Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# BRANCH: deploy from `main` only. In the Render service settings, set Branch = main.
+# NOTE: the config below is still the staging setup (FLR_ENV=staging, fake Wave, log WhatsApp).
+# Switch it to the production values listed under flariane-config before real customers.
 # Creates the API, a Celery worker (tasks + schedules), Postgres and Key Value (Redis).
 envVarGroups:
   - name: flariane-secrets

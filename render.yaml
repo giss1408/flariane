@@ -1,4 +1,5 @@
 # Render Blueprint — FREE test setup: one free web service + Neon Postgres (free tier).
+# BRANCH: deploy from `integration`. In the Render service settings, set Branch = integration.
 # Render → New → Blueprint → this repo. Production setup (paid worker, Render Postgres/Redis):
 # render.production.yaml (select it as the blueprint file when you're ready).
 #
