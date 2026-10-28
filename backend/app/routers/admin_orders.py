@@ -92,7 +92,7 @@ def admin_quote_out(q: Quote, min_fee: int, screenshot_url: str | None = None) -
 
 @router.get("", response_model=list[AdminOrderSummaryOut])
 async def inbox(
-    tab: Literal["to_quote", "quoted", "to_buy", "to_ship", "in_transit", "pickups", "refunds", "done", "all"] = "to_quote",
+    tab: Literal["to_quote", "quoted", "to_buy", "to_ship", "in_transit", "pickups", "refunds", "done", "all", "to_confirm"] = "to_quote",
     q: str | None = Query(default=None, max_length=20),
     store: Literal["SHEIN", "TEMU"] | None = None,
     _: AdminContext = viewer,
@@ -103,6 +103,10 @@ async def inbox(
         stmt = stmt.where(Order.store == store)
     if q:
         stmt = stmt.where(Order.public_ref.ilike(f"%{q.strip().upper()}%"))
+    elif tab == "to_confirm":
+        # The customer sent her payment screenshot; an admin still has to check it and confirm.
+        waiting = select(Payment.order_id).where(Payment.status == "PENDING", Payment.status_reason == "declared")
+        stmt = stmt.where(Order.id.in_(waiting))
     elif tab != "all":
         stmt = stmt.where(Order.status.in_(TABS[tab]), Order.archived_at.is_(None))
     order_desc = tab in ("done", "all") or bool(q)
