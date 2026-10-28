@@ -1,7 +1,8 @@
 # Render Blueprint: Dashboard → New → Blueprint → pick this repo.
 # BRANCH: deploy from `main` only. In the Render service settings, set Branch = main.
-# NOTE: the config below is still the staging setup (FLR_ENV=staging, fake Wave, log WhatsApp).
-# Switch it to the production values listed under flariane-config before real customers.
+# Payments: customers pay outside the app (Wave / Orange Money / Moov) and send a screenshot;
+# an admin confirms it. This is the default payment_mode=manual, so no Wave Checkout is configured.
+# WhatsApp is log-only (see FLR_WHATSAPP_MODE below) until Meta approves the templates.
 # Creates the API, a Celery worker (tasks + schedules), Postgres and Key Value (Redis).
 envVarGroups:
   - name: flariane-secrets
@@ -14,7 +15,7 @@ envVarGroups:
       - key: FLR_HASH_KEY
         generateValue: true
       - key: FLR_WAVE_WEBHOOK_SECRET
-        sync: false # paste the secret from the Wave Business dashboard (any 8+ chars while Wave is fake)
+        sync: false # required by the API at startup (8+ chars); Wave Checkout is not used
       - key: FLR_WAVE_API_KEY
         sync: false
       - key: FLR_WHATSAPP_TOKEN
@@ -29,14 +30,13 @@ envVarGroups:
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.5"
-      # staging: fake Wave, logged WhatsApp/push, test login (/dev/customer-login) available.
-      # For real customers: FLR_ENV=prod, FLR_DEV_ROUTES=false, FLR_WAVE_MODE=live, FLR_WHATSAPP_MODE=live.
+      # prod: no test login, no simulated payment page, docs hidden, secure cookies.
+      # FLR_WHATSAPP_MODE=log: messages are written to the logs, not sent. Set to live once
+      # the WhatsApp Cloud API token and approved templates are in place.
       - key: FLR_ENV
-        value: staging
+        value: prod
       - key: FLR_DEV_ROUTES
-        value: "true"
-      - key: FLR_WAVE_MODE
-        value: fake
+        value: "false"
       - key: FLR_WHATSAPP_MODE
         value: log
       - key: FLR_PUSH_MODE
