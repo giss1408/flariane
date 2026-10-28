@@ -17,17 +17,14 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: customer_app
-    # Builds run on pushes to integration (testing) and main (production candidates),
-    # and on customer-v* tags (scripts/release.sh). Other branches never build.
+    # Production builds: pushes to main and customer-v* tags (scripts/release.sh).
+    # integration builds use the customer-android-test workflow below.
     triggering:
       events:
         - push
         - tag
       branch_patterns:
         - pattern: "main"
-          include: true
-          source: true
-        - pattern: "integration"
           include: true
           source: true
       tag_patterns:
@@ -100,17 +97,14 @@ workflows:
     instance_type: linux_x2
     max_build_duration: 45
     working_directory: customer_app
-    # Builds run on pushes to integration (testing) and main (production candidates),
-    # and on customer-v* tags (scripts/release.sh). Other branches never build.
+    # Production builds: pushes to main and customer-v* tags (scripts/release.sh).
+    # integration builds use the customer-android-test workflow below.
     triggering:
       events:
         - push
         - tag
       branch_patterns:
         - pattern: "main"
-          include: true
-          source: true
-        - pattern: "integration"
           include: true
           source: true
       tag_patterns:
@@ -148,3 +142,42 @@ workflows:
         track: $PLAY_TRACK
         # Managed publishing is off, so a completed release goes to Google review by itself.
         submit_as_draft: false
+
+  # Test builds from the integration branch, against the test backend. Nothing is published:
+  # no Google Play upload and no TestFlight, so a test build never reaches testers or shares
+  # build numbers with the production workflows. Download the APK from the build's artifacts.
+  #
+  # The APK has the production package name (com.regisse.flariane) and is signed with the
+  # upload key, so it replaces a debug install but not a Play-installed app: uninstall the
+  # Play version first on the phone you test with.
+  customer-android-test:
+    name: Customer app – Android test APK (integration)
+    instance_type: linux_x2
+    max_build_duration: 30
+    working_directory: customer_app
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "integration"
+          include: true
+          source: true
+    environment:
+      flutter: 3.24.2
+      java: 17
+      android_signing:
+        - flariane-upload
+      vars:
+        API_BASE_URL: https://flariane-api-test.onrender.com
+    scripts:
+      - name: Dependencies
+        script: flutter pub get
+      - name: Tests
+        script: flutter test
+      - name: Build APK
+        script: |
+          flutter build apk --release \
+            --build-number=$BUILD_NUMBER \
+            --dart-define=API_BASE_URL="$API_BASE_URL"
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
