@@ -2,15 +2,17 @@
 """Create or reset the Flariane super admin on the server, safely (no shell escaping issues).
 
 Usage:  python3 setup_admin.py
+        FLR_API_BASE_URL=https://flariane-api-test.onrender.com python3 setup_admin.py   (test server)
 Asks for the setup token and the password without echoing them, builds the JSON itself,
 and prints the authenticator key to add to Google Authenticator / 1Password.
 """
 import getpass
 import json
+import os
 import urllib.error
 import urllib.request
 
-API = "https://flariane-api.onrender.com"
+API = os.environ.get("FLR_API_BASE_URL", "https://flariane-api.onrender.com").rstrip("/")
 
 token = getpass.getpass("FLR_SETUP_TOKEN (from Render > Environment): ").strip()
 email = input("Email: ").strip().lower()
