@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/help.dart';
 import '../../widgets/logo.dart';
 import '../account/location_screen.dart';
 import 'order_screen.dart';
@@ -103,7 +104,14 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                 onPressed: _paste),
           ),
         ),
-        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.help_outline_rounded),
+            label: const Text('Comment trouver le lien de mon panier ?'),
+            onPressed: () => showShareHelp(context),
+          ),
+        ),
         Text(
             'Vérifie tailles et couleurs dans ton panier avant d’envoyer. Les prix affichés à Abidjan peuvent changer au moment de notre commande : ton devis te donnera le prix réel.',
             style: TextStyle(color: context.pal.warning)),

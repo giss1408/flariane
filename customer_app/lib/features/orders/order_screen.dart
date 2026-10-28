@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
+import '../../widgets/help.dart';
 import '../../widgets/store_badge.dart';
 import 'pay_screen.dart';
 import '../../widgets/logo.dart';
@@ -64,12 +65,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
       appBar: FlarianeHeader(subtitle: 'Commande ${widget.orderRef}', actions: [
         if (order.valueOrNull != null) Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: StoreBadge(order.value!.store))),
       ]),
+      floatingActionButton: AskButton(orderRef: widget.orderRef),
       body: order.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(orderProvider(widget.orderRef))),
         data: (o) => RefreshIndicator(
           onRefresh: () => ref.refresh(orderProvider(widget.orderRef).future),
-          child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+          child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 96), children: [
             _StatusBanner(order: o),
             if (o.quote != null && (o.status == 'QUOTED' || o.status == 'AWAITING_PAYMENT'))
               _QuoteCard(order: o, quote: o.quote!)
@@ -90,12 +92,6 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.chat_rounded),
-              label: const Text('Poser une question sur WhatsApp'),
-              onPressed: () => askOnWhatsApp(context, ref, orderRef: o.ref),
-            ),
             if (o.canCancel) ...[
               const SizedBox(height: 16),
               TextButton(
@@ -129,19 +125,6 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
       if (mounted) showError(context, e);
     }
   }
-}
-
-/// Opens WhatsApp to Flariane's support number with the order reference pre-filled.
-Future<void> askOnWhatsApp(BuildContext context, WidgetRef ref, {String? orderRef}) async {
-  final number = (await ref.read(publicInfoProvider.future))['support_whatsapp'] as String?;
-  if (number == null || number.isEmpty) {
-    if (context.mounted) showInfo(context, 'Le support WhatsApp n’est pas encore disponible.');
-    return;
-  }
-  var digits = number.replaceAll(RegExp(r'\D'), '');
-  if (digits.length == 10 && digits.startsWith('0')) digits = '225$digits';
-  final text = orderRef == null ? 'Bonjour Flariane, j’ai une question : ' : 'Bonjour Flariane, j’ai une question sur ma commande $orderRef : ';
-  await launchUrl(Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(text)}'), mode: LaunchMode.externalApplication);
 }
 
 class _StatusBanner extends ConsumerWidget {
