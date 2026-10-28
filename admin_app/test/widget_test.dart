@@ -1,10 +1,13 @@
+import 'package:flariane_admin/core/attention.dart';
 import 'package:flariane_admin/core/secure_store.dart';
 import 'package:flariane_admin/core/session.dart';
 import 'package:flariane_admin/core/theme.dart';
 import 'package:flariane_admin/data/admin_api.dart';
 import 'package:flariane_admin/data/models.dart';
 import 'package:flariane_admin/features/auth/auth_screens.dart';
+import 'package:flariane_admin/features/account/backoffice_screens.dart';
 import 'package:flariane_admin/features/inbox/inbox_screen.dart';
+import 'package:flariane_admin/features/inbox/payments_to_confirm.dart';
 import 'package:flariane_admin/features/order/order_screen.dart';
 import 'package:flariane_admin/features/shipments/shipments_screen.dart';
 import 'package:flutter/material.dart';
@@ -176,6 +179,101 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(OrderScreen), findsOneWidget);
       verify(() => api.order(42)).called(greaterThan(0));
+    });
+  });
+
+  group('payments to confirm', () {
+    OrderSummary waiting() => OrderSummary(
+          id: 42,
+          publicRef: 'FLR-PAYME',
+          status: 'AWAITING_PAYMENT',
+          customerName: 'Awa',
+          totalXof: 25000,
+          createdAt: DateTime.now(),
+          statusChangedAt: DateTime.now(),
+          hasChangeRequest: false,
+        );
+
+    testWidgets('the banner counts them and opens the list', (tester) async {
+      final api = MockApi();
+      when(() => api.inbox('to_confirm', search: any(named: 'search'), store: any(named: 'store'))).thenAnswer((_) async => [waiting()]);
+      await tester.pumpWidget(host(const Scaffold(body: PaymentsToConfirmBanner()), [
+        adminApiProvider.overrideWithValue(api),
+        attentionProvider.overrideWith((ref) async => Attention({'payments_to_confirm': 2})),
+      ]));
+      await tester.pumpAndSettle();
+      expect(find.text('2 paiements à confirmer'), findsOneWidget);
+      await tester.tap(find.text('2 paiements à confirmer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Paiements à confirmer'), findsOneWidget); // screen title
+      expect(find.text('FLR-PAYME'), findsOneWidget);
+    });
+
+    testWidgets('no banner when nothing waits', (tester) async {
+      await tester.pumpWidget(host(const Scaffold(body: PaymentsToConfirmBanner()), [
+        attentionProvider.overrideWith((ref) async => Attention({'payments_to_confirm': 0, 'to_quote': 3})),
+      ]));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('paiement'), findsNothing);
+    });
+  });
+
+  group('offers', () {
+    Map<String, dynamic> offer({bool active = true, String? endsAt}) => {
+          'id': 5,
+          'title': '-10 % sur tes 20 premières commandes',
+          'message': 'Offre de lancement',
+          'active': active,
+          'ends_at': endsAt,
+          'created_at': '2026-10-28T10:00:00Z',
+        };
+
+    testWidgets('lists offers and switches one off', (tester) async {
+      final api = MockApi();
+      when(() => api.offers()).thenAnswer((_) async => [offer()]);
+      when(() => api.updateOffer(any(), any())).thenAnswer((_) async {});
+      await tester.pumpWidget(host(const OffersAdminScreen(), [adminApiProvider.overrideWithValue(api)]));
+      await tester.pumpAndSettle();
+      expect(find.text('-10 % sur tes 20 premières commandes'), findsOneWidget);
+      expect(find.textContaining('Visible par les clientes'), findsOneWidget);
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+      verify(() => api.updateOffer(5, {'active': false})).called(1);
+    });
+
+    testWidgets('an ended offer cannot be switched back on', (tester) async {
+      final api = MockApi();
+      when(() => api.offers()).thenAnswer((_) async => [offer(endsAt: '2020-01-01T00:00:00Z')]);
+      await tester.pumpWidget(host(const OffersAdminScreen(), [adminApiProvider.overrideWithValue(api)]));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Terminée'), findsWidgets);
+      expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
+    });
+
+    testWidgets('creates an offer from the form', (tester) async {
+      final api = MockApi();
+      when(() => api.offers()).thenAnswer((_) async => []);
+      when(() => api.createOffer(any())).thenAnswer((_) async {});
+      await tester.pumpWidget(host(const OffersAdminScreen(), [adminApiProvider.overrideWithValue(api)]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nouvelle offre'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Titre'), '  -15 % cette semaine ');
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+      verify(() => api.createOffer({'title': '-15 % cette semaine', 'message': '', 'ends_at': null, 'active': true})).called(1);
+    });
+
+    testWidgets('a title is required', (tester) async {
+      final api = MockApi();
+      when(() => api.offers()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const OffersAdminScreen(), [adminApiProvider.overrideWithValue(api)]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nouvelle offre'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enregistrer'));
+      await tester.pumpAndSettle();
+      verifyNever(() => api.createOffer(any()));
     });
   });
 }

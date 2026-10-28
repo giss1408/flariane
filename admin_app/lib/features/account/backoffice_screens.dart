@@ -217,6 +217,94 @@ class PickupPointsAdminScreen extends ConsumerWidget {
       );
 }
 
+/// Offers shown to every customer on the app's home screen ("-10 % sur tes 20 premières commandes").
+class OffersAdminScreen extends ConsumerWidget {
+  const OffersAdminScreen({super.key});
+
+  static DateTime? _end(Map<String, dynamic> o) => o['ends_at'] == null ? null : DateTime.parse(o['ends_at'] as String).toLocal();
+
+  static bool _ended(Map<String, dynamic> o) => _end(o)?.isBefore(DateTime.now()) ?? false;
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, VoidCallback reload, [Map<String, dynamic>? o]) async {
+    final title = TextEditingController(text: o?['title'] as String?);
+    final message = TextEditingController(text: o?['message'] as String?);
+    DateTime? ends = o == null ? null : _end(o);
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Text(o == null ? 'Nouvelle offre' : 'Modifier l’offre'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: title, maxLength: 80, decoration: const InputDecoration(labelText: 'Titre', hintText: '-10 % sur tes 20 premières commandes')),
+              TextField(controller: message, maxLength: 240, maxLines: 3, decoration: const InputDecoration(labelText: 'Message (facultatif)')),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_rounded),
+                title: Text(ends == null ? 'Sans date de fin' : 'Jusqu’au ${DateFormat('d MMMM', 'fr').format(ends!)}'),
+                trailing: ends == null
+                    ? null
+                    : IconButton(tooltip: 'Retirer la date de fin', icon: const Icon(Icons.close_rounded), onPressed: () => setState(() => ends = null)),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: ends ?? DateTime.now().add(const Duration(days: 7)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) setState(() => ends = DateTime(picked.year, picked.month, picked.day, 23, 59));
+                },
+              ),
+            ]),
+          ),
+          actions: [
+            if (o != null) TextButton(onPressed: () => Navigator.pop(ctx, 'delete'), child: const Text('Supprimer', style: TextStyle(color: AppColors.danger))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+            TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: const Text('Enregistrer')),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    final api = ref.read(adminApiProvider);
+    if (action == 'delete') {
+      final ok = await confirm(context, title: 'Supprimer cette offre ?', body: 'Elle disparaît de l’écran d’accueil des clientes.', ok: 'Supprimer');
+      if (!ok || !context.mounted) return;
+      return _act(context, () => api.deleteOffer(o!['id'] as int), reload);
+    }
+    if (title.text.trim().isEmpty) return showInfo(context, 'Le titre est obligatoire.');
+    final body = {'title': title.text.trim(), 'message': message.text.trim(), 'ends_at': ends?.toUtc().toIso8601String()};
+    await _act(context, () => o == null ? api.createOffer({...body, 'active': true}) : api.updateOffer(o['id'] as int, body), reload);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => _ListPage(
+        title: 'Offres clientes',
+        load: (ref) => ref.read(adminApiProvider).offers(),
+        fab: (context, reload) =>
+            FloatingActionButton.extended(onPressed: () => _edit(context, ref, reload), icon: const Icon(Icons.add), label: const Text('Nouvelle offre')),
+        tile: (context, o, reload) {
+          final ended = _ended(o);
+          final end = _end(o);
+          final live = (o['active'] as bool) && !ended;
+          return ListTile(
+            title: Text(o['title'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text([
+              if ((o['message'] as String).isNotEmpty) o['message'] as String,
+              if (end == null) 'Sans date de fin' else '${ended ? 'Terminée le' : 'Jusqu’au'} ${DateFormat('d MMMM', 'fr').format(end)}',
+              live ? 'Visible par les clientes' : (ended ? 'Terminée' : 'Désactivée'),
+            ].join('\n')),
+            isThreeLine: true,
+            trailing: Switch(
+              value: live,
+              onChanged: ended ? null : (v) => _act(context, () => ref.read(adminApiProvider).updateOffer(o['id'] as int, {'active': v}), reload),
+            ),
+            onTap: () => _edit(context, ref, reload, o),
+          );
+        },
+      );
+}
+
 class AdminUsersScreen extends ConsumerWidget {
   const AdminUsersScreen({super.key});
 

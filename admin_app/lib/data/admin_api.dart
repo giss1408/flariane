@@ -233,6 +233,12 @@ class AdminApi {
   Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> body) =>
       client.call((d) => d.put('/admin/settings', data: body), (j) => j as Map<String, dynamic>);
 
+  /// Offers shown on the customers' home screen.
+  Future<List<Map<String, dynamic>>> offers() => _list('/admin/offers');
+  Future<void> createOffer(Map<String, dynamic> body) => client.call((d) => d.post('/admin/offers', data: body), (_) {});
+  Future<void> updateOffer(int id, Map<String, dynamic> body) => client.call((d) => d.patch('/admin/offers/$id', data: body), (_) {});
+  Future<void> deleteOffer(int id) => client.call((d) => d.delete('/admin/offers/$id'), (_) {});
+
   Future<void> savePickupPoint(Map<String, dynamic> body, {int? id}) => client.call(
       (d) => id == null ? d.post('/admin/pickup-points', data: body) : d.put('/admin/pickup-points/$id', data: body), (_) {});
 
