@@ -1,10 +1,12 @@
 # Local development services. Production uses managed Postgres (Supabase/Neon) and Upstash Redis.
+# The Postgres password comes from the root .env (gitignored), e.g. FLR_LOCAL_PG_PASSWORD=<pick one>.
+# It must match the password in backend/.env (FLR_DATABASE_URL).
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: flariane
-      POSTGRES_PASSWORD: flariane
+      POSTGRES_PASSWORD: ${FLR_LOCAL_PG_PASSWORD:?set FLR_LOCAL_PG_PASSWORD in the root .env}
       POSTGRES_DB: flariane
     ports: ["127.0.0.1:5433:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
