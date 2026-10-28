@@ -28,6 +28,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        resValue "string", "app_name", "Flariane Admin"
     }
 
     buildTypes {
@@ -35,6 +36,21 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
+        }
+    }
+
+    // prod: the production admin app (default package, what the team uses day to day).
+    // integration: the test backend, installed next to prod under its own name and package.
+    //   flutter run --flavor integration --dart-define=API_BASE_URL=https://flariane-api-test.onrender.com
+    flavorDimensions "env"
+    productFlavors {
+        prod {
+            dimension "env"
+        }
+        integration {
+            dimension "env"
+            applicationIdSuffix ".integration"
+            resValue "string", "app_name", "Flariane Admin TEST"
         }
     }
 }
