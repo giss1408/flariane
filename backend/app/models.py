@@ -130,6 +130,8 @@ class Order(TimestampMixin, Base):
     status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Hidden from admin lists (delivered orders the admin cleared). Kept for history and reports.
     archived_at: Mapped[datetime | None] = _ts()
+    # Finished orders the customer cleared from her own list. The business keeps the order.
+    customer_hidden_at: Mapped[datetime | None] = _ts()
 
     customer: Mapped[Customer] = relationship(lazy="raise")
     pickup_point: Mapped[PickupPoint | None] = relationship(lazy="raise")
@@ -330,6 +332,18 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class Offer(TimestampMixin, Base):
+    """A promotion the admin shows on every customer's home screen until it ends or is switched off."""
+
+    __tablename__ = "offers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(80))
+    message: Mapped[str] = mapped_column(String(240), default="", server_default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    ends_at: Mapped[datetime | None] = _ts()
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id"))
 
 
 class OrderStatusHistory(Base):

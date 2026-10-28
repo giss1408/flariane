@@ -249,12 +249,19 @@ async def test_manual_mobile_money_payment(client: AsyncClient, customer: dict, 
     assert r.json()["declared"] and r.json()["method"] == "ORANGE" and r.json()["has_proof"]
     assert tasks.RECORDED[-1][1]["event"] == "payment_declared"
 
+    # Until an admin confirms it, the declared payment waits in the "to confirm" list.
+    assert (await client.get("/admin/orders/attention", headers=admin.headers)).json()["payments_to_confirm"] == 1
+    waiting = (await client.get("/admin/orders?tab=to_confirm", headers=admin.headers)).json()
+    assert [o["public_ref"] for o in waiting] == [ref]
+
     proof = await client.get(f"/admin/orders/{oid}/payment-proof", headers=admin.headers)
     assert proof.status_code == 200 and proof.headers["content-type"] == "image/jpeg"
     assert (await client.get(f"/admin/orders/{oid}/payment-proof", headers=customer)).status_code == 401
 
     assert (await client.post(f"/admin/orders/{oid}/confirm-payment", json={"transaction_ref": "OM123"}, headers=admin.headers)).status_code == 204
     assert (await client.get(f"/orders/{ref}", headers=customer)).json()["status"] == "PAID"
+    assert (await client.get("/admin/orders/attention", headers=admin.headers)).json()["payments_to_confirm"] == 0
+    assert (await client.get("/admin/orders?tab=to_confirm", headers=admin.headers)).json() == []
 
 
 async def test_pickup_agent_role(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]

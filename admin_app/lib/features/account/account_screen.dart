@@ -53,6 +53,7 @@ class AccountScreen extends ConsumerWidget {
               _link(context, Icons.phonelink_lock_rounded, 'Appareils', const DevicesScreen()),
               _link(context, Icons.group_rounded, 'Administrateurs', const AdminUsersScreen()),
               _link(context, Icons.place_rounded, 'Points de retrait', const PickupPointsAdminScreen()),
+              _link(context, Icons.campaign_rounded, 'Offres clientes', const OffersAdminScreen()),
               _link(context, Icons.tune_rounded, 'Paramètres', const SettingsScreen()),
             ],
           ]),

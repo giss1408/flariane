@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -15,6 +15,7 @@ from app.errors import BadRequest, Conflict, Forbidden, NotFound
 from app.integrations import storage
 from app.models import (
     Customer,
+    Offer,
     Order,
     OrderAttachment,
     OrderStatusHistory,
@@ -198,7 +199,16 @@ async def delete_me(request: Request, customer: Customer = authed, db: AsyncSess
 async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
     """Shown in the customer app. No auth: nothing private here."""
     settings = await get_settings_map(db)
+    offers = (
+        await db.scalars(
+            select(Offer)
+            .where(Offer.active.is_(True), or_(Offer.ends_at.is_(None), Offer.ends_at > func.now()))
+            .order_by(Offer.id.desc())
+            .limit(5)
+        )
+    ).all()
     return {
+        "offers": [{"id": o.id, "title": o.title, "message": o.message, "ends_at": o.ends_at} for o in offers],
         "next_departure_date": settings.get("next_departure_date"),
         "next_order_deadline": settings.get("next_order_deadline"),
         "payment_mode": settings["payment_mode"],
@@ -332,8 +342,27 @@ async def create_order(data: OrderCreateIn, request: Request, customer: Customer
 
 @router.get("/orders", response_model=list[OrderSummaryOut])
 async def list_orders(customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> list[OrderSummaryOut]:
-    rows = (await db.scalars(select(Order).where(Order.customer_id == customer.id).order_by(Order.created_at.desc()).limit(100))).all()
+    rows = (
+        await db.scalars(
+            select(Order).where(Order.customer_id == customer.id, Order.customer_hidden_at.is_(None)).order_by(Order.created_at.desc()).limit(100)
+        )
+    ).all()
     return [OrderSummaryOut(public_ref=o.public_ref, status=o.status, store=o.store, total_xof=o.total_xof, created_at=o.created_at, status_changed_at=o.status_changed_at) for o in rows]
+
+
+FINISHED_ORDERS = (OrderStatus.PICKED_UP, OrderStatus.CANCELLED, OrderStatus.REFUNDED)
+
+
+@router.post("/orders/{ref}/hide", status_code=204)
+async def hide_order(ref: str, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> None:
+    """Clear a finished order from her own list. The order stays for the business (accounting, support)."""
+    order = await _order_for(db, customer, ref)
+    if order.status not in FINISHED_ORDERS:
+        raise Conflict("order_not_finished")
+    if order.customer_hidden_at is None:
+        order.customer_hidden_at = utcnow()
+        await audit(db, actor_type="customer", actor_id=customer.id, action="order.hidden_by_customer", entity="order", entity_id=order.id, ip=client_ip(request))
+    await db.commit()
 
 
 @router.get("/orders/{ref}", response_model=OrderDetailOut)

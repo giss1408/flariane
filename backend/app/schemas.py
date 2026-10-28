@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
 
 Str80 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 Str200 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -474,6 +474,32 @@ class PickupPointIn(In):
     commune: Str80
     opening_hours: Str200
     active: bool = True
+
+
+OfferMessage = Annotated[str, StringConstraints(strip_whitespace=True, max_length=240)]
+
+
+class OfferIn(In):
+    title: Str80
+    message: OfferMessage = ""
+    ends_at: AwareDatetime | None = None  # never shown after this moment
+    active: bool = True
+
+
+class OfferPatch(In):
+    title: Str80 | None = None
+    message: OfferMessage | None = None
+    ends_at: AwareDatetime | None = None  # send null to remove the end date
+    active: bool | None = None
+
+
+class OfferOut(Out):
+    id: int
+    title: str
+    message: str
+    active: bool
+    ends_at: datetime | None
+    created_at: datetime
 
 
 class AdminUserIn(In):

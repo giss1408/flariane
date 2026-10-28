@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.enums import AdminRole, PaymentStatus, RefundStatus
 from app.errors import BadRequest, Conflict, NotFound
-from app.models import AdminDevice, AdminUser, AuditLog, Customer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
+from app.models import AdminDevice, AdminUser, AuditLog, Customer, Offer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
 from app.ratelimit import admin_limited
 from typing import Annotated
 
@@ -28,6 +28,9 @@ from app.schemas import (
     DispatchGroupOut,
     DispatchOrderOut,
     LocationOut,
+    OfferIn,
+    OfferOut,
+    OfferPatch,
     PickupPointIn,
     PickupPointOut,
     RefundCompleteIn,
@@ -371,6 +374,50 @@ async def update_point(point_id: int, data: PickupPointIn, admin: AdminContext =
     await audit(db, actor_type="admin", actor_id=admin.id, action="pickup_point.updated", entity="pickup_point", entity_id=point.id)
     await db.commit()
     return point
+
+
+# ---------------------------------------------------------------- offers shown to customers
+
+
+@router.get("/offers", response_model=list[OfferOut])
+async def list_offers(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> list[Offer]:
+    return list((await db.scalars(select(Offer).order_by(Offer.id.desc()))).all())
+
+
+@router.post("/offers", response_model=OfferOut, status_code=201)
+async def create_offer(data: OfferIn, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> Offer:
+    offer = Offer(**data.model_dump(), created_by=admin.id)
+    db.add(offer)
+    await db.flush()
+    await db.refresh(offer)  # created_at comes from the database
+    await audit(db, actor_type="admin", actor_id=admin.id, action="offer.created", entity="offer", entity_id=offer.id, after={"title": offer.title})
+    await db.commit()
+    return offer
+
+
+@router.patch("/offers/{offer_id}", response_model=OfferOut)
+async def update_offer(offer_id: int, data: OfferPatch, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> Offer:
+    offer = await db.get(Offer, offer_id)
+    if offer is None:
+        raise NotFound()
+    for field in data.model_fields_set:
+        value = getattr(data, field)
+        if value is None and field != "ends_at":
+            continue  # only the end date can be cleared with null
+        setattr(offer, field, value)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="offer.updated", entity="offer", entity_id=offer.id)
+    await db.commit()
+    return offer
+
+
+@router.delete("/offers/{offer_id}", status_code=204)
+async def delete_offer(offer_id: int, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> None:
+    offer = await db.get(Offer, offer_id)
+    if offer is None:
+        raise NotFound()
+    await db.delete(offer)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="offer.deleted", entity="offer", entity_id=offer_id, before={"title": offer.title})
+    await db.commit()
 
 
 # ---------------------------------------------------------------- refunds & held payments
