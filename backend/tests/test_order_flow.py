@@ -86,8 +86,18 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
     assert len((await client.get("/admin/shipments", headers=admin.headers)).json()) == 1
     r = await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
     assert r.json()["order_refs"] == [ref] and r.json()["order_ids"] == [oid]
+    # The order shows its shipment in the "À expédier" list and on its own screen.
+    label = "Départ du 15/01/2030"
+    r = await client.get("/admin/orders?tab=to_ship", headers=admin.headers)
+    assert [(o["public_ref"], o["shipment_id"], o["shipment_label"]) for o in r.json()] == [(ref, sid, label)]
+    r = await client.get(f"/admin/orders/{oid}", headers=admin.headers)
+    assert r.json()["shipment_id"] == sid and r.json()["shipment_label"] == label
     r = await client.delete(f"/admin/shipments/{sid}/orders/{oid}", headers=admin.headers)
     assert r.status_code == 200 and r.json()["order_refs"] == []
+    r = await client.get("/admin/orders?tab=to_ship", headers=admin.headers)
+    assert [(o["shipment_id"], o["shipment_label"]) for o in r.json()] == [(None, None)]
+    r = await client.get(f"/admin/orders/{oid}", headers=admin.headers)
+    assert r.json()["shipment_id"] is None and r.json()["shipment_label"] is None
     await client.post(f"/admin/shipments/{sid}/orders", json={"order_ids": [oid]}, headers=admin.headers)
     r = await client.post(f"/admin/shipments/{sid}/depart", json={"tracking_ref": "AWB1", "weight_kg": "1.2"}, headers=admin.headers)
     assert r.json()["status"] == "IN_TRANSIT"

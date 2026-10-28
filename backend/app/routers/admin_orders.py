@@ -22,6 +22,7 @@ from app.models import (
     PickupPoint,
     Quote,
     QuoteChangeRequest,
+    Shipment,
     ShipmentOrder,
     StorePurchase,
 )
@@ -120,10 +121,20 @@ async def inbox(
             )
         ).all()
         change_requested = {oid for oid, st in latest if st == QuoteStatus.CHANGE_REQUESTED}
+    shipments: dict[int, tuple[int, str]] = {}
+    if ids:
+        links = await db.execute(
+            select(ShipmentOrder.order_id, Shipment.id, Shipment.label)
+            .join(Shipment, Shipment.id == ShipmentOrder.shipment_id)
+            .where(ShipmentOrder.order_id.in_(ids))
+        )
+        shipments = {oid: (sid, label) for oid, sid, label in links}
     return [
         AdminOrderSummaryOut(
             id=o.id, public_ref=o.public_ref, status=o.status, store=o.store, customer_name=name, total_xof=o.total_xof,
             created_at=o.created_at, status_changed_at=o.status_changed_at, has_change_request=o.id in change_requested,
+            shipment_id=shipments[o.id][0] if o.id in shipments else None,
+            shipment_label=shipments[o.id][1] if o.id in shipments else None,
         )
         for o, name in rows
     ]
@@ -160,8 +171,11 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
     purchase = await db.scalar(select(StorePurchase).where(StorePurchase.order_id == order.id))
     history = (await db.scalars(select(OrderStatusHistory).where(OrderStatusHistory.order_id == order.id).order_by(OrderStatusHistory.id))).all()
     point = await db.get(PickupPoint, order.pickup_point_id) if order.pickup_point_id else None
-    shipment_id = await db.scalar(select(ShipmentOrder.shipment_id).where(ShipmentOrder.order_id == order.id))
-    phone = decrypt(customer.phone_enc) if customer.phone_enc else ""
+    shipment = (await db.execute(
+        select(Shipment.id, Shipment.label).join(ShipmentOrder, ShipmentOrder.shipment_id == Shipment.id).where(ShipmentOrder.order_id == order.id)
+    )).first()
+    shipment_id, shipment_label = (shipment.id, shipment.label) if shipment else (None, None)
+    phone =decrypt(customer.phone_enc) if customer.phone_enc else ""
     return AdminOrderDetailOut(
         id=order.id,
         public_ref=order.public_ref,
@@ -184,6 +198,7 @@ async def _detail(db: AsyncSession, order_id: int) -> AdminOrderDetailOut:
         purchase=StorePurchaseOut.model_validate(purchase) if purchase else None,
         history=[StatusEventOut.model_validate(h) for h in history],
         shipment_id=shipment_id,
+        shipment_label=shipment_label,
     )
 
 

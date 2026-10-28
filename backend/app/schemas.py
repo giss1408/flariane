@@ -335,6 +335,8 @@ class AdminOrderSummaryOut(BaseModel):
     created_at: datetime
     status_changed_at: datetime
     has_change_request: bool
+    shipment_id: int | None = None  # the expedition the order is in, if any
+    shipment_label: str | None = None
 
 
 class AttachmentOut(BaseModel):
@@ -374,6 +376,7 @@ class AdminOrderDetailOut(BaseModel):
     purchase: StorePurchaseOut | None
     history: list[StatusEventOut]
     shipment_id: int | None
+    shipment_label: str | None = None
 
 
 class PurchaseIn(In):
