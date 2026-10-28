@@ -233,6 +233,9 @@ class AdminApi {
   Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> body) =>
       client.call((d) => d.put('/admin/settings', data: body), (j) => j as Map<String, dynamic>);
 
+  /// Sends a real test alert through ntfy and reports what happened (SUPER_ADMIN).
+  Future<Map<String, dynamic>> ntfyTest() => client.call((d) => d.post('/admin/ntfy/test'), (j) => j as Map<String, dynamic>);
+
   /// Offers shown on the customers' home screen.
   Future<List<Map<String, dynamic>>> offers() => _list('/admin/offers');
   Future<void> createOffer(Map<String, dynamic> body) => client.call((d) => d.post('/admin/offers', data: body), (_) {});

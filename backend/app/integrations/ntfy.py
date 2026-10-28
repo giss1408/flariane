@@ -15,6 +15,10 @@ log = logging.getLogger("flariane.ntfy")
 SENT_LOG: list[dict[str, Any]] = []
 
 
+class NtfyError(Exception):
+    """The ntfy server refused the message (wrong topic or token, rate limit, outage)."""
+
+
 async def send(title: str, body: str, *, priority: int = 3, tags: list[str] | None = None) -> None:
     s = get_settings()
     if not s.ntfy_topic:
@@ -29,3 +33,4 @@ async def send(title: str, body: str, *, priority: int = 3, tags: list[str] | No
         resp = await client.post(s.ntfy_url.rstrip("/"), json=message, headers=headers)
     if resp.status_code >= 400:
         log.warning("ntfy failed: %s %s", resp.status_code, resp.text[:200])
+        raise NtfyError(f"ntfy a répondu {resp.status_code} : {resp.text[:200]}")

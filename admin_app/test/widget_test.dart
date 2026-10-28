@@ -5,6 +5,7 @@ import 'package:flariane_admin/core/theme.dart';
 import 'package:flariane_admin/data/admin_api.dart';
 import 'package:flariane_admin/data/models.dart';
 import 'package:flariane_admin/features/auth/auth_screens.dart';
+import 'package:flariane_admin/features/account/account_screen.dart';
 import 'package:flariane_admin/features/account/backoffice_screens.dart';
 import 'package:flariane_admin/features/inbox/inbox_screen.dart';
 import 'package:flariane_admin/features/inbox/payments_to_confirm.dart';
@@ -276,6 +277,48 @@ void main() {
       verifyNever(() => api.createOffer(any()));
     });
   });
+
+  group('test alerts', () {
+    List<Override> asSuperAdmin(MockApi api) => [adminApiProvider.overrideWithValue(api), sessionProvider.overrideWith(_SuperAdminSession.new)];
+
+    Future<void> openTest(WidgetTester tester, MockApi api) async {
+      await tester.pumpWidget(host(const AccountScreen(), asSuperAdmin(api)));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Tester les alertes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tester les alertes'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('says the alert was sent and which topic to look for', (tester) async {
+      final api = MockApi();
+      when(() => api.ntfyTest()).thenAnswer((_) async => {'sent': true, 'topic_hint': 'fl•••••••••ic', 'topic_length': 19, 'server': 'https://ntfy.sh'});
+      await openTest(tester, api);
+      expect(find.text('Alerte envoyée'), findsOneWidget);
+      expect(find.textContaining('fl•••••••••ic (19 caractères)'), findsOneWidget);
+    });
+
+    testWidgets('shows why ntfy refused the alert', (tester) async {
+      final api = MockApi();
+      when(() => api.ntfyTest())
+          .thenAnswer((_) async => {'sent': false, 'error': 'ntfy a répondu 403 : forbidden', 'topic_hint': 'fl•••••••••ic', 'topic_length': 19, 'server': 'https://ntfy.sh'});
+      await openTest(tester, api);
+      expect(find.text('Alerte refusée'), findsOneWidget);
+      expect(find.textContaining('403'), findsOneWidget);
+    });
+
+    testWidgets('operators do not see the test', (tester) async {
+      await tester.pumpWidget(host(const AccountScreen(), [adminApiProvider.overrideWithValue(MockApi()), sessionProvider.overrideWith(_OperatorSession.new)]));
+      await tester.pumpAndSettle();
+      expect(find.text('Tester les alertes'), findsNothing);
+    });
+  });
+}
+
+class _SuperAdminSession extends SessionController {
+  @override
+  SessionState build() =>
+      SessionState(SessionStatus.loggedIn, me: AdminMe(id: 1, email: 'root@flariane.ci', name: 'Root', role: 'SUPER_ADMIN', deviceId: 1));
 }
 
 class _OperatorSession extends SessionController {
