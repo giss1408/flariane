@@ -122,4 +122,40 @@ void main() {
     expect(o.latestSent!.version, 1);
     expect(o.pendingChangeRequest, isNull);
   });
+
+  test('orders know the expedition they are in', () {
+    final free = OrderDetail.fromJson(orderJson());
+    expect(free.inShipment, isFalse);
+    expect(free.shipmentLabel, isNull);
+
+    final inside = OrderDetail.fromJson({...orderJson(), 'shipment_id': 7, 'shipment_label': 'Départ du 15/01/2030'});
+    expect(inside.inShipment, isTrue);
+    expect(inside.shipmentLabel, 'Départ du 15/01/2030');
+
+    final row = OrderSummary.fromJson({
+      'id': 1,
+      'public_ref': 'FLR-ABCDE',
+      'status': 'PURCHASED',
+      'customer_name': 'Awa',
+      'total_xof': 1000,
+      'created_at': '2026-10-01T10:00:00Z',
+      'status_changed_at': '2026-10-02T10:00:00Z',
+      'shipment_id': 7,
+      'shipment_label': 'Départ du 15/01/2030',
+    });
+    expect(row.inShipment, isTrue);
+    expect(row.shipmentLabel, 'Départ du 15/01/2030');
+    // Older servers send neither field: the app keeps working.
+    final legacy = OrderSummary.fromJson({
+      'id': 2,
+      'public_ref': 'FLR-ZZZZZ',
+      'status': 'PURCHASED',
+      'customer_name': null,
+      'total_xof': null,
+      'created_at': '2026-10-01T10:00:00Z',
+      'status_changed_at': '2026-10-02T10:00:00Z',
+    });
+    expect(legacy.inShipment, isFalse);
+    expect(legacy.shipmentLabel, isNull);
+  });
 }

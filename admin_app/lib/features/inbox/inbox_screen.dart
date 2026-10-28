@@ -157,6 +157,14 @@ class OrderTile extends StatelessWidget {
                   '${order.customerName ?? 'Client'} · ${ago(order.statusChangedAt)}',
                   style: TextStyle(color: overdue ? AppColors.warning : AppColors.muted),
                 ),
+                if (order.shipmentLabel != null) ...[
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    const Icon(Icons.local_shipping_outlined, size: 16, color: AppColors.muted),
+                    const SizedBox(width: 4),
+                    Flexible(child: Text(order.shipmentLabel!, style: const TextStyle(color: AppColors.muted), overflow: TextOverflow.ellipsis)),
+                  ]),
+                ],
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

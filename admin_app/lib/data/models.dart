@@ -14,6 +14,8 @@ class OrderSummary {
     required this.createdAt,
     required this.statusChangedAt,
     required this.hasChangeRequest,
+    this.shipmentId,
+    this.shipmentLabel,
   });
 
   factory OrderSummary.fromJson(Map<String, dynamic> j) => OrderSummary(
@@ -26,6 +28,8 @@ class OrderSummary {
         createdAt: _date(j['created_at'])!,
         statusChangedAt: _date(j['status_changed_at'])!,
         hasChangeRequest: j['has_change_request'] as bool? ?? false,
+        shipmentId: j['shipment_id'] as int?,
+        shipmentLabel: j['shipment_label'] as String?,
       );
 
   final int id;
@@ -37,6 +41,10 @@ class OrderSummary {
   final DateTime createdAt;
   final DateTime statusChangedAt;
   final bool hasChangeRequest;
+  final int? shipmentId; // the expedition the order is already in
+  final String? shipmentLabel;
+
+  bool get inShipment => shipmentId != null;
 }
 
 class PickupPoint {
@@ -324,6 +332,7 @@ class OrderDetail {
     required this.purchase,
     required this.history,
     required this.shipmentId,
+    this.shipmentLabel,
   });
 
   factory OrderDetail.fromJson(Map<String, dynamic> j) => OrderDetail(
@@ -348,6 +357,7 @@ class OrderDetail {
         purchase: j['purchase'] == null ? null : Purchase.fromJson(j['purchase'] as Map<String, dynamic>),
         history: _list(j['history'], StatusEvent.fromJson),
         shipmentId: j['shipment_id'] as int?,
+        shipmentLabel: j['shipment_label'] as String?,
       );
 
   final int id;
@@ -371,6 +381,9 @@ class OrderDetail {
   final Purchase? purchase;
   final List<StatusEvent> history;
   final int? shipmentId;
+  final String? shipmentLabel;
+
+  bool get inShipment => shipmentId != null;
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 

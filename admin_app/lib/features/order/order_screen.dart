@@ -64,6 +64,21 @@ class OrderScreen extends ConsumerWidget {
               ],
               if (o.latestSent != null) _QuoteSummary(order: o),
               if (o.purchase != null) _PurchaseSummary(order: o),
+              if (o.inShipment) ...[
+                const SectionTitle('Expédition'),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.local_shipping_rounded),
+                    title: Text(o.shipmentLabel ?? 'Expédition'),
+                    subtitle: const Text('Ouvrir l’expédition'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShipmentScreen(shipmentId: o.shipmentId!)));
+                      ref.invalidate(orderProvider(orderId));
+                    },
+                  ),
+                ),
+              ],
               const SectionTitle('Adresse à Abidjan'),
               Card(
                 child: o.deliveryLocation == null
@@ -463,12 +478,19 @@ class _PrimaryAction extends ConsumerWidget {
           ),
         ]);
       case 'PURCHASED':
-        // Next mandatory step: put the parcel in a shipment.
-        return FilledButton.icon(
-          icon: const Icon(Icons.local_shipping_rounded),
-          onPressed: () => _addToShipment(context, ref),
-          label: const Text('Ajouter à une expédition'),
-        );
+        // Next mandatory step: put the parcel in a shipment. Done once: the button locks afterwards.
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          if (order.inShipment)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Déjà dans « ${order.shipmentLabel ?? 'une expédition'} »', style: const TextStyle(color: AppColors.muted)),
+            ),
+          FilledButton.icon(
+            icon: const Icon(Icons.local_shipping_rounded),
+            onPressed: order.inShipment ? null : () => _addToShipment(context, ref),
+            label: const Text('Ajouter à une expédition'),
+          ),
+        ]);
       case 'IN_TRANSIT':
         return OutlinedButton.icon(
           icon: const Icon(Icons.flight_land_rounded),

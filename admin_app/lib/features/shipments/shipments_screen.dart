@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../order/order_screen.dart';
 import 'dispatch_screen.dart';
 
 final shipmentsProvider = FutureProvider.autoDispose<List<Shipment>>((ref) => ref.watch(adminApiProvider).shipments());
@@ -113,6 +114,13 @@ class ShipmentScreen extends ConsumerWidget {
                   dense: true,
                   leading: const Icon(Icons.inventory_2_outlined),
                   title: Text(r),
+                  // Tap a row to open the order (refs and ids are parallel lists).
+                  onTap: i < s.orderIds.length
+                      ? () async {
+                          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => OrderScreen(orderId: s.orderIds[i])));
+                          reload();
+                        }
+                      : null,
                   // Only while the shipment is still being prepared (server refuses afterwards).
                   trailing: canOperate && s.status == 'OPEN' && i < s.orderIds.length
                       ? IconButton(
@@ -120,7 +128,7 @@ class ShipmentScreen extends ConsumerWidget {
                           icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.danger),
                           onPressed: () => _removeOrder(context, ref, s, s.orderIds[i], r),
                         )
-                      : null,
+                      : (i < s.orderIds.length ? const Icon(Icons.chevron_right) : null),
                 ),
             ]),
           ),
@@ -184,7 +192,9 @@ class ShipmentScreen extends ConsumerWidget {
     final orders = await ref.read(_toShipProvider.future);
     if (!context.mounted) return;
     if (orders.isEmpty) return showInfo(context, 'Aucune commande achetée en attente.');
-    final selected = <int>{...orders.map((o) => o.id)};
+    // Orders already in an expedition are listed (with theirs) but can't be picked again.
+    if (orders.every((o) => o.inShipment)) return showInfo(context, 'Toutes les commandes achetées sont déjà dans une expédition.');
+    final selected = <int>{...orders.where((o) => !o.inShipment).map((o) => o.id)};
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -197,9 +207,13 @@ class ShipmentScreen extends ConsumerWidget {
                 for (final o in orders)
                   CheckboxListTile(
                     value: selected.contains(o.id),
+                    enabled: !o.inShipment,
                     title: Text(o.publicRef),
-                    subtitle: Text(o.customerName ?? ''),
-                    onChanged: (v) => setState(() => v == true ? selected.add(o.id) : selected.remove(o.id)),
+                    subtitle: Text([
+                      if (o.customerName != null) o.customerName!,
+                      if (o.inShipment) 'Déjà dans « ${o.shipmentLabel} »',
+                    ].join('\n')),
+                    onChanged: o.inShipment ? null : (v) => setState(() => v == true ? selected.add(o.id) : selected.remove(o.id)),
                   ),
               ]),
             ),
