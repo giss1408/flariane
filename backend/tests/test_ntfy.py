@@ -42,3 +42,38 @@ async def test_ntfy_failure_does_not_block_fcm(topic: None, monkeypatch: pytest.
 
     monkeypatch.setattr(ntfy, "send", boom)
     await tasks.push_admins("quote_requested", "FLR-ABC12", 1)  # must not raise
+
+
+# ---- "Tester les alertes": a super admin checks the whole chain from the app
+
+
+async def test_admin_can_send_a_test_alert(client, admin, topic: None) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/admin/ntfy/test", headers=admin.headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["sent"] is True and body["topic_length"] == len("flariane-test-topic")
+    # Enough of the topic to compare with the ntfy app, never the whole secret.
+    assert body["topic_hint"].startswith("fl") and body["topic_hint"].endswith("ic") and "flariane-test-topic" not in body["topic_hint"]
+    assert ntfy.SENT_LOG[-1]["title"] == "Test d’alerte Flariane"
+
+
+async def test_test_alert_says_when_no_topic_is_set(client, admin) -> None:  # type: ignore[no-untyped-def]
+    r = await client.post("/admin/ntfy/test", headers=admin.headers)
+    assert r.status_code == 400 and r.json()["detail"] == "ntfy_not_configured"
+
+
+async def test_test_alert_reports_a_refusal_from_ntfy(client, admin, topic: None, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    async def refused(*args: object, **kwargs: object) -> None:
+        raise ntfy.NtfyError("ntfy answered 403: forbidden")
+
+    monkeypatch.setattr(ntfy, "send", refused)
+    r = await client.post("/admin/ntfy/test", headers=admin.headers)
+    assert r.status_code == 200 and r.json()["sent"] is False and "403" in r.json()["error"]
+
+
+async def test_only_super_admins_can_test_alerts(client, topic: None) -> None:  # type: ignore[no-untyped-def]
+    from tests.conftest import make_admin
+
+    operator = await make_admin(role="OPERATOR", email="op@flariane.ci")
+    assert (await client.post("/admin/ntfy/test", headers=operator.headers)).status_code == 403
+    assert (await client.post("/admin/ntfy/test")).status_code == 401

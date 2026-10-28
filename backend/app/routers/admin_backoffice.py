@@ -122,6 +122,25 @@ async def whatsapp_test(data: WhatsAppTestIn, request: Request, admin: AdminCont
     return {"mode": mode, "message_id": message_id, "sent": mode == "live"}
 
 
+@router.post("/ntfy/test")
+async def ntfy_test(_: AdminContext = super_admin) -> dict:
+    """Sends a real test alert and says what happened, so a missing notification can be traced:
+    no topic on the server, refused by ntfy, or sent (then the ntfy app must be on the same topic)."""
+    from app.config import get_settings as app_settings
+    from app.integrations import ntfy
+
+    s = app_settings()
+    if not s.ntfy_topic:
+        raise BadRequest("ntfy_not_configured", "FLR_NTFY_TOPIC n’est pas défini sur le serveur")
+    topic = s.ntfy_topic
+    info = {"topic_hint": topic[:2] + "•" * max(len(topic) - 4, 0) + topic[-2:], "topic_length": len(topic), "server": s.ntfy_url}
+    try:
+        await ntfy.send("Test d’alerte Flariane", "Si tu vois ce message, les alertes fonctionnent.", tags=["white_check_mark"])
+    except Exception as exc:  # network error, refusal: report it, don't crash
+        return {"sent": False, "error": str(exc)[:300] or type(exc).__name__, **info}
+    return {"sent": True, **info}
+
+
 # ---------------------------------------------------------------- customers
 
 
