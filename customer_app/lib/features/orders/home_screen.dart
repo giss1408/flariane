@@ -143,11 +143,14 @@ class _HelpRow extends StatelessWidget {
             ),
           ),
         );
-    return Row(children: [
-      tile(Icons.ios_share_rounded, 'Partager mon panier', 'SHEIN ou Temu, pas à pas', () => showShareHelp(context)),
-      const SizedBox(width: 10),
-      tile(Icons.help_outline_rounded, 'Poser une question', 'Comment joindre l’équipe', () => showAskHelp(context)),
-    ]);
+    // Same height whatever the text wraps to, so the two cards line up.
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        tile(Icons.ios_share_rounded, 'Comment partager mon panier', 'SHEIN ou Temu, pas à pas', () => showShareHelp(context)),
+        const SizedBox(width: 10),
+        tile(Icons.help_outline_rounded, 'Poser une question', 'Comment joindre l’équipe', () => showAskHelp(context)),
+      ]),
+    );
   }
 }
 
