@@ -45,6 +45,7 @@ from app.schemas import (
     QuoteLineOut,
     ReadyForPickupIn,
     RefundOut,
+    RefundStartIn,
     SendQuoteIn,
     StatusEventOut,
     StorePurchaseOut,
@@ -63,6 +64,7 @@ from app.services.settings import get_settings_map
 router = APIRouter(prefix="/admin/orders", tags=["admin-orders"], dependencies=[Depends(admin_limited)])
 viewer = Depends(require_role(AdminRole.VIEWER))
 operator = Depends(require_role(AdminRole.OPERATOR))
+super_admin = Depends(require_role(AdminRole.SUPER_ADMIN))
 pickup_desk = Depends(require_pickup_access())
 
 TABS: dict[str, list[OrderStatus]] = {
@@ -328,6 +330,13 @@ async def purchase(order_id: int, data: PurchaseIn, request: Request, admin: Adm
 @router.post("/{order_id}/items/{item_id}/cancel-by-store", response_model=RefundOut)
 async def cancel_item(order_id: int, item_id: int, data: CancelItemIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> RefundOut:
     refund = await operations.cancel_item_by_store(db, order_id, item_id, data.reason, admin.id, client_ip(request))
+    await db.commit()
+    return RefundOut.model_validate(refund)
+
+
+@router.post("/{order_id}/refund", response_model=RefundOut)
+async def start_refund(order_id: int, data: RefundStartIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> RefundOut:
+    refund = await operations.start_refund(db, order_id, data.amount_xof, data.reason, admin.id, client_ip(request))
     await db.commit()
     return RefundOut.model_validate(refund)
 

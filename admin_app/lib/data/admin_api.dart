@@ -226,6 +226,12 @@ class AdminApi {
   Future<void> completeRefund(int id, String externalRef) =>
       client.call((d) => d.post('/admin/refunds/$id/complete', data: {'external_ref': externalRef}), (_) {});
 
+  /// SUPER_ADMIN: send money back for a paid order. No amount = everything not refunded yet.
+  Future<void> startRefund(int orderId, {int? amountXof, required String reason}) => client.call(
+        (d) => d.post('/admin/orders/$orderId/refund', data: {if (amountXof != null) 'amount_xof': amountXof, 'reason': reason}),
+        (_) {},
+      );
+
   /// VIEWER+
   Future<List<Map<String, dynamic>>> heldPayments() => _list('/admin/payments/held');
   Future<void> refundHeldPayment(int paymentId) => client.call((d) => d.post('/admin/payments/$paymentId/refund'), (_) {});

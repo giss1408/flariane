@@ -10,6 +10,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_proof.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/whatsapp.dart';
 import '../purchase/purchase_screen.dart';
@@ -106,6 +107,7 @@ class OrderScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              _RefundSection(order: o, canRefund: me?.role == 'SUPER_ADMIN', onChanged: () => ref.invalidate(orderProvider(orderId))),
               _ItemsSection(order: o, canOperate: me?.canOperate ?? false),
               const SectionTitle('Historique'),
               Card(
@@ -452,7 +454,7 @@ class _PrimaryAction extends ConsumerWidget {
               OutlinedButton.icon(
                 icon: const Icon(Icons.receipt_rounded),
                 label: const Text('Voir la capture du paiement'),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ProofScreen(orderId: order.id))),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentProofScreen(orderId: order.id))),
               ),
             const SizedBox(height: 8),
           ] else ...[
@@ -676,23 +678,95 @@ class _PrimaryAction extends ConsumerWidget {
   }
 }
 
-class _ProofScreen extends ConsumerWidget {
-  const _ProofScreen({required this.orderId});
+/// SUPER_ADMIN: send money back for a paid order; everyone sees a pending refund and can open the proof.
+class _RefundSection extends ConsumerWidget {
+  const _RefundSection({required this.order, required this.canRefund, required this.onChanged});
 
-  final int orderId;
+  final OrderDetail order;
+  final bool canRefund;
+  final VoidCallback onChanged;
+
+  PaymentInfo? get _paid => order.payments.where((p) => p.status == 'SUCCEEDED').firstOrNull;
+
+  Future<void> _start(BuildContext context, WidgetRef ref) async {
+    final paid = _paid;
+    if (paid == null) return;
+    final amount = TextEditingController(text: '${paid.amountXof}');
+    final reason = TextEditingController();
+    final form = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rembourser la cliente'),
+        content: Form(
+          key: form,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Payé : ${fcfa(paid.amountXof)} par ${paid.methodName}. Si tu rembourses tout, la commande est terminée.'),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(labelText: 'Montant à rembourser (FCFA)'),
+              validator: (v) {
+                final n = int.tryParse(v ?? '');
+                return n == null || n <= 0 || n > paid.amountXof ? 'Entre 1 et ${paid.amountXof}' : null;
+              },
+            ),
+            TextFormField(
+              controller: reason,
+              maxLength: 200,
+              decoration: const InputDecoration(labelText: 'Motif'),
+              validator: (v) => (v ?? '').trim().length < 3 ? 'Motif requis' : null,
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => form.currentState!.validate() ? Navigator.pop(ctx, true) : null, child: const Text('Rembourser')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      final n = int.parse(amount.text);
+      await ref.read(adminApiProvider).startRefund(order.id, amountXof: n == paid.amountXof ? null : n, reason: reason.text.trim());
+      onChanged();
+      if (context.mounted) showInfo(context, 'Remboursement créé. Envoie l’argent puis marque-le « Fait » dans Remboursements.');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        appBar: AppBar(title: const Text('Capture du paiement')),
-        body: FutureBuilder<List<int>>(
-          future: ref.read(adminApiProvider).paymentProof(orderId),
-          builder: (context, snap) {
-            if (snap.hasError) return ErrorView(snap.error!, onRetry: () => (context as Element).markNeedsBuild());
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            return InteractiveViewer(maxScale: 5, child: Center(child: Image.memory(Uint8List.fromList(snap.data!))));
-          },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = order.status == 'REFUND_PENDING';
+    final startable = canRefund && (order.status == 'PAID' || order.status == 'PURCHASED') && _paid != null;
+    if (!pending && !startable) return const SizedBox.shrink();
+    final proof = order.payments.any((p) => p.hasProof);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SectionTitle('Remboursement'),
+      if (pending) ...[
+        const WarningBox('Remboursement à envoyer à la cliente. Quand c’est fait, marque-le « Fait » dans Compte › Remboursements.'),
+      ],
+      if (pending && proof)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.receipt_rounded),
+            label: const Text('Voir la capture du paiement'),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentProofScreen(orderId: order.id))),
+          ),
         ),
-      );
+      if (startable)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.undo_rounded, color: AppColors.danger),
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+          label: const Text('Rembourser la cliente…'),
+          onPressed: () => _start(context, ref),
+        ),
+    ]);
+  }
 }
 
 class _DeleteMenu extends ConsumerWidget {

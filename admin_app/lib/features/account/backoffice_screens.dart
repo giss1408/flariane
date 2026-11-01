@@ -8,6 +8,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_proof.dart';
 
 /// Generic "load a list, show it, act on rows" screen used by the back-office pages.
 class _ListPage extends ConsumerStatefulWidget {
@@ -118,27 +119,44 @@ class DevicesScreen extends ConsumerWidget {
 class RefundsScreen extends ConsumerWidget {
   const RefundsScreen({super.key});
 
+  static const _methods = {'WAVE': 'Wave', 'ORANGE': 'Orange Money', 'MOOV': 'Moov Money'};
+
   @override
   Widget build(BuildContext context, WidgetRef ref) => _ListPage(
         title: 'Remboursements',
         load: (ref) => ref.read(adminApiProvider).refunds(),
-        tile: (context, r, reload) => ListTile(
-          title: Text('${fcfa((r['amount_xof'] as num).toInt())} · commande ${r['order_id']}'),
-          subtitle: Text('${r['reason']}\n${r['status'] == 'COMPLETED' ? 'Remboursé (${r['external_ref']})' : 'À rembourser via Wave Business'}'),
-          isThreeLine: true,
-          trailing: r['status'] == 'PENDING'
-              ? FilledButton(
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-                  onPressed: () async {
-                    final ext = await _ask(context, 'Remboursement effectué', 'Référence de transaction Wave');
-                    if (ext == null || ext.length < 3 || !context.mounted) return;
-                    await _act(context, () => ref.read(adminApiProvider).completeRefund(r['id'] as int, ext), reload,
-                        done: 'Client prévenu sur WhatsApp.');
-                  },
-                  child: const Text('Fait'),
-                )
-              : const Icon(Icons.check_circle, color: AppColors.success),
-        ),
+        tile: (context, r, reload) {
+          final method = _methods[r['method']] ?? 'mobile money';
+          final done = r['status'] == 'COMPLETED';
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ListTile(
+              title: Text('${fcfa((r['amount_xof'] as num).toInt())} · ${r['order_ref'] ?? 'commande ${r['order_id']}'}'),
+              subtitle: Text('${r['reason']}\n${done ? 'Remboursé (${r['external_ref']})' : 'À rembourser par $method'}'),
+              isThreeLine: true,
+              trailing: done
+                  ? const Icon(Icons.check_circle, color: AppColors.success)
+                  : FilledButton(
+                      style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                      onPressed: () async {
+                        final ext = await _ask(context, 'Remboursement effectué', 'Référence de la transaction ($method)');
+                        if (ext == null || ext.length < 3 || !context.mounted) return;
+                        await _act(context, () => ref.read(adminApiProvider).completeRefund(r['id'] as int, ext), reload,
+                            done: 'Client prévenu sur WhatsApp.');
+                      },
+                      child: const Text('Fait'),
+                    ),
+            ),
+            if (r['has_proof'] == true)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, bottom: 4),
+                child: TextButton.icon(
+                  icon: const Icon(Icons.receipt_rounded, size: 18),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentProofScreen(orderId: r['order_id'] as int))),
+                  label: const Text('Voir la capture'),
+                ),
+              ),
+          ]);
+        },
       );
 }
 

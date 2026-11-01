@@ -208,6 +208,28 @@ async def cancel_item_by_store(db: AsyncSession, order_id: int, item_id: int, re
     return refund
 
 
+REFUNDABLE_STATUSES = (OrderStatus.PAID, OrderStatus.PURCHASED)
+
+
+async def start_refund(
+    db: AsyncSession, order_id: int, amount_xof: int | None, reason: str, admin_id: int, ip: str | None
+) -> Refund:
+    """An admin sends money back for a paid order (customer cancels, wrong payment…). The payout itself
+    is done outside the app and confirmed with `complete_refund`. Giving back everything that is left
+    ends the order (REFUND_PENDING); a partial refund leaves it running. SUPER_ADMIN only, by the route."""
+    order = await _locked_order(db, order_id)
+    if order.status not in REFUNDABLE_STATUSES:
+        raise Conflict("order_not_refundable", order.status)
+    payment = await succeeded_payment(db, order.id)
+    if payment is None:
+        raise Conflict("no_paid_payment")
+    remaining = payment.amount_xof - await _refunded_so_far(db, payment.id)
+    refund = await create_refund(db, order, payment, remaining if amount_xof is None else amount_xof, reason, admin_id)
+    if refund.amount_xof == remaining:
+        await transition_order(db, order, OrderStatus.REFUND_PENDING, actor=f"admin:{admin_id}", actor_type="admin", actor_id=admin_id, ip=ip)
+    return refund
+
+
 async def complete_refund(db: AsyncSession, refund_id: int, external_ref: str, admin_id: int, ip: str | None) -> Refund:
     """Mark a refund as paid out (done in the Wave Business app). SUPER_ADMIN only, enforced by the route."""
     refund = await db.get(Refund, refund_id, with_for_update=True)

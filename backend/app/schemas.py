@@ -444,6 +444,16 @@ class RefundOut(Out):
     created_at: datetime
     completed_at: datetime | None
     external_ref: str | None
+    # Filled by the refunds list so the admin sees which order and where the customer paid from.
+    order_ref: str | None = None
+    method: str | None = None  # WAVE | ORANGE | MOOV
+    has_proof: bool = False  # the customer's payment screenshot can be opened
+
+
+class RefundStartIn(In):
+    """Start a refund for a paid order. No amount = everything not refunded yet."""
+    amount_xof: Annotated[int, Field(gt=0)] | None = None
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=200)]
 
 
 class RefundCompleteIn(In):

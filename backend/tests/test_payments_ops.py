@@ -376,3 +376,49 @@ async def test_delete_unpaid_after_three_days(client: AsyncClient, customer: dic
         await db.commit()
     r = await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)
     assert r.status_code == 409 and r.json()["detail"] == "order_paid"
+
+
+async def test_super_admin_starts_full_refund_on_paid_order(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    ref, oid, _ = await _paid(client, customer, admin, pickup_point)
+    r = await client.post(f"/admin/orders/{oid}/refund", json={"reason": "Cliente a annulé"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "PENDING" and r.json()["reason"] == "Cliente a annulé"
+    amount = r.json()["amount_xof"]
+    assert amount > 0
+    assert await _status(client, ref, customer) == "REFUND_PENDING"  # the whole payment goes back: order is over
+    listed = (await client.get("/admin/refunds?status=PENDING", headers=admin.headers)).json()
+    assert listed[0]["order_ref"] == ref and listed[0]["method"] is None and listed[0]["has_proof"] is False
+    r = await client.post(f"/admin/refunds/{listed[0]['id']}/complete", json={"external_ref": "WAVE-R-9"}, headers=admin.headers)
+    assert r.status_code == 200
+    assert await _status(client, ref, customer) == "REFUNDED"
+    assert await _payment_status() == "REFUNDED"
+
+
+async def test_partial_refund_keeps_the_order_running(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    ref, oid, _ = await _paid(client, customer, admin, pickup_point)
+    before = await _status(client, ref, customer)
+    r = await client.post(f"/admin/orders/{oid}/refund", json={"amount_xof": 1000, "reason": "Geste commercial"}, headers=admin.headers)
+    assert r.status_code == 200 and r.json()["amount_xof"] == 1000
+    assert await _status(client, ref, customer) == before
+    # What is left can still be refunded once, but never more than was paid.
+    too_much = await client.post(f"/admin/orders/{oid}/refund", json={"amount_xof": 10**9, "reason": "Trop"}, headers=admin.headers)
+    assert too_much.status_code == 409 and too_much.json()["detail"] == "refund_exceeds_payment"
+    rest = await client.post(f"/admin/orders/{oid}/refund", json={"reason": "Le reste"}, headers=admin.headers)
+    assert rest.status_code == 200 and rest.json()["amount_xof"] > 0
+    assert await _status(client, ref, customer) == "REFUND_PENDING"
+
+
+async def test_only_super_admin_starts_a_refund(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from tests.conftest import make_admin
+
+    _, oid, _ = await _paid(client, customer, admin, pickup_point)
+    operator = await make_admin(role="OPERATOR", email="op@flariane.ci")
+    r = await client.post(f"/admin/orders/{oid}/refund", json={"reason": "Test"}, headers=operator.headers)
+    assert r.status_code == 403
+
+
+async def test_unpaid_order_cannot_be_refunded(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    _, oid, _ = await _accepted(client, customer, admin, pickup_point)  # accepted, not paid
+    r = await client.post(f"/admin/orders/{oid}/refund", json={"reason": "Test"}, headers=admin.headers)
+    assert r.status_code == 409
+    assert (await client.post(f"/admin/orders/{oid}/refund", json={"reason": "x"}, headers=admin.headers)).status_code == 422  # reason too short

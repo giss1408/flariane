@@ -443,11 +443,20 @@ async def delete_offer(offer_id: int, admin: AdminContext = super_admin, db: Asy
 
 
 @router.get("/refunds", response_model=list[RefundOut])
-async def refunds(status: RefundStatus | None = None, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[Refund]:
-    stmt = select(Refund).order_by(Refund.id.desc()).limit(200)
+async def refunds(status: RefundStatus | None = None, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[RefundOut]:
+    stmt = (
+        select(Refund, Order.public_ref, Payment.method, Payment.proof_content_type)
+        .join(Order, Order.id == Refund.order_id)
+        .join(Payment, Payment.id == Refund.payment_id)
+        .order_by(Refund.id.desc())
+        .limit(200)
+    )
     if status:
         stmt = stmt.where(Refund.status == status)
-    return list((await db.scalars(stmt)).all())
+    return [
+        RefundOut.model_validate(r).model_copy(update={"order_ref": ref, "method": method, "has_proof": proof is not None})
+        for r, ref, method, proof in (await db.execute(stmt)).all()
+    ]
 
 
 @router.post("/refunds/{refund_id}/complete", response_model=RefundOut)
