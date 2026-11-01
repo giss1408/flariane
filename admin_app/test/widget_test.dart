@@ -229,17 +229,32 @@ void main() {
           'created_at': '2026-10-28T10:00:00Z',
         };
 
-    testWidgets('lists offers and switches one off', (tester) async {
+    testWidgets('lists offers and switches one off, then back on', (tester) async {
       final api = MockApi();
-      when(() => api.offers()).thenAnswer((_) async => [offer()]);
-      when(() => api.updateOffer(any(), any())).thenAnswer((_) async {});
+      var active = true;
+      when(() => api.offers()).thenAnswer((_) async => [offer(active: active)]);
+      when(() => api.updateOffer(any(), any())).thenAnswer((inv) async {
+        active = (inv.positionalArguments[1] as Map)['active'] as bool;
+      });
       await tester.pumpWidget(host(const OffersAdminScreen(), [adminApiProvider.overrideWithValue(api)]));
       await tester.pumpAndSettle();
       expect(find.text('-10 % sur tes 20 premières commandes'), findsOneWidget);
       expect(find.textContaining('Visible par les clientes'), findsOneWidget);
+
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
       verify(() => api.updateOffer(5, {'active': false})).called(1);
+      // The list reloads and shows the new state, with no error dialog.
+      expect(find.textContaining('Désactivée'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+      expect(find.textContaining('Erreur'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+      verify(() => api.updateOffer(5, {'active': true})).called(1);
+      expect(find.textContaining('Visible par les clientes'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
     });
 
     testWidgets('an ended offer cannot be switched back on', (tester) async {

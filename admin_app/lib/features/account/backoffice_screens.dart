@@ -25,7 +25,9 @@ class _ListPage extends ConsumerStatefulWidget {
 class _ListPageState extends ConsumerState<_ListPage> {
   late Future<List<Map<String, dynamic>>> _future = widget.load(ref);
 
-  void _reload() => setState(() => _future = widget.load(ref));
+  void _reload() => setState(() {
+        _future = widget.load(ref);
+      });
 
   @override
   Widget build(BuildContext context) => Scaffold(

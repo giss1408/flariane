@@ -27,7 +27,9 @@ class _PickupDeskScreenState extends ConsumerState<PickupDeskScreen> {
 
   Future<List<PickupDeskOrder>> _load() => ref.read(adminApiProvider).pickupDesk(query: _search.text.trim());
 
-  void _reload() => setState(() => _future = _load());
+  void _reload() => setState(() {
+        _future = _load();
+      });
 
   @override
   void dispose() {
