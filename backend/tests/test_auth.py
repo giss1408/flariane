@@ -366,3 +366,33 @@ async def test_consent_required_and_recorded(client: AsyncClient) -> None:
         await db.commit()
     assert (await client.get("/me", headers=h)).json()["consent_required"] is True
     assert (await client.post("/me/consent", headers=h)).json()["consent_required"] is False
+
+
+async def test_super_admin_reinstall_replaces_own_device(client: AsyncClient, admin: AdminFixture) -> None:
+    # The fixture's approved device is "Test phone"/android; the reinstalled app registers anew.
+    phone = {"name": "Test phone", "platform": "android"}
+    r = await _login(client, admin, phone)
+    assert r["http"] == 200 and r["status"] == "ok"
+    async with SessionLocal() as db:
+        old = await db.get(AdminDevice, admin.device.id)
+        assert old is not None and old.revoked_at is not None
+        new = await db.get(AdminDevice, r["device_id"])
+        assert new is not None and new.approved_at is not None and new.revoked_at is None
+
+
+async def test_reinstall_of_other_platform_or_name_stays_pending(client: AsyncClient, admin: AdminFixture) -> None:
+    r = await _login(client, admin, {"name": "Other phone", "platform": "android"})
+    assert r["status"] == "device_pending"
+    r = await _login(client, admin, {"name": "Test phone", "platform": "ios"}, totp_at=int(time.time()) + 30)
+    assert r["status"] == "device_pending"
+    async with SessionLocal() as db:
+        assert (await db.get(AdminDevice, admin.device.id)).revoked_at is None  # type: ignore[union-attr]
+
+
+async def test_operator_reinstall_still_needs_approval(client: AsyncClient) -> None:
+    from tests.conftest import make_admin
+
+    await make_admin()
+    op = await make_admin(role="OPERATOR", email="op@flariane.ci")
+    r = await _login(client, op, {"name": "Test phone", "platform": "android"})
+    assert r["status"] == "device_pending"

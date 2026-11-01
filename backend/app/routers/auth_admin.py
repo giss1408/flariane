@@ -1,7 +1,8 @@
 """Admin login: email + password + TOTP, then device approval.
 
 A new device gets a one-time `device_secret` (stored in Keychain/Keystore or browser storage) and
-stays pending until a SUPER_ADMIN approves it. Refresh tokens are bound to the device, and admin
+stays pending until a SUPER_ADMIN approves it (a super admin reinstalling the app replaces their own
+old device of the same platform and name instead). Refresh tokens are bound to the device, and admin
 sessions end after 12 h (full login with TOTP again).
 """
 
@@ -25,6 +26,7 @@ from app.security.tokens import (
     RefreshError,
     create_access_token,
     issue_refresh_token,
+    revoke_device_tokens,
     revoke_token,
     rotate_refresh_token,
     utcnow,
@@ -71,6 +73,33 @@ async def _bootstrap_allowed(db: AsyncSession, user: AdminUser) -> bool:
     return not approved
 
 
+async def _retire_reinstalled(db: AsyncSession, user: AdminUser, platform: str, name: str, ip: str | None, new_id: int) -> bool:
+    """Reinstalling the app wipes the Keystore/Keychain, so the phone comes back as a new device while
+    its old record stays approved and nobody is left to approve the new one. A super admin who just
+    passed password + authenticator code replaces their own approved device of the same platform and
+    name: the old record is revoked, the new one is approved. Returns False when there is nothing to replace."""
+    if user.role != "SUPER_ADMIN":
+        return False
+    old = (
+        await db.scalars(
+            select(AdminDevice).where(
+                AdminDevice.admin_user_id == user.id,
+                AdminDevice.platform == platform,
+                AdminDevice.name == name,
+                AdminDevice.id != new_id,
+                AdminDevice.approved_at.is_not(None),
+                AdminDevice.revoked_at.is_(None),
+            )
+        )
+    ).all()
+    for device in old:
+        device.revoked_at = utcnow()
+        device.push_token = None
+        await revoke_device_tokens(db, device.id)
+        await audit(db, actor_type="admin", actor_id=user.id, action="device.replaced_on_reinstall", entity="admin_device", entity_id=device.id, ip=ip)
+    return bool(old)
+
+
 @router.post("/login", response_model=AdminLoginOut, dependencies=[Depends(ip_limited)])
 async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends(get_session)) -> AdminLoginOut:
     ip = client_ip(request)
@@ -94,7 +123,7 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         db.add(device)
         await db.flush()
         await audit(db, actor_type="admin", actor_id=user.id, action="device.registered", entity="admin_device", entity_id=device.id, ip=ip)
-        if not await _bootstrap_allowed(db, user):
+        if not await _bootstrap_allowed(db, user) and not await _retire_reinstalled(db, user, device.platform, device.name, ip, device.id):
             await db.commit()
             return AdminLoginOut(status="device_pending", device_id=device.id, device_secret=secret)
         device.approved_at, device.approved_by = utcnow(), user.id
@@ -119,7 +148,7 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
     if device.approved_at is None:
         # A phone saved while another device was approved: once none is left (revoked, or
         # reset-admin), it is in the same place as a brand-new one and nobody else could approve it.
-        if not await _bootstrap_allowed(db, user):
+        if not await _bootstrap_allowed(db, user) and not await _retire_reinstalled(db, user, device.platform, device.name, ip, device.id):
             await db.commit()
             return AdminLoginOut(status="device_pending", device_id=device.id)
         device.approved_at, device.approved_by = utcnow(), user.id
