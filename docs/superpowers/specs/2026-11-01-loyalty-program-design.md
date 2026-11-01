@@ -105,7 +105,11 @@ or redeemed afterwards; the ledger keeps what was actually credited.
 ## Customer app
 
 - **Mes points** screen (from the Account area): balance, progress toward 100, referral code with a
-  WhatsApp Share button, history list. Texts in French.
+  WhatsApp Share button, history list. Texts in French. A permanent note under the balance reads
+  "Les points sont crédités au retrait du colis" and explains the rules: +5 pts par commande retirée,
+  +1 pt par amie parrainée, +3 pts quand elle retire sa première commande.
+- **Order screen:** an order that is not yet collected shows "+5 pts au retrait du colis"; once collected
+  it shows the points earned.
 - **Quote review:** when the balance is ≥ 100, a tick box "Utiliser 100 pts : −X FCFA sur les frais de
   service". The total and the amount to pay update immediately.
 - **Registration:** optional field "Code de parrainage".
