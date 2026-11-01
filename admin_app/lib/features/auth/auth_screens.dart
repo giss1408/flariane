@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/config.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 
@@ -61,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     const Icon(Icons.storefront_rounded, size: 48, color: AppColors.primary),
                     const SizedBox(height: 12),
-                    Text('Flariane Admin', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+                    Text(AppConfig.appTitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 28),
                     if (message != null) ...[
                       Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.warning)),

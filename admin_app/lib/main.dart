@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_lock.dart';
+import 'core/config.dart';
 import 'core/session.dart';
 import 'core/theme.dart';
 import 'features/account/account_screen.dart';
@@ -46,7 +47,7 @@ class _FlarianeAdminAppState extends ConsumerState<FlarianeAdminApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flariane Admin',
+      title: AppConfig.appTitle,
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
