@@ -23,15 +23,17 @@ class PushService {
       if (Firebase.apps.isEmpty) await Firebase.initializeApp();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(); // Android 13+ asks; older versions grant it
-      _register(await messaging.getToken());
+      final token = await messaging.getToken();
+      debugPrint('push: token ${token == null ? 'null' : 'ok'}');
+      _register(token);
       _subs
         ..add(messaging.onTokenRefresh.listen(_register))
         ..add(FirebaseMessaging.onMessage.listen(_foreground))
         ..add(FirebaseMessaging.onMessageOpenedApp.listen(_open));
       final launch = await messaging.getInitialMessage(); // app was closed, opened by tapping the alert
       if (launch != null) _open(launch);
-    } catch (_) {
-      // Firebase not configured (or no Play services): the app works, alerts don't.
+    } catch (e) {
+      debugPrint('push: disabled ($e)'); // Firebase not configured (or no Play services): the app works, alerts don't
     }
   }
 
@@ -45,8 +47,9 @@ class PushService {
     if (token == null) return;
     try {
       await ref.read(adminApiProvider).setPushToken(token);
-    } catch (_) {
-      // Retried at the next launch or token refresh.
+      debugPrint('push: token registered');
+    } catch (e) {
+      debugPrint('push: token registration failed ($e)'); // retried at the next launch or token refresh
     }
   }
 

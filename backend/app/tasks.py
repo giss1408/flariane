@@ -76,6 +76,8 @@ async def push_admins(event: str, order_ref: str, order_id: int) -> None:
                 )
             )
         ).all()
+        if not devices:
+            log.warning("push %s for %s: no approved admin device has a push token", event, order_ref)
         for device in devices:
             note = Notification(channel="push", admin_device_id=device.id, template=event)
             db.add(note)
@@ -89,6 +91,7 @@ async def push_admins(event: str, order_ref: str, order_id: int) -> None:
                 note.status = "SENT"
             except Exception as exc:
                 note.status, note.error = "FAILED", str(exc)[:500]
+                log.error("push %s to device %s failed: %s", event, device.id, str(exc)[:300])
         await db.commit()
 
 
