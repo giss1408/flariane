@@ -33,6 +33,8 @@ def text_for(kind: str, customer: Customer, order: Order, quote: Quote | None, p
         return (
             f"Bonjour {name} 👋 Le lien envoyé pour ta commande {order.public_ref} ne fonctionne pas "
             f"(ce n’est pas un panier {store_name(order)} valide). On a supprimé cette commande.\n\n"
+            "On achète uniquement sur la boutique européenne (prix en €) : si ton app SHEIN ou Temu est sur les USA ou le "
+            "Royaume-Uni, passe-la sur la France ou l’Allemagne et refais ton panier.\n\n"
             "Ouvre ton panier dans l’app, touche Partager, puis envoie-le à Flariane pour recevoir ton devis."
         )
     assert point is not None and code is not None
