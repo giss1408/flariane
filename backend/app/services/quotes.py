@@ -21,7 +21,7 @@ from app.schemas import ChangeRequestIn, QuoteDraftIn
 from app.security.tokens import utcnow
 from app.services import notify
 from app.services.audit import audit
-from app.services.links import extract_shein_urls, product_id_from_url, store_of
+from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, product_id_from_url, store_of
 from app.services.orders import lock_order, transition_order
 from app.services.pricing import LineInput, compute_quote, default_customs, default_freight, to_xof
 from app.services.settings import get_settings_map
@@ -342,6 +342,8 @@ async def request_change(db: AsyncSession, customer_id: int, ref: str, version: 
 
     new_url: str | None = None
     if data.new_share_text:
+        if is_non_eu_link(data.new_share_text):
+            raise BadRequest("non_eu_cart", NON_EU_MESSAGE)
         urls = extract_shein_urls(data.new_share_text)
         if not urls:
             raise BadRequest("no_shein_link")

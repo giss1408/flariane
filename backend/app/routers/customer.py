@@ -49,7 +49,7 @@ from app.security.tokens import utcnow
 from app.services import customer_auth, notify, phone_verification, quotes
 from app.services.audit import audit
 from app.services import location as loc
-from app.services.links import extract_shein_urls, pick_cart_url, store_of
+from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, pick_cart_url, store_of
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
 from app.services.payments import MANUAL_PROVIDERS, transition_payment
@@ -297,6 +297,8 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
 async def create_order(data: OrderCreateIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> OrderDetailOut:
     if customer.phone_verified_at is None:
         raise Forbidden("phone_not_verified")
+    if is_non_eu_link(data.share_text):
+        raise BadRequest("non_eu_cart", NON_EU_MESSAGE)
     urls = extract_shein_urls(data.share_text)
     if not urls:
         raise BadRequest("no_shein_link", "Collez le lien de partage de votre panier SHEIN ou Temu")

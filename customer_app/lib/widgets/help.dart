@@ -40,7 +40,8 @@ class _ShareHelp extends StatelessWidget {
   const _ShareHelp();
 
   static const _shein = [
-    'Ouvre l’app SHEIN et remplis ton panier (tailles et couleurs choisies).',
+    'Dans l’app, choisis la boutique européenne : Moi › Paramètres › Pays/région › France ou Allemagne (pas USA ni Royaume-Uni).',
+    'Remplis ton panier (tailles et couleurs choisies).',
     'Touche le sac 🛍️ pour ouvrir ton panier.',
     'Touche l’icône Partager en haut à droite du panier.',
     'Choisis Flariane dans la liste. Si Flariane n’y est pas, touche « Copier le lien ».',
@@ -48,7 +49,7 @@ class _ShareHelp extends StatelessWidget {
   ];
 
   static const _temu = [
-    'Ouvre l’app Temu et ouvre un article que tu veux.',
+    'Vérifie que l’app Temu est sur la France ou l’Allemagne (pas USA ni Royaume-Uni), puis ouvre un article que tu veux.',
     'Touche l’icône Partager sur la page de l’article.',
     'Choisis Flariane, ou « Copier le lien » puis colle-le dans Flariane.',
     'Plusieurs articles ? Envoie un lien, puis ajoute des captures d’écran de ton panier Temu.',

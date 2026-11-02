@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
@@ -15,6 +16,12 @@ import 'order_screen.dart';
 bool looksLikeSheinLink(String text) =>
     RegExp(r'https://([a-z0-9-]+\.)*(shein|temu)\.com/\S+', caseSensitive: false)
         .hasMatch(text);
+
+/// Carts from the US, UK, Canada or Australia stores: refused (we buy on the European stores).
+bool looksNonEuLink(String text) =>
+    RegExp(r'https://([a-z0-9-]+\.)*(us\.shein\.com|ca\.shein\.com|au\.shein\.com|shein\.co\.uk|shein\.com\.au)/', caseSensitive: false)
+        .hasMatch(text) ||
+    RegExp(r'https://([a-z0-9-]+\.)*temu\.com/(us|uk|gb|ca|au)(-[a-z]{2})?(/|$)', caseSensitive: false).hasMatch(text);
 
 class NewOrderScreen extends ConsumerStatefulWidget {
   const NewOrderScreen({super.key});
@@ -50,6 +57,9 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   }
 
   Future<void> _submit() async {
+    if (looksNonEuLink(_link.text)) {
+      return showInfo(context, errorMessages['non_eu_cart']!);
+    }
     if (!looksLikeSheinLink(_link.text)) {
       return showInfo(context, 'Colle le lien de partage de ton panier SHEIN ou Temu.');
     }
@@ -112,6 +122,17 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
             onPressed: () => showShareHelp(context),
           ),
         ),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.public_rounded, size: 18, color: context.pal.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+                'Panier de la boutique européenne uniquement (prix en €). Si tu es sur la boutique USA ou Royaume-Uni, '
+                'passe ton app sur la France ou l’Allemagne et refais ton panier.',
+                style: TextStyle(color: context.pal.muted)),
+          ),
+        ]),
+        const SizedBox(height: 12),
         Text(
             'Vérifie tailles et couleurs dans ton panier avant d’envoyer. Les prix affichés à Abidjan peuvent changer au moment de notre commande : ton devis te donnera le prix réel.',
             style: TextStyle(color: context.pal.warning)),

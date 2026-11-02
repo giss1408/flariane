@@ -352,3 +352,14 @@ async def test_attention_counts(client: AsyncClient, customer: dict, admin: Admi
     await create_order(client, customer, pickup_point)
     a = (await client.get("/admin/orders/attention", headers=admin.headers)).json()
     assert a["to_quote"] == 1 and a["to_buy"] == 0 and a["registrations_to_verify"] == 0
+
+
+def test_non_eu_links_are_detected() -> None:
+    from app.services.links import is_non_eu_link
+
+    assert is_non_eu_link("Mon panier https://us.shein.com/cart/share/abc")
+    assert is_non_eu_link("https://www.shein.co.uk/product-p-123.html")
+    assert is_non_eu_link("https://www.temu.com/us-en/goods.html?goods_id=1")
+    assert not is_non_eu_link("https://onelink.shein.com/16/5abc")
+    assert not is_non_eu_link("https://fr.shein.com/cart")
+    assert not is_non_eu_link("https://www.temu.com/fr-en/goods.html?goods_id=1")
