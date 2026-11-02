@@ -52,7 +52,7 @@ from app.services import location as loc
 from app.services.links import extract_shein_urls, pick_cart_url, store_of
 from app.services.settings import get_settings_map
 from app.services.orders import unique_public_ref
-from app.services.payments import MANUAL_PROVIDERS, start_checkout, transition_payment
+from app.services.payments import MANUAL_PROVIDERS, transition_payment
 
 router = APIRouter(tags=["customer"])
 authed = Depends(customer_limited)
@@ -211,7 +211,7 @@ async def public_info(db: AsyncSession = Depends(get_session)) -> dict:
         "offers": [{"id": o.id, "title": o.title, "message": o.message, "ends_at": o.ends_at} for o in offers],
         "next_departure_date": settings.get("next_departure_date"),
         "next_order_deadline": settings.get("next_order_deadline"),
-        "payment_mode": settings["payment_mode"],
+        "payment_mode": "manual",
         "wave_phone": settings.get("wave_phone"),
         "has_wave_qr": bool(settings.get("wave_qr_image")),
         "support_whatsapp": settings.get("support_whatsapp"),
@@ -402,18 +402,14 @@ async def retry_payment(ref: str, customer: Customer = authed, db: AsyncSession 
 
 
 async def _start_payment(db: AsyncSession, payment: Payment, ref: str) -> PaymentOut:
-    """Wave Checkout (business account) or manual Wave QR, depending on the payment_mode setting."""
-    settings = await get_settings_map(db)
-    if settings["payment_mode"] == "wave_checkout" and get_settings().env == "prod" and get_settings().wave_mode != "live":
-        raise Conflict("payment_unavailable", "Wave Business n’est pas configuré")
-    if settings["payment_mode"] != "wave_checkout":
-        if payment.status == PaymentStatus.INITIATED:
-            payment.provider = "MANUAL"
-            await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
-            await db.commit()
-        return PaymentOut.of(payment, launch=False)
-    payment = await start_checkout(db, payment.id, ref)
-    return PaymentOut.of(payment)
+    """Payments are always manual: she pays from her own mobile-money app and sends the screenshot.
+    A payment left over from the old Wave Checkout mode is converted, its checkout link dropped."""
+    if payment.provider not in MANUAL_PROVIDERS or payment.launch_url:
+        payment.provider, payment.launch_url = "MANUAL", None
+    if payment.status == PaymentStatus.INITIATED:
+        await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
+    await db.commit()
+    return PaymentOut.of(payment, launch=False)
 
 
 @router.post("/orders/{ref}/payment/declare", response_model=PaymentOut)
@@ -429,11 +425,15 @@ async def declare_payment(
     An admin checks it against their account and confirms."""
     order = await _order_for(db, customer, ref)
     payment = await db.scalar(
-        select(Payment).where(Payment.order_id == order.id, Payment.provider.in_(MANUAL_PROVIDERS), Payment.status == PaymentStatus.PENDING)
+        select(Payment).where(Payment.order_id == order.id, Payment.status.in_((PaymentStatus.PENDING, PaymentStatus.INITIATED)))
         .order_by(Payment.id.desc()).limit(1)
     )
     if payment is None:
         raise Conflict("no_pending_payment")
+    if payment.provider not in MANUAL_PROVIDERS or payment.launch_url:
+        payment.provider, payment.launch_url = "MANUAL", None  # started under the old Wave Checkout mode
+    if payment.status == PaymentStatus.INITIATED:
+        await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
     data, content_type, _ = storage.sanitize_image(await file.read(10 * 1024 * 1024 + 1))
     payment.method, payment.proof_image, payment.proof_content_type = method, data, content_type
     payment.status_reason = "declared"

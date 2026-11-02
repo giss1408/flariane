@@ -393,7 +393,7 @@ async def archive_order(order_id: int, request: Request, admin: AdminContext = o
 
 @router.delete("/{order_id}")
 async def delete_order(
-    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid"] = Query(), admin: AdminContext = operator,
+    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid", "payment_problem"] = Query(), admin: AdminContext = operator,
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str | None]:
     """Permanent deletion (see operations.delete_order). For a wrong link, returns the WhatsApp

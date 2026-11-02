@@ -1,11 +1,9 @@
-import time
-
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Payment, WebhookEvent
-from tests.conftest import AdminFixture, create_order, order_id, pay, quote_and_send, send_wave_event
+from app.models import Payment
+from tests.conftest import AdminFixture, create_order, order_id, pay, quote_and_send
 
 
 async def _accepted(client: AsyncClient, customer: dict, admin: AdminFixture, point) -> tuple[str, int, dict]:  # type: ignore[no-untyped-def]
@@ -26,107 +24,12 @@ async def _payment_status() -> str:
         return (await db.scalar(select(Payment.status).order_by(Payment.id.desc()).limit(1)))  # type: ignore[return-value]
 
 
-async def test_bad_signature_rejected(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    event = {"id": "EV_x", "type": "checkout.session.completed", "data": {"id": "whatever"}}
-    assert await send_wave_event(client, event, secret="wrong") == 401
-    assert await send_wave_event(client, event, timestamp=int(time.time()) - 3600) == 401
-    assert await _status(client, ref, customer) == "AWAITING_PAYMENT"
-
-
-async def test_duplicate_event_is_noop(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    assert await pay(client, payment["launch_url"]) == 200
-    assert await pay(client, payment["launch_url"]) == 200
-    async with SessionLocal() as db:
-        assert await db.scalar(select(func.count()).select_from(WebhookEvent)) == 1
-    assert await _status(client, ref, customer) == "PAID"
-
-
-async def test_amount_mismatch_holds_payment(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    assert await pay(client, payment["launch_url"], amount="100") == 200
-    assert await _payment_status() == "HELD"
-    assert await _status(client, ref, customer) == "AWAITING_PAYMENT"
-    held = (await client.get("/admin/payments/held", headers=admin.headers)).json()
-    assert held[0]["reason"].startswith("amount_mismatch")
-
-
-async def test_unknown_session_is_logged_not_failed(client: AsyncClient) -> None:
-    event = {"id": "EV_unknown", "type": "checkout.session.completed", "data": {"id": "cos-nope", "payment_status": "succeeded"}}
-    assert await send_wave_event(client, event) == 200
-
-
-async def test_processing_error_rolls_back_dedupe(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    import pytest
-
-    from app.routers import webhooks
-
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-
-    async def boom(*_a, **_k):  # type: ignore[no-untyped-def]
-        raise RuntimeError("db down")
-
-    monkeypatch.setattr(webhooks, "apply_wave_event", boom)
-    with pytest.raises(RuntimeError):
-        await pay(client, payment["launch_url"])
-    async with SessionLocal() as db:
-        assert await db.scalar(select(func.count()).select_from(WebhookEvent)) == 0
-    monkeypatch.undo()
-    # Wave retries the same event: processed normally.
-    assert await pay(client, payment["launch_url"]) == 200
-    assert await _status(client, ref, customer) == "PAID"
-
-
-async def test_failed_payment_then_retry(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    assert await pay(client, payment["launch_url"], outcome="failed") == 200
-    assert await _payment_status() == "FAILED"
-    r = await client.post(f"/orders/{ref}/payment", headers=customer)
-    assert r.status_code == 200 and r.json()["launch_url"] != payment["launch_url"]
-    assert await pay(client, r.json()["launch_url"]) == 200
-    assert await _status(client, ref, customer) == "PAID"
-
-
-async def test_success_for_cancelled_order_is_held(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    await pay(client, payment["launch_url"], outcome="failed")
-    assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 204
-    # Late success for the same session (customer completed it after all).
-    from app.integrations import wave
-
-    session_id = payment["launch_url"].rsplit("/", 1)[-1]
-    data = {**{k: v for k, v in wave.FAKE_SESSIONS[session_id].items() if not k.startswith("_")}, "payment_status": "succeeded"}
-    assert await send_wave_event(client, {"id": "EV_late", "type": "checkout.session.completed", "data": data}) == 200
-    assert await _payment_status() == "HELD"
-    assert await _status(client, ref, customer) == "CANCELLED"
-
-
-async def test_reconcile_catches_lost_webhook(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
-    from sqlalchemy import update
-
-    from app import tasks
-    from app.integrations import wave
-    from app.security.tokens import utcnow
-
-    ref, _, payment = await _accepted(client, customer, admin, pickup_point)
-    session_id = payment["launch_url"].rsplit("/", 1)[-1]
-    wave.FAKE_SESSIONS[session_id].update(checkout_status="complete", payment_status="succeeded", transaction_id="T1")
-    async with SessionLocal() as db:
-        from datetime import timedelta
-
-        await db.execute(update(Payment).values(created_at=utcnow() - timedelta(minutes=20)))
-        await db.commit()
-    assert await tasks.reconcile_payments() == {"checked": 1, "changed": 1}
-    assert await _status(client, ref, customer) == "PAID"
-
-
 # ---------------------------------------------------------------- operations
 
 
 async def _paid(client: AsyncClient, customer: dict, admin: AdminFixture, point) -> tuple[str, int, list[int]]:  # type: ignore[no-untyped-def]
     ref, oid, payment = await _accepted(client, customer, admin, point)
-    await pay(client, payment["launch_url"])
+    await pay(client, customer, admin, ref)
     view = (await client.get(f"/admin/orders/{oid}", headers=admin.headers)).json()
     return ref, oid, [i["id"] for i in view["items"]]
 
@@ -369,7 +272,7 @@ async def test_delete_unpaid_after_three_days(client: AsyncClient, customer: dic
     assert (await client.get(f"/orders/{ref}", headers=customer)).status_code == 404
 
     ref, oid, payment = await _accepted(client, customer, admin, pickup_point)
-    assert await pay(client, payment["launch_url"]) == 200
+    assert await pay(client, customer, admin, ref) == 200
     async with SessionLocal() as db:
         order = await db.get(Order, oid)
         order.created_at -= timedelta(days=4)  # type: ignore[union-attr]
@@ -422,3 +325,26 @@ async def test_unpaid_order_cannot_be_refunded(client: AsyncClient, customer: di
     r = await client.post(f"/admin/orders/{oid}/refund", json={"reason": "Test"}, headers=admin.headers)
     assert r.status_code == 409
     assert (await client.post(f"/admin/orders/{oid}/refund", json={"reason": "x"}, headers=admin.headers)).status_code == 422  # reason too short
+
+
+async def test_delete_order_with_payment_problem(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    import io
+
+    from PIL import Image
+
+    ref, oid, _ = await _accepted(client, customer, admin, pickup_point)
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 60), "gray").save(buf, format="JPEG")
+    r = await client.post(f"/orders/{ref}/payment/declare", data={"method": "WAVE"}, files={"file": ("pay.jpg", buf.getvalue(), "image/jpeg")}, headers=customer)
+    assert r.status_code == 200, r.text
+    # A declared but unconfirmed payment blocks the ordinary rules, not the payment-problem one, and it is immediate.
+    assert (await client.delete(f"/admin/orders/{oid}", params={"reason": "unpaid"}, headers=admin.headers)).status_code == 409
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "payment_problem"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/orders/{ref}", headers=customer)).status_code == 404
+
+
+async def test_payment_problem_delete_refused_once_paid(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    ref, oid, _ = await _paid(client, customer, admin, pickup_point)
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "payment_problem"}, headers=admin.headers)
+    assert r.status_code == 409

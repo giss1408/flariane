@@ -275,7 +275,7 @@ async def _active_payment(db: AsyncSession, quote_id: int) -> Payment | None:
 async def accept_quote(
     db: AsyncSession, customer_id: int, ref: str, version: int, sizes_confirmed: bool, ip: str | None
 ) -> Payment:
-    """Accept a quote and create the payment row. The caller creates the Wave session after commit."""
+    """Accept a quote and create the payment row. Payment is manual: the customer pays and sends a screenshot."""
     if not sizes_confirmed:
         raise BadRequest("sizes_not_confirmed")
     order = await _customer_order_locked(db, customer_id, ref)
@@ -306,9 +306,9 @@ async def new_payment_attempt(db: AsyncSession, order: Order, quote: Quote) -> P
     payment = Payment(
         order_id=order.id,
         quote_id=quote.id,
-        provider="WAVE",
+        provider="MANUAL",
         amount_xof=quote.total_xof,  # from the frozen quote, never from the request
-        idempotency_key=f"quote-{quote.id}-{attempts + 1}",  # one Wave checkout per attempt
+        idempotency_key=f"quote-{quote.id}-{attempts + 1}",
         status=PaymentStatus.INITIATED,
     )
     db.add(payment)

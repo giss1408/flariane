@@ -3,7 +3,6 @@
 from httpx import AsyncClient
 
 from app import tasks
-from app.integrations import wave
 from tests.conftest import AdminFixture, create_order, order_id, pay, quote_and_send
 
 
@@ -49,14 +48,13 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
     assert r.status_code == 200, r.text
     payment = r.json()
     assert payment["status"] == "PENDING" and payment["amount_xof"] == 13560
-    session = next(iter(wave.FAKE_SESSIONS.values()))
-    assert session["amount"] == "13560" and session["client_reference"] == ref and session["currency"] == "XOF"
+    assert payment["provider"] == "MANUAL" and payment["launch_url"] is None
 
-    # Double tap returns the same checkout, no second session.
+    # Double tap returns the same payment, no second one.
     r2 = await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)
-    assert r2.json()["launch_url"] == payment["launch_url"] and len(wave.FAKE_SESSIONS) == 1
+    assert r2.json()["provider"] == "MANUAL" and r2.json()["amount_xof"] == payment["amount_xof"]
 
-    assert await pay(client, payment["launch_url"]) == 200
+    assert await pay(client, customer, admin, ref) == 200
     r = await client.get(f"/orders/{ref}", headers=customer)
     assert r.json()["status"] == "PAID"
     assert recorded("send_customer_whatsapp")[-1]["template"] == "payment_received"
@@ -248,14 +246,10 @@ async def test_cancel_rules(client: AsyncClient, customer: dict, admin: AdminFix
     oid = await order_id(ref)
     await quote_and_send(client, admin, oid)
     r = await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)
-    launch = r.json()["launch_url"]
-    # Pending Wave payment: cannot cancel or change.
+    # Pending payment: cannot cancel or change.
     assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 409
     r = await client.post(f"/orders/{ref}/quotes/1/change-request", json={"note": "x"}, headers=customer)
     assert r.status_code == 409 and r.json()["detail"] == "payment_in_progress"
-    # After a failed payment the customer may cancel.
-    assert await pay(client, launch, outcome="failed") == 200
-    assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 204
 
 
 async def test_order_without_pickup_point(client: AsyncClient, customer: dict) -> None:
@@ -313,7 +307,7 @@ async def test_cart_mode_quote_with_screenshot(client: AsyncClient, customer: di
     assert detail["attachments"] == 0  # the quote screenshot isn't one of her uploads
 
     p = (await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)).json()
-    assert await pay(client, p["launch_url"]) == 200
+    assert await pay(client, customer, admin, ref) == 200
     r = await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH9", "paid_amount": "32500", "currency": "XOF"}, headers=admin.headers)
     assert r.status_code == 200 and r.json()["estimated_margin_xof"] == 0
 

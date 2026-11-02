@@ -44,7 +44,7 @@ class OrderScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(order.valueOrNull?.publicRef ?? 'Commande'),
         actions: [
-          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid))
+          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid || order.value!.canDeletePaymentProblem))
             _DeleteMenu(order: order.value!),
         ],
       ),
@@ -782,6 +782,8 @@ class _DeleteMenu extends ConsumerWidget {
             const PopupMenuItem(value: 'wrong_link', child: Text('Lien incorrect · supprimer')),
           if (order.canDeleteUnpaid)
             const PopupMenuItem(value: 'unpaid', child: Text('Supprimer (non payée)')),
+          if (order.canDeletePaymentProblem)
+            const PopupMenuItem(value: 'payment_problem', child: Text('Problème de paiement · supprimer')),
         ],
       );
 
@@ -793,8 +795,11 @@ class _DeleteMenu extends ConsumerWidget {
       body: wrongLink
           ? 'Le lien ne mène pas à un panier ${order.storeName} valide. La commande est supprimée définitivement, '
               'puis WhatsApp s’ouvre avec un message demandant à la cliente de renvoyer son panier.'
-          : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '
-              '(devis, captures, articles) et disparaît aussi de l’app de la cliente.',
+          : reason == 'payment_problem'
+              ? 'Problème de paiement (preuve fausse, illisible ou jamais confirmée). Aucun paiement n’est confirmé : '
+                  'la commande est supprimée définitivement (devis, captures, articles) et disparaît aussi de l’app de la cliente.'
+              : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '
+                  '(devis, captures, articles) et disparaît aussi de l’app de la cliente.',
       ok: 'Supprimer',
     );
     if (!ok) return;

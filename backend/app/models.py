@@ -228,7 +228,7 @@ class Payment(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
     quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"), index=True)
-    provider: Mapped[str] = mapped_column(String(16), default="WAVE")
+    provider: Mapped[str] = mapped_column(String(16), default="MANUAL")
     checkout_session_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     launch_url: Mapped[str | None] = mapped_column(Text)
     provider_txn_id: Mapped[str | None] = mapped_column(String(80))

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FLR_", extra="ignore")
 
     env: Literal["dev", "test", "staging", "prod"] = "dev"
-    # Test-only routes (simulated Wave checkout page). Default: on in dev only.
+    # Test-only routes. Default: on in dev only.
     # Never mounted in prod, whatever this says.
     dev_routes: bool | None = None
     api_base_url: str = "http://localhost:8000"
@@ -34,11 +34,6 @@ class Settings(BaseSettings):
     customer_refresh_days: int = 30
     admin_refresh_days: int = 30  # sliding: renewed at each use; a revoked device loses access at once
 
-    # Wave
-    wave_mode: Literal["fake", "live"] = "fake"
-    wave_api_key: str = ""
-    wave_webhook_secret: str = Field(min_length=8)
-    wave_api_base: str = "https://api.wave.com"
     webhook_tolerance_seconds: int = 300
 
     # WhatsApp Cloud API

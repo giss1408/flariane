@@ -68,7 +68,7 @@ async def seed_pickup_points() -> None:
 
 
 def gen_keys() -> None:
-    for name in ("FLR_JWT_SECRET", "FLR_FIELD_ENCRYPTION_KEY", "FLR_HASH_KEY", "FLR_WAVE_WEBHOOK_SECRET"):
+    for name in ("FLR_JWT_SECRET", "FLR_FIELD_ENCRYPTION_KEY", "FLR_HASH_KEY"):
         print(f"{name}={base64.b64encode(os.urandom(32)).decode()}")
 
 

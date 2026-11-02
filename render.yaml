@@ -32,8 +32,6 @@ services:
         generateValue: true
       - key: FLR_HASH_KEY
         generateValue: true
-      - key: FLR_WAVE_WEBHOOK_SECRET
-        generateValue: true
       # One-time creation of the first super admin (no shell on the free plan). Remove after setup.
       - key: FLR_SETUP_TOKEN
         generateValue: true
@@ -42,9 +40,7 @@ services:
       - key: FLR_ENV
         value: staging
       - key: FLR_DEV_ROUTES
-        value: "true" # password-less test login + fake Wave page
-      - key: FLR_WAVE_MODE
-        value: fake
+        value: "true" # password-less test login
       - key: FLR_WHATSAPP_MODE
         value: log
       - key: FLR_PUSH_MODE

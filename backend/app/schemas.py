@@ -204,7 +204,7 @@ class PaymentOut(BaseModel):
     status: str
     amount_xof: int
     launch_url: str | None
-    provider: str = "WAVE"  # WAVE (checkout) | MANUAL (mobile money + screenshot, confirmed by an admin)
+    provider: str = "MANUAL"  # mobile money + screenshot, confirmed by an admin
     declared: bool = False  # MANUAL: the customer sent her payment screenshot
     method: str | None = None  # WAVE | ORANGE | MOOV
     has_proof: bool = False
@@ -471,7 +471,7 @@ class SettingsIn(In):
     freight_default_xof: Annotated[int, Field(ge=0)] | None = None
     payment_deadline_days: Annotated[int, Field(ge=1, le=30)] | None = None
     support_whatsapp: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
-    payment_mode: Literal["manual", "wave_qr", "wave_checkout"] | None = None
+    payment_mode: Literal["manual"] | None = None
     payment_accounts: dict[Literal["WAVE", "ORANGE", "MOOV"], Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None] | None = None
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     next_departure_date: date | None = None

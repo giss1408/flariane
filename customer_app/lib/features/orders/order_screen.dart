@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/format.dart';
@@ -139,10 +138,8 @@ class _StatusBanner extends ConsumerWidget {
       'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', context.pal.accent),
       'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', context.pal.warning),
       'QUOTED' => ('Votre devis est prêt.', context.pal.accent),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
-      'AWAITING_PAYMENT' when order.paymentPending => ('Nous confirmons votre paiement Wave…', context.pal.accent),
-      'AWAITING_PAYMENT' => ('Paiement non abouti. Vous pouvez réessayer.', context.pal.warning),
+      'AWAITING_PAYMENT' when order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
+      'AWAITING_PAYMENT' => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
       'PAID' => ('Paiement reçu. Nous achetons vos articles.', context.pal.success),
       'READY_FOR_PICKUP' => ('Votre colis vous attend ! Présentez le code reçu sur WhatsApp.', context.pal.success),
       'CANCELLED' => ('Commande annulée.', context.pal.danger),
@@ -156,10 +153,6 @@ class _StatusBanner extends ConsumerWidget {
       decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          if (order.paymentPending) ...[
-            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            const SizedBox(width: 10),
-          ],
           Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
         ]),
         if (order.paymentDeadline != null && !(order.payment?.declared ?? false)) ...[
@@ -181,7 +174,7 @@ class _StatusBanner extends ConsumerWidget {
             child: const Text('Demander un nouveau devis'),
           ),
         ],
-        if (order.status == 'AWAITING_PAYMENT' && order.payment?.isQr == true) ...[
+        if (order.status == 'AWAITING_PAYMENT' && order.payment != null) ...[
           const SizedBox(height: 10),
           FilledButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
@@ -190,30 +183,9 @@ class _StatusBanner extends ConsumerWidget {
             child: Text(order.payment!.declared ? 'Preuve envoyée' : 'Payer (Wave, Orange, Moov)'),
           ),
         ],
-        if (order.status == 'AWAITING_PAYMENT' && !order.paymentPending && order.payment?.isQr != true) ...[
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: () async {
-              try {
-                final p = await ref.read(apiProvider).retryPayment(order.ref);
-                await openWave(p);
-                ref.invalidate(orderProvider(order.ref));
-              } catch (e) {
-                if (context.mounted) showError(context, e);
-              }
-            },
-            child: const Text('Réessayer le paiement Wave'),
-          ),
-        ],
       ]),
     );
   }
-}
-
-Future<void> openWave(Payment p) async {
-  if (p.launchUrl == null) throw ApiException(502, 'wave_unavailable');
-  // Opens the Wave app if installed (universal link), otherwise Wave's web checkout.
-  await launchUrl(Uri.parse(p.launchUrl!), mode: LaunchMode.externalApplication);
 }
 
 String variant(QuoteLine l) => [l.size, l.color].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
@@ -236,14 +208,11 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
     setState(() => _busy = true);
     try {
       final p = await ref.read(apiProvider).acceptQuote(widget.order.ref, widget.quote.version);
-      if (p.isQr) {
-        if (mounted) {
-          await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => PayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
-          ));
-        }
-      } else {
-        await openWave(p);
+      // Payment is always manual (number / QR + screenshot); the checkout link, if any, is ignored.
+      if (mounted) {
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => PayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
+        ));
       }
       ref.invalidate(orderProvider(widget.order.ref));
     } on ApiException catch (e) {

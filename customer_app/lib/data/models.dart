@@ -234,7 +234,6 @@ class Order {
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 
-  // Automatic (checkout) payments only: QR payments wait for a human confirmation.
-  bool get paymentPending =>
-      status == 'AWAITING_PAYMENT' && payment?.isQr != true && (payment?.status == 'PENDING' || payment?.status == 'INITIATED');
+  // Payments are manual (mobile money + screenshot), confirmed by Flariane: nothing to poll.
+  bool get paymentPending => false;
 }

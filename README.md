@@ -30,12 +30,11 @@ cd admin_app && flutter run              # or --dart-define=API_BASE_URL=https:/
 cd customer_app && flutter run
 ```
 
-In dev, Wave is simulated (`FLR_WAVE_MODE=fake`): "Payer avec Wave" opens a local page that sends a signed
-webhook. WhatsApp messages and push notifications are logged instead of sent.
+Payments are manual: the customer pays a Flariane Wave / Orange / Moov number, sends the screenshot, and an
+admin confirms it. There is no Wave API. WhatsApp messages and push notifications are logged instead of sent in dev.
 
 ## Before production
 
-- Wave Business API key + webhook secret (`FLR_WAVE_MODE=live`); check field names against docs.wave.com.
 - Meta WhatsApp Cloud API: register templates in `fr` (`quote_ready`, `payment_received`,
   `order_ready_pickup`, `item_cancelled`, `refund_completed`); `FLR_WHATSAPP_MODE=live`.
 - Firebase: `flutterfire configure` in `admin_app/` for push; `FLR_PUSH_MODE=live` + service account.

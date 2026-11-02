@@ -209,9 +209,6 @@ class CustomerApi {
       () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true}),
       (j) => Payment.fromJson(j as Map<String, dynamic>));
 
-  Future<Payment> retryPayment(String ref) =>
-      _call(() => dio.post('/orders/$ref/payment'), (j) => Payment.fromJson(j as Map<String, dynamic>));
-
   Future<void> requestChange(String ref, int version, Map<String, dynamic> body) =>
       _call(() => dio.post('/orders/$ref/quotes/$version/change-request', data: body), (_) {});
 

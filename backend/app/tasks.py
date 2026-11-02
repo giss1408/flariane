@@ -116,39 +116,6 @@ async def expire_quotes() -> int:
         return len(quotes)
 
 
-async def reconcile_payments() -> dict[str, int]:
-    """Ask Wave about payments still pending after 10 minutes, in case a webhook was lost."""
-    from app.integrations import wave
-    from app.services.payments import apply_session_state
-
-    counts = {"checked": 0, "changed": 0}
-    async with session_factory() as db:
-        ids = (
-            await db.scalars(
-                select(Payment.id).where(
-                    Payment.status == PaymentStatus.PENDING,
-                    Payment.created_at <= utcnow() - timedelta(minutes=10),
-                    Payment.checkout_session_id.is_not(None),
-                )
-            )
-        ).all()
-    for pid in ids:
-        async with session_factory() as db:
-            payment = await db.get(Payment, pid, with_for_update=True)
-            if payment is None or payment.status != PaymentStatus.PENDING:
-                continue
-            try:
-                session = await wave.get_checkout_session(payment.checkout_session_id or "")
-            except Exception:
-                log.exception("reconcile: wave lookup failed for payment %s", pid)
-                continue
-            counts["checked"] += 1
-            if await apply_session_state(db, payment, session, source="reconcile"):
-                counts["changed"] += 1
-            await db.commit()
-    return counts
-
-
 async def cancel_unpaid_orders() -> int:
     """Quotes not paid within `payment_deadline_days`: cancel the order. Orders whose payment proof
     is waiting for an admin check are left alone."""
@@ -192,7 +159,6 @@ TASKS: dict[str, Callable[..., Awaitable[Any]]] = {
     "send_customer_whatsapp": send_customer_whatsapp,
     "push_admins": push_admins,
     "expire_quotes": expire_quotes,
-    "reconcile_payments": reconcile_payments,
     "cancel_unpaid_orders": cancel_unpaid_orders,
 }
 

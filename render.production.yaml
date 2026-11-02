@@ -14,10 +14,6 @@ envVarGroups:
         generateValue: true
       - key: FLR_HASH_KEY
         generateValue: true
-      - key: FLR_WAVE_WEBHOOK_SECRET
-        sync: false # required by the API at startup (8+ chars); Wave Checkout is not used
-      - key: FLR_WAVE_API_KEY
-        sync: false
       - key: FLR_WHATSAPP_TOKEN
         sync: false
       - key: FLR_WHATSAPP_PHONE_NUMBER_ID

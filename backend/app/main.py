@@ -17,10 +17,8 @@ from app.routers import (
     auth_admin,
     auth_customer,
     customer,
-    dev,
     files,
     legal,
-    payment_return,
     setup,
     webhooks,
 )
@@ -35,7 +33,7 @@ async def _inline_scheduler() -> None:
     ticks = 0
     while True:
         # Runs once right after start-up (free hosting wakes up on demand), then every 5 minutes.
-        for name, every in (("expire_quotes", 1), ("reconcile_payments", 2), ("cancel_unpaid_orders", 1)):
+        for name, every in (("expire_quotes", 1), ("cancel_unpaid_orders", 1)):
             if ticks % every == 0:
                 try:
                     await tasks.TASKS[name]()
@@ -56,8 +54,6 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     s = get_settings()
     prod = s.env == "prod"
-    # Production may run with manual mobile-money payments and admin-sent WhatsApp; the simulated
-    # Wave page is never mounted in prod (dev_routes_enabled is False), and checkout refuses fake Wave.
 
     app = FastAPI(
         title="Flariane API",
@@ -88,10 +84,8 @@ def create_app() -> FastAPI:
         return response
 
     install_error_handlers(app)
-    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return, setup, legal):
+    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, setup, legal):
         app.include_router(module.router)
-    if s.dev_routes_enabled and s.wave_mode == "fake":
-        app.include_router(dev.router)  # simulated Wave checkout page
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:

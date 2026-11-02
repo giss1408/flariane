@@ -280,7 +280,9 @@ _NO_MONEY = (PaymentStatus.INITIATED, PaymentStatus.FAILED, PaymentStatus.EXPIRE
 
 async def delete_order(db: AsyncSession, order_id: int, reason: str, admin_id: int, ip: str | None) -> None:
     """Hard delete, only where no money moved. `wrong_link`: not quoted yet, any time.
-    `unpaid`: never paid and older than UNPAID_DELETE_AFTER. Only the audit entry remains."""
+    `unpaid`: never paid and older than UNPAID_DELETE_AFTER. `payment_problem`: unpaid order whose
+    payment is stuck (unconfirmed proof, fake or unreadable screenshot…), any time; refused once a
+    payment is confirmed. Only the audit entry remains."""
     order = await _locked_order(db, order_id)
     sent = await db.scalar(select(func.count()).select_from(Quote).where(Quote.order_id == order.id, Quote.status != QuoteStatus.DRAFT))
     if reason == "wrong_link":
@@ -289,10 +291,11 @@ async def delete_order(db: AsyncSession, order_id: int, reason: str, admin_id: i
     else:
         if order.status not in (OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT, OrderStatus.CANCELLED):
             raise Conflict("order_paid")
-        if utcnow() - order.created_at < UNPAID_DELETE_AFTER:
+        if reason == "unpaid" and utcnow() - order.created_at < UNPAID_DELETE_AFTER:
             raise Conflict("order_too_recent")
     payments = (await db.scalars(select(Payment).where(Payment.order_id == order.id))).all()
-    if any(p.status not in _NO_MONEY for p in payments) or await db.scalar(select(StorePurchase.id).where(StorePurchase.order_id == order.id)):
+    no_money = _NO_MONEY + (PaymentStatus.PENDING,) if reason == "payment_problem" else _NO_MONEY  # PENDING = proof never confirmed
+    if any(p.status not in no_money for p in payments) or await db.scalar(select(StorePurchase.id).where(StorePurchase.order_id == order.id)):
         raise Conflict("order_paid")
 
     quote_ids = select(Quote.id).where(Quote.order_id == order.id).scalar_subquery()
