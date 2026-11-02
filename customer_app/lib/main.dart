@@ -10,6 +10,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'core/providers.dart';
+import 'widgets/connection_banner.dart';
 import 'core/theme.dart';
 import 'features/auth/consent_screen.dart';
 import 'features/auth/login_screen.dart';
@@ -98,6 +99,16 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> with WidgetsBindingOb
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, child) => ConnectionBanner(
+        online: ref.read(apiProvider).online,
+        onRetry: () async {
+          try {
+            await ref.read(apiProvider).publicInfo(); // success flips the banner off
+            ref.invalidate(ordersProvider);
+          } catch (_) {}
+        },
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: switch (auth) {
         AuthStatus.loading => const Scaffold(body: Center(child: CircularProgressIndicator())),
         AuthStatus.loggedOut => const LoginScreen(),

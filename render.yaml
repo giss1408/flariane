@@ -44,12 +44,11 @@ services:
       - key: FLR_WHATSAPP_MODE
         value: log
       - key: FLR_PUSH_MODE
-        value: log
-      # Admin alerts via the ntfy app: set a long random topic (+ token if the topic is reserved).
-      - key: FLR_NTFY_TOPIC
-        sync: false
-      - key: FLR_NTFY_TOKEN
-        sync: false
+        value: live
+      - key: FLR_FCM_PROJECT_ID
+        value: flariane
+      - key: FLR_FCM_SERVICE_ACCOUNT_JSON
+        sync: false # service-account key: paste it in the Render dashboard, never in this file
       - key: FLR_TASK_MODE
         value: inline
       - key: FLR_RATE_LIMIT_STORAGE

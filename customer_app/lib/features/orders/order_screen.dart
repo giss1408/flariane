@@ -9,6 +9,7 @@ import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/auto_refresh.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/delivery_estimate.dart';
@@ -26,47 +27,19 @@ class OrderScreen extends ConsumerStatefulWidget {
   ConsumerState<OrderScreen> createState() => _OrderScreenState();
 }
 
-class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingObserver {
-  Timer? _poll;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _poll?.cancel();
-    super.dispose();
-  }
-
-  /// Back from the Wave app: re-read the order (the webhook confirms payment server-side).
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) ref.invalidate(orderProvider(widget.orderRef));
-  }
-
-  void _syncPolling(Order o) {
-    if (o.paymentPending && _poll == null) {
-      _poll = Timer.periodic(const Duration(seconds: 5), (_) => ref.invalidate(orderProvider(widget.orderRef)));
-    } else if (!o.paymentPending) {
-      _poll?.cancel();
-      _poll = null;
-    }
-  }
-
+class _OrderScreenState extends ConsumerState<OrderScreen> {
   @override
   Widget build(BuildContext context) {
     final order = ref.watch(orderProvider(widget.orderRef));
-    order.whenData(_syncPolling);
-    return Scaffold(
+    return AutoRefresh(
+      onRefresh: () => ref.invalidate(orderProvider(widget.orderRef)),
+      child: Scaffold(
       appBar: FlarianeHeader(subtitle: 'Commande ${widget.orderRef}', actions: [
         if (order.valueOrNull != null) Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: StoreBadge(order.value!.store))),
       ]),
       floatingActionButton: AskButton(orderRef: widget.orderRef),
       body: order.when(
+        skipLoadingOnReload: true, // the silent auto-refresh must not flash a spinner
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(orderProvider(widget.orderRef))),
         data: (o) => RefreshIndicator(
@@ -102,7 +75,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
           ]),
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _cancel(Order o) async {

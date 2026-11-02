@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/auto_refresh.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/departure_ticket.dart';
@@ -72,7 +73,13 @@ class HomeScreen extends ConsumerWidget {
     final active = list.where((o) => !_finished.contains(o.status)).toList();
     final offers = ref.watch(offersProvider).valueOrNull ?? const <Offer>[];
 
-    return Scaffold(
+    return AutoRefresh(
+      onRefresh: () {
+        ref.invalidate(ordersProvider);
+        ref.invalidate(nextDepartureProvider);
+        ref.invalidate(publicInfoProvider); // offers come with it
+      },
+      child: Scaffold(
       appBar: FlarianeHeader(
         showBack: false,
         actions: [
@@ -135,6 +142,7 @@ class HomeScreen extends ConsumerWidget {
           Text('Mes commandes', style: display(20, weight: FontWeight.w700)),
           const SizedBox(height: 10),
           ...orders.when(
+            skipLoadingOnReload: true, // the silent auto-refresh must not flash a spinner
             loading: () => [const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))],
             error: (e, _) => [ErrorView(e, onRetry: () => ref.invalidate(ordersProvider))],
             data: (all) => all.isEmpty
@@ -154,7 +162,7 @@ class HomeScreen extends ConsumerWidget {
           ),
         ]),
       ),
-    );
+    ));
   }
 }
 

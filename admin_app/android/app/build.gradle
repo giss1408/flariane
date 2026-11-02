@@ -58,3 +58,9 @@ android {
 flutter {
     source = "../.."
 }
+
+// Firebase push: enabled once google-services.json is in this folder (see README). Without it the app
+// still builds and runs, just without push.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}

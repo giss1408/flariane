@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../data/models.dart';
@@ -64,7 +65,13 @@ class CustomerApi {
             if (accessToken != null) o.headers['Authorization'] = 'Bearer $accessToken';
             h.next(o);
           },
+          onResponse: (res, h) {
+            online.value = true;
+            h.next(res);
+          },
           onError: (err, h) async {
+            // No answer at all (no network, DNS, timeout) = offline; any HTTP answer, even an error, = online.
+            online.value = err.response != null;
             final req = err.requestOptions;
             if (err.response?.statusCode == 401 && req.extra['retried'] != true) {
               final outcome = await refresh();
@@ -84,6 +91,8 @@ class CustomerApi {
         ));
   }
 
+  /// False after a request got no answer, true again after the next one that does. Drives the offline banner.
+  final ValueNotifier<bool> online = ValueNotifier(true);
   final Dio dio;
   final Dio _auth; // no interceptors: refresh must not recurse into the queued error handler
   final TokenStore tokens;

@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_lock.dart';
 import 'core/config.dart';
+import 'core/push.dart';
 import 'core/session.dart';
 import 'core/theme.dart';
 import 'features/account/account_screen.dart';
@@ -90,15 +91,18 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   late final AttentionPoller _poller = AttentionPoller(ref);
+  late final PushService _push = PushService(ref);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(_poller);
+    _push.start();
   }
 
   @override
   void dispose() {
+    _push.dispose();
     WidgetsBinding.instance.removeObserver(_poller);
     _poller.dispose();
     super.dispose();
