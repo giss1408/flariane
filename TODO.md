@@ -65,3 +65,15 @@ Goal: less battery, data and server load; the apps refresh when something actual
 - [ ] Add keyset pagination to the admin inbox (limit 200) and customer list (limit 100). The composite index on
       `(status, status_changed_at)` is done.
 - [x] Admin app images use the disk-cached `CachedImage` (same widget as the customer app).
+
+## 8. Turn on error tracking (Sentry)
+
+The code is in place in the API and both apps, and does nothing until a DSN is set.
+
+- [ ] Create a Sentry project (or three: API, customer app, admin app) and copy the DSNs.
+- [ ] API: set `FLR_SENTRY_DSN` in the Render environment.
+- [ ] Apps: add `--dart-define=SENTRY_DSN="$SENTRY_DSN"` to the release builds in `codemagic.yaml` (a Codemagic
+      secret variable), for both apps.
+- [ ] Mention Sentry in the privacy policy (crash reports, no personal data sent: no request bodies, no IP/user,
+      no screenshots) for ARTCI.
+- [ ] Optional: upload Dart debug symbols so stack traces are readable (`sentry_dart_plugin`).

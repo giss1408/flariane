@@ -2,13 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import 'api.dart';
+import 'response_cache.dart';
 
 /// flutter run --dart-define=API_BASE_URL=https://api.flariane.ci  (emulator default: host machine)
 /// Production server by default (store builds). Local dev: --dart-define=API_BASE_URL=http://10.0.2.2:8000
 const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://flariane-api.onrender.com');
 
 final tokenStoreProvider = Provider<TokenStore>((_) => SecureTokenStore());
-final apiProvider = Provider<CustomerApi>((ref) => CustomerApi(baseUrl: apiBaseUrl, tokens: ref.watch(tokenStoreProvider)));
+final apiProvider = Provider<CustomerApi>((ref) => CustomerApi(baseUrl: apiBaseUrl, tokens: ref.watch(tokenStoreProvider), cache: PrefsCache()));
 
 enum AuthStatus { loading, loggedOut, loggedIn }
 
@@ -19,7 +20,10 @@ class AuthController extends Notifier<AuthStatus> {
 
   @override
   AuthStatus build() {
-    ref.read(apiProvider).onSessionExpired = () => state = AuthStatus.loggedOut;
+    ref.read(apiProvider).onSessionExpired = () {
+      ref.read(apiProvider).cache.clear();
+      state = AuthStatus.loggedOut;
+    };
     Future.microtask(_restore);
     return AuthStatus.loading;
   }

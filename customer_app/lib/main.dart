@@ -11,6 +11,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'core/providers.dart';
 import 'widgets/connection_banner.dart';
+import 'core/monitoring.dart';
 import 'core/theme.dart';
 import 'features/auth/consent_screen.dart';
 import 'features/auth/login_screen.dart';
@@ -28,7 +29,7 @@ Future<void> main() async {
     }
   });
   await initializeDateFormatting('fr');
-  runApp(const ProviderScope(child: FlarianeApp()));
+  await runWithMonitoring(const ProviderScope(child: FlarianeApp()));
 }
 
 class FlarianeApp extends ConsumerStatefulWidget {

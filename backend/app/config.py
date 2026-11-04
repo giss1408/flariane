@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_attachments_per_order: int = 10
 
+    # Error tracking (Sentry). Empty = off. No personal data is sent: no request bodies, no cookies/headers.
+    sentry_dsn: str = ""
     rate_limit_storage: str = "memory://"
     # How many reverse proxies sit in front of the API (0 = none, use the socket address). The client IP
     # is read from X-Forwarded-For counting from the right, so a header the client sends itself is ignored.

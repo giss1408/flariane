@@ -290,7 +290,7 @@ async def test_super_admin_starts_full_refund_on_paid_order(client: AsyncClient,
     assert amount > 0
     assert await _status(client, ref, customer) == "REFUND_PENDING"  # the whole payment goes back: order is over
     listed = (await client.get("/admin/refunds?status=PENDING", headers=admin.headers)).json()
-    assert listed[0]["order_ref"] == ref and listed[0]["method"] is None and listed[0]["has_proof"] is False
+    assert listed[0]["order_ref"] == ref and listed[0]["method"] == "WAVE" and listed[0]["has_proof"] is True  # how she paid, so the refund goes back the same way
     r = await client.post(f"/admin/refunds/{listed[0]['id']}/complete", json={"external_ref": "WAVE-R-9"}, headers=admin.headers)
     assert r.status_code == 200
     assert await _status(client, ref, customer) == "REFUNDED"

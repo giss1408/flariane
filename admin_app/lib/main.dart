@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_lock.dart';
 import 'core/config.dart';
+import 'core/monitoring.dart';
 import 'core/push.dart';
 import 'core/session.dart';
 import 'core/theme.dart';
@@ -20,7 +21,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await initializeDateFormatting('fr');
-  runApp(const ProviderScope(child: FlarianeAdminApp()));
+  await runWithMonitoring(const ProviderScope(child: FlarianeAdminApp()));
 }
 
 final navigatorKey = GlobalKey<NavigatorState>();

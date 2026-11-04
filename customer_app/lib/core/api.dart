@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../data/models.dart';
 import 'format.dart';
+import 'response_cache.dart';
 
 class ApiException implements Exception {
   ApiException(this.status, this.code);
@@ -65,7 +66,7 @@ enum RefreshOutcome { ok, expired, offline }
 
 /// Customer API. Access token in memory; refresh token in Keychain/Keystore, rotated on use.
 class CustomerApi {
-  CustomerApi({required String baseUrl, required this.tokens, Dio? dio, Dio? authDio})
+  CustomerApi({required String baseUrl, required this.tokens, this.cache = const NoCache(), Dio? dio, Dio? authDio})
       // Free hosting sleeps when idle and can take ~1 min to wake up.
       : dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))),
         _auth = authDio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))) {
@@ -105,6 +106,7 @@ class CustomerApi {
   final Dio dio;
   final Dio _auth; // no interceptors: refresh must not recurse into the queued error handler
   final TokenStore tokens;
+  final ResponseCache cache;
   String? accessToken;
   void Function()? onSessionExpired;
   Future<RefreshOutcome>? _inflight;
@@ -160,6 +162,7 @@ class CustomerApi {
     } catch (_) {}
     accessToken = null;
     await tokens.write(null);
+    await cache.clear();
   }
 
   // ---- account
@@ -211,10 +214,27 @@ class CustomerApi {
   Future<List<PickupPoint>> pickupPoints() => _call(() => dio.get('/pickup-points'),
       (j) => (j as List).cast<Map<String, dynamic>>().map(PickupPoint.fromJson).toList());
 
-  Future<List<OrderSummary>> orders() => _call(
-      () => dio.get('/orders'), (j) => (j as List).cast<Map<String, dynamic>>().map(OrderSummary.fromJson).toList());
+  /// GET that remembers the last good answer and returns it when there is no connection at all
+  /// (an HTTP error, including 4xx/5xx, is still an error). The offline banner tells her it may be old.
+  Future<T> _cached<T>(String key, String path, T Function(dynamic) parse) async {
+    try {
+      final data = (await dio.get(path)).data;
+      await cache.write(key, data);
+      return parse(data);
+    } catch (e) {
+      final err = toApiException(e);
+      if (err.status == null) {
+        final saved = await cache.read(key);
+        if (saved != null) return parse(saved);
+      }
+      throw err;
+    }
+  }
 
-  Future<Order> order(String ref) => _call(() => dio.get('/orders/$ref'), (j) => Order.fromJson(j as Map<String, dynamic>));
+  Future<List<OrderSummary>> orders() =>
+      _cached('orders', '/orders', (j) => (j as List).cast<Map<String, dynamic>>().map(OrderSummary.fromJson).toList());
+
+  Future<Order> order(String ref) => _cached('order.$ref', '/orders/$ref', (j) => Order.fromJson(j as Map<String, dynamic>));
 
   Options? _idem(String? key) => key == null ? null : Options(headers: {'Idempotency-Key': key});
 

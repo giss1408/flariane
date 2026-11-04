@@ -51,8 +51,22 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         job.cancel()
 
 
+def _init_sentry(dsn: str, env: str) -> None:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=env,
+        send_default_pii=False,
+        max_request_body_size="never",  # bodies hold passwords and phone numbers
+        traces_sample_rate=0,
+    )
+
+
 def create_app() -> FastAPI:
     s = get_settings()
+    if s.sentry_dsn:
+        _init_sentry(s.sentry_dsn, s.env)
     prod = s.env == "prod"
     if prod and s.setup_token:
         # /setup/reset-admin can take over the super admin account while this is set.
