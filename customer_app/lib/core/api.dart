@@ -15,7 +15,7 @@ class ApiException implements Exception {
   final String code;
 
   String get message =>
-      status == null ? 'Pas de connexion. Vérifiez votre réseau.' : (errorMessages[code] ?? 'Une erreur est survenue.');
+      status == null ? 'Pas de connexion. Vérifie ton réseau.' : (errorMessages[code] ?? 'Une erreur est survenue.');
 }
 
 ApiException toApiException(Object e) {

@@ -87,7 +87,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
             const SizedBox(height: 16),
             Text('Preuve envoyée !', style: display(26)),
             const SizedBox(height: 8),
-            const Text('On vérifie ton paiement et ta commande passe à « Payée ». Tu seras prévenue sur WhatsApp.',
+            const Text('On vérifie ton paiement et ta commande passe à « Payée ». On te prévient sur WhatsApp.',
                 textAlign: TextAlign.center),
             const SizedBox(height: 24),
             FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Retour à ma commande')),

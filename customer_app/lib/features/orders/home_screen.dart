@@ -423,7 +423,11 @@ class _OrderRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text(order.ref, style: const TextStyle(fontWeight: FontWeight.w700)),
         ]),
-        subtitle: Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
+          if (nextStep(order.status) case final step?)
+            Text(step, style: TextStyle(fontWeight: step.startsWith('À toi') ? FontWeight.w700 : FontWeight.w500, color: step.startsWith('À toi') ? color : context.pal.muted)),
+        ]),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w600)),
           if (onRemove != null)

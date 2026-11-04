@@ -108,14 +108,14 @@ class _StatusBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (text, color) = switch (order.status) {
-      'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', context.pal.accent),
-      'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', context.pal.warning),
-      'QUOTED' => ('Votre devis est prêt.', context.pal.accent),
+      'QUOTE_REQUESTED' => ('Devis en préparation : on te prévient sur WhatsApp.', context.pal.accent),
+      'QUOTED' when order.canRequestRequote => ('Ton devis a expiré.', context.pal.warning),
+      'QUOTED' => ('Ton devis est prêt.', context.pal.accent),
       'AWAITING_PAYMENT' when order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
       'AWAITING_PAYMENT' => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
-      'PAID' => ('Paiement reçu. Nous achetons vos articles.', context.pal.success),
+      'PAID' => ('Paiement reçu. On achète tes articles.', context.pal.success),
       'READY_FOR_PICKUP' => (
-        order.pickupCode != null ? 'Votre colis vous attend ! Présentez ce code au point de retrait.' : 'Votre colis vous attend ! Présentez le code reçu sur WhatsApp.',
+        order.pickupCode != null ? 'Ton colis t’attend ! Présente ce code au point de retrait.' : 'Ton colis t’attend ! Présente le code reçu sur WhatsApp.',
         context.pal.success
       ),
       'CANCELLED' => ('Commande annulée.', context.pal.danger),
@@ -238,6 +238,18 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         const Spacer(),
         if (q.expiresAt != null && open) Text('valable jusqu’au ${dateTime(q.expiresAt)}', style: TextStyle(color: context.pal.muted)),
       ]),
+      if (open) ...[
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(color: context.pal.accent.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
+          child: Row(children: [
+            Text('Total à payer', style: TextStyle(color: context.pal.muted)),
+            const Spacer(),
+            Text('${fcfa(q.totalXof)} FCFA', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
+          ]),
+        ),
+      ],
       const SizedBox(height: 8),
       if (q.screenshotUrl != null) ...[
         const PriceAdvice(),
@@ -404,7 +416,7 @@ class _ChangeRequestSheetState extends ConsumerState<ChangeRequestSheet> {
     try {
       await ref.read(apiProvider).requestChange(widget.order.ref, widget.quote.version, body);
       if (!mounted) return;
-      showInfo(context, 'Demande envoyée — vous recevrez un nouveau devis.');
+      showInfo(context, 'Demande envoyée : tu recevras un nouveau devis.');
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) showError(context, e);

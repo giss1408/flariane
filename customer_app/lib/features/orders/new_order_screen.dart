@@ -94,7 +94,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
       showInfo(
           context,
           failed == 0
-              ? 'Demande envoyée — vous recevrez votre devis sur WhatsApp.'
+              ? 'Demande envoyée : tu recevras ton devis sur WhatsApp.'
               : 'Demande envoyée, mais $failed capture(s) n’ont pas pu être envoyées.');
       Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => OrderScreen(orderRef: order.ref)));
@@ -175,7 +175,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           error: (e, _) =>
               ErrorView(e, onRetry: () => ref.invalidate(pickupPointsProvider)),
           data: (list) => list.isEmpty
-              ? const Text('Point de retrait : choisi plus tard avec vous.')
+              ? const Text('Point de retrait : choisi plus tard avec toi.')
               : DropdownButtonFormField<int>(
                   value: _pointId,
                   isExpanded: true,

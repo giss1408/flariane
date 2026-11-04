@@ -54,11 +54,25 @@ const statusLabels = {
   'REFUNDED': 'Remboursée',
 };
 
+/// What happens next, in plain words. "À toi" marks the steps that wait on the customer. Null for finished orders.
+String? nextStep(String status) => switch (status) {
+      'QUOTE_REQUESTED' => 'On prépare ton devis',
+      'QUOTED' => 'À toi : vérifie et accepte ton devis',
+      'AWAITING_PAYMENT' => 'À toi : paie et envoie la capture',
+      'PAID' => 'On achète tes articles',
+      'PURCHASED' => 'En attente du prochain départ',
+      'IN_TRANSIT' => 'En route vers Abidjan',
+      'ARRIVED' => 'Bientôt prête au retrait',
+      'READY_FOR_PICKUP' => 'À toi : va retirer ton colis',
+      'REFUND_PENDING' => 'On te rembourse',
+      _ => null,
+    };
+
 const errorMessages = {
   'invalid_phone': 'Numéro ivoirien à 10 chiffres attendu (01, 05 ou 07…).',
   'invalid_credentials': 'Numéro ou mot de passe incorrect.',
   'login_locked': 'Trop d’essais. Réessayez dans 15 minutes.',
-  'phone_taken': 'Un compte existe déjà avec ce numéro. Connectez-vous.',
+  'phone_taken': 'Un compte existe déjà avec ce numéro. Connecte-toi.',
   'weak_password': 'Mot de passe trop simple (8 caractères minimum).',
   'no_shein_link': 'Colle le lien de partage de ton panier SHEIN ou Temu.',
   'non_eu_cart': 'On achète uniquement sur la boutique européenne (en euros). Passe ton app SHEIN ou Temu sur la France ou l’Allemagne, puis renvoie ton panier.',
@@ -68,7 +82,7 @@ const errorMessages = {
   'sizes_not_confirmed': 'Confirmez les tailles et couleurs.',
   'payment_in_progress': 'Un paiement Wave est en cours pour ce devis.',
   'cannot_cancel': 'Cette commande ne peut plus être annulée.',
-  'orders_in_progress': 'Vous avez des commandes en cours.',
+  'orders_in_progress': 'Tu as des commandes en cours.',
   'invalid_image': 'Image invalide.',
   'unsupported_image_type': 'Format accepté : JPEG, PNG ou WebP.',
   'file_too_large': 'Image trop lourde (10 Mo max).',

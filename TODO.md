@@ -118,9 +118,9 @@ amount copy on the payment screen.
 
 - [ ] Verify the shortcut package ids on a phone with the apps installed (`com.zzkko`, `com.einnovation.temu`,
       `com.wave.personal`) and add Orange Money / Moov Money ids if wanted.
-- [ ] Quote screen: total and "Accepter et payer" first, details below; fold "J'ai vérifié mon panier" into the confirmation.
-- [ ] Order list: group active / finished, show the next step in plain words ("Paie avant vendredi", "Retire à Cocody").
+- [x] Quote screen shows "Total à payer" at the top. Still open: fold "J'ai vérifié mon panier" into the accept confirmation.
+- [x] Order list shows the next step in plain words ("À toi : paie et envoie la capture"). Still open: group active / finished.
 - [ ] Ask for the Abidjan address once, in context, before the first quote.
-- [ ] Use "tu" everywhere (some screens still say "vous").
-- [ ] "Réessayer" on every failed load.
+- [x] "tu" everywhere in the customer app (and gender-neutral wording).
+- [x] "Réessayer" on every failed load (already the case).
 - [ ] Customer push notifications instead of 20 s polling (item 7).
