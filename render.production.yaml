@@ -35,6 +35,9 @@ envVarGroups:
         value: "false"
       - key: FLR_WHATSAPP_MODE
         value: log
+      # Accept German mobiles (+49) at sign-up so the team can test from Germany. Remove before opening to the public.
+      - key: FLR_ALLOW_GERMAN_NUMBERS
+        value: "true"
       - key: FLR_PUSH_MODE
         value: live
       - key: FLR_FCM_PROJECT_ID

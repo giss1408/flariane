@@ -106,7 +106,8 @@ async def admin() -> AdminFixture:
     return await make_admin()
 
 
-PHONE = "0701020304"
+# The team tests from Germany: the default test customer has a German mobile (accepted outside production, or when FLR_ALLOW_GERMAN_NUMBERS is set).
+PHONE = "+49 176 12345678"
 
 
 PASSWORD = "awa-secret-2026"

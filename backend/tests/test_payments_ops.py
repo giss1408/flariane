@@ -181,8 +181,8 @@ async def test_pickup_agent_role(client: AsyncClient, customer: dict, admin: Adm
 
     # Desk sees arrived parcels; search by phone (any format) or by reference.
     assert [o["id"] for o in (await client.get("/admin/orders/pickup-desk", headers=agent.headers)).json()] == [oid]
-    by_phone = (await client.get("/admin/orders/pickup-desk", params={"q": "07 01 02 03 04"}, headers=agent.headers)).json()
-    assert by_phone[0]["id"] == oid and by_phone[0]["customer_phone_masked"] == "+225 07 •• •• 04"
+    by_phone = (await client.get("/admin/orders/pickup-desk", params={"q": "+49 176 12345678"}, headers=agent.headers)).json()
+    assert by_phone[0]["id"] == oid and by_phone[0]["customer_phone_masked"] == "+491 •• 78"
     ref = by_phone[0]["public_ref"]
     assert (await client.get("/admin/orders/pickup-desk", params={"q": ref[-4:]}, headers=agent.headers)).json()[0]["id"] == oid
 

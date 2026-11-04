@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # is read from X-Forwarded-For counting from the right, so a header the client sends itself is ignored.
     # Render: 1. Cloudflare in front of Render: 2.
     trusted_proxy_hops: int = 0
+    # German mobiles (+49 15x/16x/17x) are accepted for sign-up outside production. Set true to accept them in
+    # production too (the team tests from Germany); turn it off again when the service opens to the public.
+    allow_german_numbers: bool = False
     # Account creation limits (bots, admin push spam). Per IP is low-ish but CGNAT shares IPs, hence the hourly window.
     register_per_ip_hour: int = 5
     register_global_hour: int = 300

@@ -133,12 +133,18 @@ def test_german_test_numbers(raw: str, expected: str) -> None:
     assert normalize_ci_phone(raw) == expected
 
 
-def test_german_numbers_refused_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_german_numbers_refused_in_prod_unless_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import get_settings
 
     monkeypatch.setattr(get_settings(), "env", "prod")
     with pytest.raises(BadRequest):
         normalize_ci_phone("+4915123456789")
+    # The team tests from Germany on production: allowed by FLR_ALLOW_GERMAN_NUMBERS, Ivorian numbers still work.
+    monkeypatch.setattr(get_settings(), "allow_german_numbers", True)
+    assert normalize_ci_phone("+49 151 23456789") == "+4915123456789"
+    assert normalize_ci_phone("07 01 02 03 04") == "+2250701020304"
+    with pytest.raises(BadRequest):
+        normalize_ci_phone("+33 6 12 34 56 78")  # other countries stay refused
 
 
 async def test_legal_pages() -> None:
