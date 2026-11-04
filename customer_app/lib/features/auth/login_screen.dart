@@ -89,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         controller: _name,
                         textCapitalization: TextCapitalization.words,
                         autofillHints: const [AutofillHints.givenName],
-                        decoration: const InputDecoration(labelText: 'Votre prénom'),
+                        decoration: const InputDecoration(labelText: 'Ton prénom'),
                       ),
                     ],
                     const SizedBox(height: 12),
@@ -138,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           context: context,
                           builder: (ctx) => AlertDialog(
                             title: const Text('Mot de passe oublié'),
-                            content: const Text('Écrivez-nous sur WhatsApp depuis votre numéro : nous vous enverrons un '
+                            content: const Text('Écris-nous sur WhatsApp depuis ton numéro : on t’enverra un '
                                 'mot de passe temporaire, à changer à la connexion.'),
                             actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
                           ),

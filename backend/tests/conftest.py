@@ -1,6 +1,5 @@
 import base64
 import os
-import time
 from collections.abc import AsyncIterator
 
 # Test configuration must be in place before the app is imported.
@@ -11,13 +10,13 @@ os.environ.update(
         "FLR_JWT_SECRET": base64.b64encode(b"j" * 32).decode(),
         "FLR_FIELD_ENCRYPTION_KEY": base64.b64encode(b"e" * 32).decode(),
         "FLR_HASH_KEY": base64.b64encode(b"h" * 32).decode(),
-        "FLR_WAVE_WEBHOOK_SECRET": "test-webhook-secret",
-        "FLR_WAVE_MODE": "fake",
         "FLR_WHATSAPP_MODE": "log",
         "FLR_WHATSAPP_APP_SECRET": "wa-app-secret",
         "FLR_PUSH_MODE": "log",
         "FLR_TASK_MODE": "record",
         "FLR_RATE_LIMIT_STORAGE": "memory://",
+        "FLR_REGISTER_PER_IP_HOUR": "1000",
+        "FLR_REGISTER_GLOBAL_HOUR": "1000",
         "FLR_STORAGE_LOCAL_DIR": "/tmp/flariane-test-uploads",
     }
 )
@@ -30,7 +29,7 @@ from sqlalchemy import text  # noqa: E402
 
 from app import ratelimit, tasks  # noqa: E402
 from app.db import Base, SessionLocal, engine  # noqa: E402
-from app.integrations import push, wave, whatsapp  # noqa: E402
+from app.integrations import push, whatsapp  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import AdminDevice, AdminUser, PickupPoint  # noqa: E402
 from app.security.crypto import encrypt, hash_password  # noqa: E402
@@ -53,14 +52,6 @@ def _create_test_db() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _checkout_payments(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Most tests exercise the Wave Checkout flow; the Wave QR test switches mode explicitly."""
-    from app.services import settings as settings_service
-
-    monkeypatch.setitem(settings_service.DEFAULTS, "payment_mode", "wave_checkout")
-
-
-@pytest.fixture(autouse=True)
 async def _clean() -> AsyncIterator[None]:
     tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
     async with engine.begin() as c:
@@ -68,7 +59,6 @@ async def _clean() -> AsyncIterator[None]:
     tasks.RECORDED.clear()
     whatsapp.SENT_LOG.clear()
     push.SENT_LOG.clear()
-    wave.FAKE_SESSIONS.clear()
     ratelimit.reset()
     yield
 
@@ -116,7 +106,8 @@ async def admin() -> AdminFixture:
     return await make_admin()
 
 
-PHONE = "0701020304"
+# The team tests from Germany: the default test customer has a German mobile (accepted outside production, or when FLR_ALLOW_GERMAN_NUMBERS is set).
+PHONE = "+49 176 12345678"
 
 
 PASSWORD = "awa-secret-2026"
@@ -178,29 +169,16 @@ async def quote_and_send(client: AsyncClient, admin: AdminFixture, oid: int, dra
     return r.json()
 
 
-async def pay(client: AsyncClient, launch_url: str, outcome: str = "succeeded", amount: str | None = None) -> int:
-    """Simulate Wave: complete the fake session and deliver a signed webhook."""
-    session_id = launch_url.rsplit("/", 1)[-1]
-    session = wave.FAKE_SESSIONS[session_id]
-    session["checkout_status"] = "complete"
-    session["payment_status"] = "succeeded" if outcome == "succeeded" else "cancelled"
-    session["transaction_id"] = "T_TEST"
-    data = {k: v for k, v in session.items() if not k.startswith("_")}
-    if amount is not None:
-        data["amount"] = amount
-    return await send_wave_event(
-        client,
-        {"id": f"EV_{session_id}_{outcome}", "type": "checkout.session.completed" if outcome == "succeeded" else "checkout.session.payment_failed", "data": data},
-    )
+async def pay(client: AsyncClient, customer: dict, admin: AdminFixture, ref: str) -> int:
+    """Manual payment: the customer sends the screenshot, an admin confirms it. Returns the confirm status."""
+    import io
 
+    from PIL import Image
 
-async def send_wave_event(client: AsyncClient, event: dict, secret: str = "test-webhook-secret", timestamp: int | None = None) -> int:
-    import json
-
-    body = json.dumps(event).encode()
-    r = await client.post(
-        "/webhooks/wave",
-        content=body,
-        headers={"wave-signature": wave.sign_payload(body, secret, timestamp or int(time.time())), "content-type": "application/json"},
-    )
-    return r.status_code
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 60), "orange").save(buf, format="JPEG")
+    r = await client.post(f"/orders/{ref}/payment/declare", data={"method": "WAVE"}, files={"file": ("pay.jpg", buf.getvalue(), "image/jpeg")}, headers=customer)
+    assert r.status_code == 200, r.text
+    oid = await order_id(ref)
+    r = await client.post(f"/admin/orders/{oid}/confirm-payment", json={"transaction_ref": "T_TEST"}, headers=admin.headers)
+    return 200 if r.status_code == 204 else r.status_code

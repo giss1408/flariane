@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/open_app.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/auto_refresh.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/departure_ticket.dart';
@@ -19,17 +21,28 @@ import 'order_screen.dart';
 
 const _finished = {'PICKED_UP', 'CANCELLED', 'REFUNDED'};
 
+/// True while the new-order screen opened by a share is on screen (a rebuild must not open a second one).
+final _openingShareProvider = StateProvider<bool>((_) => false);
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // A share from the SHEIN app opens the new-order screen directly.
+    // A share from the SHEIN app opens the new-order screen directly: whether it arrives while this screen is
+    // open (listener) or before it exists, e.g. the share started the app or she had to log in first (checked here).
+    void openSharedOrder() {
+      if (ref.read(_openingShareProvider) || !context.mounted || ref.read(sharedTextProvider) == null) return;
+      ref.read(_openingShareProvider.notifier).state = true;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen())).whenComplete(() {
+        if (context.mounted) ref.read(_openingShareProvider.notifier).state = false;
+      });
+    }
+
     ref.listen(sharedTextProvider, (_, text) {
-      if (text != null) {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen()));
-      }
+      if (text != null) openSharedOrder();
     });
+    if (ref.read(sharedTextProvider) != null) WidgetsBinding.instance.addPostFrameCallback((_) => openSharedOrder());
     final orders = ref.watch(ordersProvider);
     final departure = ref.watch(nextDepartureProvider).valueOrNull;
     final me = ref.watch(meProvider).valueOrNull;
@@ -72,7 +85,13 @@ class HomeScreen extends ConsumerWidget {
     final active = list.where((o) => !_finished.contains(o.status)).toList();
     final offers = ref.watch(offersProvider).valueOrNull ?? const <Offer>[];
 
-    return Scaffold(
+    return AutoRefresh(
+      onRefresh: () {
+        ref.invalidate(ordersProvider);
+        ref.invalidate(nextDepartureProvider);
+        ref.invalidate(publicInfoProvider); // offers come with it
+      },
+      child: Scaffold(
       appBar: FlarianeHeader(
         showBack: false,
         actions: [
@@ -135,10 +154,11 @@ class HomeScreen extends ConsumerWidget {
           Text('Mes commandes', style: display(20, weight: FontWeight.w700)),
           const SizedBox(height: 10),
           ...orders.when(
+            skipLoadingOnReload: true, // the silent auto-refresh must not flash a spinner
             loading: () => [const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))],
             error: (e, _) => [ErrorView(e, onRetry: () => ref.invalidate(ordersProvider))],
             data: (all) => all.isEmpty
-                ? [const _EmptyOrders()]
+                ? [const _FirstSteps()]
                 : [
                     for (final o in all)
                       Padding(
@@ -154,7 +174,7 @@ class HomeScreen extends ConsumerWidget {
           ),
         ]),
       ),
-    );
+    ));
   }
 }
 
@@ -414,7 +434,11 @@ class _OrderRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text(order.ref, style: const TextStyle(fontWeight: FontWeight.w700)),
         ]),
-        subtitle: Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${statusLabels[order.status] ?? order.status}, le ${date(order.createdAt)}'),
+          if (nextStep(order.status) case final step?)
+            Text(step, style: TextStyle(fontWeight: step.startsWith('À toi') ? FontWeight.w700 : FontWeight.w500, color: step.startsWith('À toi') ? color : context.pal.muted)),
+        ]),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(fcfa(order.totalXof), style: const TextStyle(fontWeight: FontWeight.w600)),
           if (onRemove != null)
@@ -429,22 +453,35 @@ class _OrderRow extends StatelessWidget {
   }
 }
 
-class _EmptyOrders extends StatelessWidget {
-  const _EmptyOrders();
+/// First order: three steps and a shortcut to the shopping app, since "where do I find the link?" is the hardest part.
+class _FirstSteps extends StatelessWidget {
+  const _FirstSteps();
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: context.pal.lilac, width: 2),
-        ),
-        child: Column(children: [
-          Icon(Icons.shopping_bag_outlined, size: 36, color: context.pal.accent),
-          const SizedBox(height: 8),
-          const Text('Pas encore de commande', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text('Partage ton premier panier SHEIN ou Temu pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: context.pal.lilac, width: 2)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Ta première commande en 3 étapes', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+          const SizedBox(height: 12),
+          for (final (i, t) in const [
+            'Remplis ton panier dans SHEIN ou Temu.',
+            'Touche Partager, puis choisis Flariane (ou copie le lien).',
+            'Reçois ton devis en FCFA, puis paie avec Wave.',
+          ].indexed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                CircleAvatar(radius: 12, backgroundColor: context.pal.accent, child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700))),
+                const SizedBox(width: 10),
+                Expanded(child: Text(t)),
+              ]),
+            ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ouvrir SHEIN'), onPressed: () => openPartnerApp(context, PartnerApp.shein)),
+            OutlinedButton.icon(icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ouvrir Temu'), onPressed: () => openPartnerApp(context, PartnerApp.temu)),
+          ]),
         ]),
       );
 }

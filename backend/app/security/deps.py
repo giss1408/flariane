@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_session
 from app.enums import ROLE_RANK, AdminRole
 from app.models import AdminDevice, AdminUser, Customer
@@ -16,7 +17,14 @@ bearer = HTTPBearer(auto_error=False)
 
 
 def client_ip(request: Request) -> str | None:
-    # Uvicorn runs with --proxy-headers behind the platform proxy, so client.host is the real IP.
+    """Real client address. Uvicorn does not rewrite client.host (no --proxy-headers): behind N trusted
+    proxies each one appends the address it saw to X-Forwarded-For, so the entry N from the right is the
+    client. Anything to its left is whatever the client claimed and is ignored."""
+    hops = get_settings().trusted_proxy_hops
+    if hops > 0:
+        parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+        if len(parts) >= hops:
+            return parts[-hops]
     return request.client.host if request.client else None
 
 

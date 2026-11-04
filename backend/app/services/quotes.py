@@ -21,7 +21,7 @@ from app.schemas import ChangeRequestIn, QuoteDraftIn
 from app.security.tokens import utcnow
 from app.services import notify
 from app.services.audit import audit
-from app.services.links import extract_shein_urls, product_id_from_url, store_of
+from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, product_id_from_url, store_of
 from app.services.orders import lock_order, transition_order
 from app.services.pricing import LineInput, compute_quote, default_customs, default_freight, to_xof
 from app.services.settings import get_settings_map
@@ -275,7 +275,7 @@ async def _active_payment(db: AsyncSession, quote_id: int) -> Payment | None:
 async def accept_quote(
     db: AsyncSession, customer_id: int, ref: str, version: int, sizes_confirmed: bool, ip: str | None
 ) -> Payment:
-    """Accept a quote and create the payment row. The caller creates the Wave session after commit."""
+    """Accept a quote and create the payment row. Payment is manual: the customer pays and sends a screenshot."""
     if not sizes_confirmed:
         raise BadRequest("sizes_not_confirmed")
     order = await _customer_order_locked(db, customer_id, ref)
@@ -306,9 +306,9 @@ async def new_payment_attempt(db: AsyncSession, order: Order, quote: Quote) -> P
     payment = Payment(
         order_id=order.id,
         quote_id=quote.id,
-        provider="WAVE",
+        provider="MANUAL",
         amount_xof=quote.total_xof,  # from the frozen quote, never from the request
-        idempotency_key=f"quote-{quote.id}-{attempts + 1}",  # one Wave checkout per attempt
+        idempotency_key=f"quote-{quote.id}-{attempts + 1}",
         status=PaymentStatus.INITIATED,
     )
     db.add(payment)
@@ -342,6 +342,8 @@ async def request_change(db: AsyncSession, customer_id: int, ref: str, version: 
 
     new_url: str | None = None
     if data.new_share_text:
+        if is_non_eu_link(data.new_share_text):
+            raise BadRequest("non_eu_cart", NON_EU_MESSAGE)
         urls = extract_shein_urls(data.new_share_text)
         if not urls:
             raise BadRequest("no_shein_link")

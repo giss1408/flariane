@@ -35,7 +35,9 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  cached_network_image: ^3.4.1
   flutter_riverpod: ^2.6.1
+  sentry_flutter: ^8.14.2
   dio: ^5.11.1
   flutter_secure_storage: ^10.3.4
   local_auth: ^2.3.0
@@ -44,6 +46,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   image_picker: ^1.1.2
+  firebase_core: ^4.7.0
+  firebase_messaging: ^16.2.0
 
 dev_dependencies:
   flutter_test:
@@ -98,3 +102,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+dependency_overrides:
+  # Pulled in by sentry_flutter; 9.x needs a newer Flutter Gradle plugin than 3.24 ships.
+  package_info_plus: 8.0.2

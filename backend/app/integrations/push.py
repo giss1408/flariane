@@ -37,7 +37,7 @@ async def send_push(token: str, title: str, body: str, data: dict[str, str]) -> 
         SENT_LOG.append({"token": token, "title": title, "body": body, "data": data})
         log.info("push(log) %s %s", title, data)
         return f"push.log.{len(SENT_LOG)}"
-    message = {"message": {"token": token, "notification": {"title": title, "body": body}, "data": data}}
+    message = {"message": {"token": token, "notification": {"title": title, "body": body}, "data": data, "android": {"priority": "HIGH"}}}
     url = f"https://fcm.googleapis.com/v1/projects/{s.fcm_project_id}/messages:send"
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, json=message, headers={"Authorization": f"Bearer {_access_token()}"})

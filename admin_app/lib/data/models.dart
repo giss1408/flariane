@@ -403,6 +403,11 @@ class OrderDetail {
       const {'QUOTE_REQUESTED', 'QUOTED', 'AWAITING_PAYMENT', 'CANCELLED'}.contains(status) &&
       payments.every((p) => const {'INITIATED', 'FAILED', 'EXPIRED'}.contains(p.status)) &&
       DateTime.now().difference(createdAt) >= const Duration(days: 3);
+
+  /// Payment stuck (proof never confirmed, fake screenshot…): delete at once while no payment is confirmed.
+  bool get canDeletePaymentProblem =>
+      const {'QUOTED', 'AWAITING_PAYMENT', 'CANCELLED'}.contains(status) &&
+      payments.every((p) => const {'INITIATED', 'PENDING', 'FAILED', 'EXPIRED'}.contains(p.status));
 }
 
 class Shipment {

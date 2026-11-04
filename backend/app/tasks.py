@@ -11,14 +11,14 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import db as db_module
 from app.config import get_settings
 from app.enums import PaymentStatus, QuoteStatus
-from app.integrations import ntfy, push, whatsapp
-from app.models import AdminDevice, AdminUser, Customer, Notification, Payment, Quote
+from app.integrations import push, whatsapp
+from app.models import AdminDevice, AdminUser, Customer, IdempotencyKey, Notification, Payment, Quote
 from app.security.crypto import decrypt
 from app.security.tokens import utcnow
 
@@ -61,16 +61,8 @@ ADMIN_EVENTS = {
 }
 
 
-# Money events ring louder on ntfy (5 = max, 3 = default).
-NTFY_PRIORITY = {"payment_received": 4, "payment_declared": 4, "payment_held": 5}
-
-
 async def push_admins(event: str, order_ref: str, order_id: int) -> None:
     title, body = ADMIN_EVENTS[event]
-    try:
-        await ntfy.send(title, body.format(ref=order_ref), priority=NTFY_PRIORITY.get(event, 3))
-    except Exception:  # an alert channel never blocks the FCM pushes
-        log.exception("ntfy alert failed for %s", event)
     async with session_factory() as db:
         devices = (
             await db.scalars(
@@ -84,6 +76,8 @@ async def push_admins(event: str, order_ref: str, order_id: int) -> None:
                 )
             )
         ).all()
+        if not devices:
+            log.warning("push %s for %s: no approved admin device has a push token", event, order_ref)
         for device in devices:
             note = Notification(channel="push", admin_device_id=device.id, template=event)
             db.add(note)
@@ -97,7 +91,16 @@ async def push_admins(event: str, order_ref: str, order_id: int) -> None:
                 note.status = "SENT"
             except Exception as exc:
                 note.status, note.error = "FAILED", str(exc)[:500]
+                log.error("push %s to device %s failed: %s", event, device.id, str(exc)[:300])
         await db.commit()
+
+
+async def purge_idempotency_keys() -> int:
+    """Retries come within seconds or minutes; a day is plenty."""
+    async with session_factory() as db:
+        result = await db.execute(delete(IdempotencyKey).where(IdempotencyKey.created_at < utcnow() - timedelta(hours=24)))
+        await db.commit()
+        return result.rowcount or 0
 
 
 async def expire_quotes() -> int:
@@ -114,39 +117,6 @@ async def expire_quotes() -> int:
             q.status = QuoteStatus.EXPIRED
         await db.commit()
         return len(quotes)
-
-
-async def reconcile_payments() -> dict[str, int]:
-    """Ask Wave about payments still pending after 10 minutes, in case a webhook was lost."""
-    from app.integrations import wave
-    from app.services.payments import apply_session_state
-
-    counts = {"checked": 0, "changed": 0}
-    async with session_factory() as db:
-        ids = (
-            await db.scalars(
-                select(Payment.id).where(
-                    Payment.status == PaymentStatus.PENDING,
-                    Payment.created_at <= utcnow() - timedelta(minutes=10),
-                    Payment.checkout_session_id.is_not(None),
-                )
-            )
-        ).all()
-    for pid in ids:
-        async with session_factory() as db:
-            payment = await db.get(Payment, pid, with_for_update=True)
-            if payment is None or payment.status != PaymentStatus.PENDING:
-                continue
-            try:
-                session = await wave.get_checkout_session(payment.checkout_session_id or "")
-            except Exception:
-                log.exception("reconcile: wave lookup failed for payment %s", pid)
-                continue
-            counts["checked"] += 1
-            if await apply_session_state(db, payment, session, source="reconcile"):
-                counts["changed"] += 1
-            await db.commit()
-    return counts
 
 
 async def cancel_unpaid_orders() -> int:
@@ -192,8 +162,8 @@ TASKS: dict[str, Callable[..., Awaitable[Any]]] = {
     "send_customer_whatsapp": send_customer_whatsapp,
     "push_admins": push_admins,
     "expire_quotes": expire_quotes,
-    "reconcile_payments": reconcile_payments,
     "cancel_unpaid_orders": cancel_unpaid_orders,
+    "purge_idempotency_keys": purge_idempotency_keys,
 }
 
 

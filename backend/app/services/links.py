@@ -8,6 +8,29 @@ URL_RE = re.compile(r"https?://[^\s<>\"']+")
 SHEIN_SHARE = re.compile(r"^https://onelink\.shein\.com/\d+/[A-Za-z0-9]+(\?[\w=&%.-]*)?$", re.ASCII)
 MAX_URL_LENGTH = 1000
 
+# Flariane buys on the European stores (prices in €, shipped from Germany). Carts from these stores
+# are refused up front. Short onelink.shein.com links hide their region, so those can't be checked.
+NON_EU_HOSTS = ("us.shein.com", "ca.shein.com", "au.shein.com", "shein.co.uk", "shein.com.au")
+NON_EU_TEMU_PATH = re.compile(r"^/(us|uk|gb|ca|au)(-[a-z]{2})?(/|$)", re.IGNORECASE)
+NON_EU_MESSAGE = (
+    "Nous achetons uniquement sur la boutique européenne (en euros). "
+    "Passe ton app SHEIN ou Temu sur la France ou l’Allemagne, puis renvoie ton panier."
+)
+
+
+def is_non_eu_link(text: str) -> bool:
+    for raw in URL_RE.findall(text or ""):
+        try:
+            u = urlsplit(raw.rstrip(".,;:!?)"))
+        except ValueError:
+            continue
+        host = (u.hostname or "").lower()
+        if any(host == h or host.endswith("." + h) for h in NON_EU_HOSTS):
+            return True
+        if (host == "temu.com" or host.endswith(".temu.com")) and NON_EU_TEMU_PATH.match(u.path or ""):
+            return True
+    return False
+
 
 def extract_shein_urls(text: str) -> list[str]:
     urls: list[str] = []

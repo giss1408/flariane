@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 
 import '../core/api_client.dart';
 import 'models.dart';
@@ -164,7 +165,7 @@ class AdminApi {
         (j) => (j as Map)['url'] as String,
       );
 
-  /// Permanent deletion. [reason]: `wrong_link` | `unpaid`. Returns the wa.me link for a wrong link.
+  /// Permanent deletion. [reason]: `wrong_link` | `unpaid` | `payment_problem`. Returns the wa.me link for a wrong link.
   Future<String?> deleteOrder(int orderId, String reason) => client.call(
         (d) => d.delete('/admin/orders/$orderId', queryParameters: {'reason': reason}),
         (j) => (j as Map)['url'] as String?,
@@ -207,6 +208,17 @@ class AdminApi {
         (j) => Shipment.fromJson(j as Map<String, dynamic>),
       );
 
+  Future<Shipment> createShipment(DateTime departure) => client.call(
+        (d) => d.post('/admin/shipments', data: {'departure_date': DateFormat('yyyy-MM-dd').format(departure)}),
+        (j) => Shipment.fromJson(j as Map<String, dynamic>),
+      );
+
+  /// Every ARRIVED order of the shipment becomes ready for pickup; one row per order: {order_id, ref, ok, error}.
+  Future<List<Map<String, dynamic>>> readyShipmentForPickup(int shipmentId, {int? pickupPointId}) => client.call(
+        (d) => d.post('/admin/shipments/$shipmentId/ready-for-pickup', data: {'pickup_point_id': pickupPointId}),
+        (j) => (j as List).cast<Map<String, dynamic>>(),
+      );
+
   Future<Shipment> arriveShipment(int shipmentId) => client.call(
         (d) => d.post('/admin/shipments/$shipmentId/arrive'),
         (j) => Shipment.fromJson(j as Map<String, dynamic>),
@@ -218,6 +230,8 @@ class AdminApi {
       client.call((d) => d.get(path, queryParameters: q), (j) => (j as List).cast<Map<String, dynamic>>());
 
   Future<List<Map<String, dynamic>>> devices() => _list('/admin/devices');
+  Future<Map<String, dynamic>> pushStatus() => client.call((d) => d.get('/admin/notifications/push'), (j) => j as Map<String, dynamic>);
+  Future<Map<String, dynamic>> pushTest() => client.call((d) => d.post('/admin/notifications/push-test'), (j) => j as Map<String, dynamic>);
   Future<void> approveDevice(int id) => client.call((d) => d.post('/admin/devices/$id/approve'), (_) {});
   Future<void> revokeDevice(int id) => client.call((d) => d.post('/admin/devices/$id/revoke'), (_) {});
 
@@ -226,15 +240,18 @@ class AdminApi {
   Future<void> completeRefund(int id, String externalRef) =>
       client.call((d) => d.post('/admin/refunds/$id/complete', data: {'external_ref': externalRef}), (_) {});
 
+  /// SUPER_ADMIN: send money back for a paid order. No amount = everything not refunded yet.
+  Future<void> startRefund(int orderId, {int? amountXof, required String reason}) => client.call(
+        (d) => d.post('/admin/orders/$orderId/refund', data: {if (amountXof != null) 'amount_xof': amountXof, 'reason': reason}),
+        (_) {},
+      );
+
   /// VIEWER+
   Future<List<Map<String, dynamic>>> heldPayments() => _list('/admin/payments/held');
   Future<void> refundHeldPayment(int paymentId) => client.call((d) => d.post('/admin/payments/$paymentId/refund'), (_) {});
 
   Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> body) =>
       client.call((d) => d.put('/admin/settings', data: body), (j) => j as Map<String, dynamic>);
-
-  /// Sends a real test alert through ntfy and reports what happened (SUPER_ADMIN).
-  Future<Map<String, dynamic>> ntfyTest() => client.call((d) => d.post('/admin/ntfy/test'), (j) => j as Map<String, dynamic>);
 
   /// Offers shown on the customers' home screen.
   Future<List<Map<String, dynamic>>> offers() => _list('/admin/offers');

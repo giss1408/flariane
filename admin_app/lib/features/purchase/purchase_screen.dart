@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../order/order_screen.dart';
 
@@ -68,7 +69,8 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
     if (!_checklist.complete) {
       return showInfo(context, 'Cochez ou refusez chaque article.');
     }
-    final allRefused = _checklist.bought.isEmpty;
+    // A cart-mode quote has no lines: the empty checklist there is not "everything refused".
+    final allRefused = !_quote.isCartMode && _checklist.bought.isEmpty;
     if (!allRefused &&
         (_ref.text.trim().length < 3 || _amount.text.trim().isEmpty)) {
       return showInfo(
@@ -157,7 +159,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
             if (_quote.screenshotUrl != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.network(_quote.screenshotUrl!,
+                child: CachedImage(_quote.screenshotUrl!,
                     height: 320,
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter),

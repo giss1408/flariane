@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import on_commit
 from app.enums import ItemStatus, OrderStatus, PaymentStatus, QuoteStatus, RefundStatus, ShipmentStatus
-from app.errors import BadRequest, Conflict, NotFound, TooManyRequests
+from app.errors import BadRequest, Conflict, DomainError, NotFound, TooManyRequests
 from app.integrations import storage
 from app.models import (
     Customer,
@@ -29,7 +29,7 @@ from app.models import (
     StorePurchase,
 )
 from app.schemas import PurchaseIn
-from app.security.crypto import constant_time_equals, keyed_hash, random_digits
+from app.security.crypto import constant_time_equals, decrypt, encrypt, keyed_hash, random_digits
 from app.security.tokens import utcnow
 from app.services import notify
 from app.services.audit import audit
@@ -208,6 +208,28 @@ async def cancel_item_by_store(db: AsyncSession, order_id: int, item_id: int, re
     return refund
 
 
+REFUNDABLE_STATUSES = (OrderStatus.PAID, OrderStatus.PURCHASED)
+
+
+async def start_refund(
+    db: AsyncSession, order_id: int, amount_xof: int | None, reason: str, admin_id: int, ip: str | None
+) -> Refund:
+    """An admin sends money back for a paid order (customer cancels, wrong payment…). The payout itself
+    is done outside the app and confirmed with `complete_refund`. Giving back everything that is left
+    ends the order (REFUND_PENDING); a partial refund leaves it running. SUPER_ADMIN only, by the route."""
+    order = await _locked_order(db, order_id)
+    if order.status not in REFUNDABLE_STATUSES:
+        raise Conflict("order_not_refundable", order.status)
+    payment = await succeeded_payment(db, order.id)
+    if payment is None:
+        raise Conflict("no_paid_payment")
+    remaining = payment.amount_xof - await _refunded_so_far(db, payment.id)
+    refund = await create_refund(db, order, payment, remaining if amount_xof is None else amount_xof, reason, admin_id)
+    if refund.amount_xof == remaining:
+        await transition_order(db, order, OrderStatus.REFUND_PENDING, actor=f"admin:{admin_id}", actor_type="admin", actor_id=admin_id, ip=ip)
+    return refund
+
+
 async def complete_refund(db: AsyncSession, refund_id: int, external_ref: str, admin_id: int, ip: str | None) -> Refund:
     """Mark a refund as paid out (done in the Wave Business app). SUPER_ADMIN only, enforced by the route."""
     refund = await db.get(Refund, refund_id, with_for_update=True)
@@ -258,7 +280,9 @@ _NO_MONEY = (PaymentStatus.INITIATED, PaymentStatus.FAILED, PaymentStatus.EXPIRE
 
 async def delete_order(db: AsyncSession, order_id: int, reason: str, admin_id: int, ip: str | None) -> None:
     """Hard delete, only where no money moved. `wrong_link`: not quoted yet, any time.
-    `unpaid`: never paid and older than UNPAID_DELETE_AFTER. Only the audit entry remains."""
+    `unpaid`: never paid and older than UNPAID_DELETE_AFTER. `payment_problem`: unpaid order whose
+    payment is stuck (unconfirmed proof, fake or unreadable screenshot…), any time; refused once a
+    payment is confirmed. Only the audit entry remains."""
     order = await _locked_order(db, order_id)
     sent = await db.scalar(select(func.count()).select_from(Quote).where(Quote.order_id == order.id, Quote.status != QuoteStatus.DRAFT))
     if reason == "wrong_link":
@@ -267,10 +291,11 @@ async def delete_order(db: AsyncSession, order_id: int, reason: str, admin_id: i
     else:
         if order.status not in (OrderStatus.QUOTE_REQUESTED, OrderStatus.QUOTED, OrderStatus.AWAITING_PAYMENT, OrderStatus.CANCELLED):
             raise Conflict("order_paid")
-        if utcnow() - order.created_at < UNPAID_DELETE_AFTER:
+        if reason == "unpaid" and utcnow() - order.created_at < UNPAID_DELETE_AFTER:
             raise Conflict("order_too_recent")
     payments = (await db.scalars(select(Payment).where(Payment.order_id == order.id))).all()
-    if any(p.status not in _NO_MONEY for p in payments) or await db.scalar(select(StorePurchase.id).where(StorePurchase.order_id == order.id)):
+    no_money = _NO_MONEY + (PaymentStatus.PENDING,) if reason == "payment_problem" else _NO_MONEY  # PENDING = proof never confirmed
+    if any(p.status not in no_money for p in payments) or await db.scalar(select(StorePurchase.id).where(StorePurchase.order_id == order.id)):
         raise Conflict("order_paid")
 
     quote_ids = select(Quote.id).where(Quote.order_id == order.id).scalar_subquery()
@@ -307,6 +332,26 @@ async def ensure_departure_shipment(db: AsyncSession, departure: date, order_dea
         await audit(db, actor_type="admin", actor_id=admin_id, action="shipment.created", entity="shipment", entity_id=shipment.id,
                     after={"departure_date": departure.isoformat()})
     shipment.order_deadline = order_deadline
+    return shipment
+
+
+async def create_departure(db: AsyncSession, departure: date, admin_id: int) -> Shipment:
+    """A new open departure. It also becomes the "prochain départ" shown to customers when there is none
+    yet or the current one has already left (otherwise the admin would hit a dead end)."""
+    from app.services.settings import get_settings_map, set_setting
+
+    if departure < date.today():
+        raise BadRequest("departure_in_past")
+    existing = await db.scalar(select(Shipment).where(Shipment.departure_date == departure))
+    if existing is not None and existing.status != ShipmentStatus.OPEN:
+        raise Conflict("departure_date_taken")
+    shipment = existing or await ensure_departure_shipment(db, departure, None, admin_id)
+    settings = await get_settings_map(db)
+    current_date = settings.get("next_departure_date")
+    current = await db.scalar(select(Shipment).where(Shipment.departure_date == date.fromisoformat(current_date))) if current_date else None
+    if current is None or current.status != ShipmentStatus.OPEN or current.departure_date < date.today():
+        await set_setting(db, "next_departure_date", departure.isoformat(), admin_id)
+        await set_setting(db, "next_order_deadline", None, admin_id)
     return shipment
 
 
@@ -410,16 +455,45 @@ async def mark_ready_for_pickup(db: AsyncSession, order_id: int, pickup_point_id
     code = random_digits(6)
     row = await db.get(PickupCode, order.id)
     if row is None:
-        db.add(PickupCode(order_id=order.id, code_hash=_pickup_hash(order.id, code)))
+        db.add(PickupCode(order_id=order.id, code_hash=_pickup_hash(order.id, code), code_enc=encrypt(code)))
     else:
-        row.code_hash, row.failed_attempts, row.used_at = _pickup_hash(order.id, code), 0, None
+        row.code_hash, row.code_enc, row.failed_attempts, row.used_at = _pickup_hash(order.id, code), encrypt(code), 0, None
     if order.status == OrderStatus.ARRIVED:
         await transition_order(db, order, OrderStatus.READY_FOR_PICKUP, actor=f"admin:{admin_id}", actor_type="admin", actor_id=admin_id, ip=ip)
     customer = await db.get(Customer, order.customer_id)
     assert customer is not None
     notify.ready_for_pickup(db, customer, order, point, code)
-    # Returned once so the admin can send it from their own WhatsApp; only the hash is stored.
     return code
+
+
+async def current_pickup_code(db: AsyncSession, order_id: int) -> str | None:
+    """The code of a parcel that is waiting at the pickup point (None once collected or for older orders)."""
+    row = await db.get(PickupCode, order_id)
+    if row is None or row.used_at is not None or row.code_enc is None:
+        return None
+    return decrypt(row.code_enc)
+
+
+async def mark_shipment_ready(db: AsyncSession, shipment_id: int, pickup_point_id: int | None, admin_id: int, ip: str | None) -> list[dict[str, object]]:
+    """Every order of an arrived shipment that is still ARRIVED becomes READY_FOR_PICKUP, each with its own code.
+    An order without a pickup point is skipped unless `pickup_point_id` is given. Returns one row per order."""
+    shipment = await db.get(Shipment, shipment_id)
+    if shipment is None:
+        raise NotFound()
+    if shipment.status != ShipmentStatus.ARRIVED:
+        raise Conflict("shipment_not_arrived")
+    orders = await _shipment_orders(db, shipment_id)
+    results: list[dict[str, object]] = []
+    for order in orders:
+        if order.status != OrderStatus.ARRIVED:
+            continue
+        try:
+            async with db.begin_nested():
+                await mark_ready_for_pickup(db, order.id, pickup_point_id, admin_id, ip)
+            results.append({"order_id": order.id, "ref": order.public_ref, "ok": True, "error": None})
+        except DomainError as exc:
+            results.append({"order_id": order.id, "ref": order.public_ref, "ok": False, "error": exc.code})
+    return results
 
 
 async def confirm_pickup(db: AsyncSession, order_id: int, code: str, admin_id: int, ip: str | None) -> None:

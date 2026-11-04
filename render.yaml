@@ -17,9 +17,11 @@ services:
     plan: free
     region: frankfurt
     buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: FLR_TRUSTED_PROXY_HOPS
+        value: "1"
       - key: PYTHON_VERSION
         value: "3.13.5"
       # Neon → your project → Connect → copy the connection string (pooled or direct both work).
@@ -32,8 +34,6 @@ services:
         generateValue: true
       - key: FLR_HASH_KEY
         generateValue: true
-      - key: FLR_WAVE_WEBHOOK_SECRET
-        generateValue: true
       # One-time creation of the first super admin (no shell on the free plan). Remove after setup.
       - key: FLR_SETUP_TOKEN
         generateValue: true
@@ -42,18 +42,15 @@ services:
       - key: FLR_ENV
         value: staging
       - key: FLR_DEV_ROUTES
-        value: "true" # password-less test login + fake Wave page
-      - key: FLR_WAVE_MODE
-        value: fake
+        value: "true" # password-less test login
       - key: FLR_WHATSAPP_MODE
         value: log
       - key: FLR_PUSH_MODE
-        value: log
-      # Admin alerts via the ntfy app: set a long random topic (+ token if the topic is reserved).
-      - key: FLR_NTFY_TOPIC
-        sync: false
-      - key: FLR_NTFY_TOKEN
-        sync: false
+        value: live
+      - key: FLR_FCM_PROJECT_ID
+        value: flariane
+      - key: FLR_FCM_SERVICE_ACCOUNT_JSON
+        sync: false # service-account key: paste it in the Render dashboard, never in this file
       - key: FLR_TASK_MODE
         value: inline
       - key: FLR_RATE_LIMIT_STORAGE

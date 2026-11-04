@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Cookie, Depends, Request, Response
+from limits import parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session, on_commit
 from app.tasks import dispatch
-from app.errors import BadRequest, DomainError
-from app.ratelimit import ip_limited
+from app.errors import BadRequest, DomainError, TooManyRequests
+from app.ratelimit import ip_limited, limiter
 from app.schemas import LoginIn, RefreshIn, RegisterIn, TokenOut
 from app.security.deps import client_ip
 from app.security.tokens import (
@@ -54,6 +55,11 @@ def _tokens(customer_id: int, refresh: str, client: str, response: Response) -> 
 async def register(data: RegisterIn, request: Request, response: Response, db: AsyncSession = Depends(get_session)) -> TokenOut:
     if not data.consent:
         raise BadRequest("consent_required")
+    s = get_settings()
+    if not limiter().hit(parse(f"{s.register_per_ip_hour}/hour"), f"register-ip:{client_ip(request)}") or not limiter().hit(
+        parse(f"{s.register_global_hour}/hour"), "register-global"
+    ):
+        raise TooManyRequests("register_rate_limited")
     customer = await customer_auth.register(db, data.phone, data.password, data.display_name)
     refresh = await issue_refresh_token(db, "customer", customer.id)
     await audit(db, actor_type="customer", actor_id=customer.id, action="auth.registered", ip=client_ip(request))

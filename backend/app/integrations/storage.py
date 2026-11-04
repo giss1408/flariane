@@ -77,6 +77,26 @@ def put(key: str, data: bytes, content_type: str) -> None:
     path.write_bytes(data)
 
 
+def is_durable() -> bool:
+    """Local disk is wiped when a free/starter host restarts or redeploys; only object storage keeps files."""
+    return get_settings().storage_mode == "s3"
+
+
+def get(key: str) -> bytes | None:
+    s = get_settings()
+    if s.storage_mode == "s3":
+        try:
+            return _s3().get_object(Bucket=s.s3_bucket, Key=key)["Body"].read()
+        except _s3().exceptions.NoSuchKey:
+            return None
+    path = Path(s.storage_local_dir) / key
+    return path.read_bytes() if path.is_file() else None
+
+
+def new_proof_key(order_id: int, ext: str) -> str:
+    return f"proofs/{order_id}/{uuid.uuid4().hex}.{ext}"
+
+
 def delete(key: str) -> None:
     s = get_settings()
     if s.storage_mode == "s3":

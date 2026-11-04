@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
+from anyio import to_thread
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
@@ -45,6 +46,7 @@ from app.schemas import (
     QuoteLineOut,
     ReadyForPickupIn,
     RefundOut,
+    RefundStartIn,
     SendQuoteIn,
     StatusEventOut,
     StorePurchaseOut,
@@ -63,6 +65,7 @@ from app.services.settings import get_settings_map
 router = APIRouter(prefix="/admin/orders", tags=["admin-orders"], dependencies=[Depends(admin_limited)])
 viewer = Depends(require_role(AdminRole.VIEWER))
 operator = Depends(require_role(AdminRole.OPERATOR))
+super_admin = Depends(require_role(AdminRole.SUPER_ADMIN))
 pickup_desk = Depends(require_pickup_access())
 
 TABS: dict[str, list[OrderStatus]] = {
@@ -332,6 +335,13 @@ async def cancel_item(order_id: int, item_id: int, data: CancelItemIn, request: 
     return RefundOut.model_validate(refund)
 
 
+@router.post("/{order_id}/refund", response_model=RefundOut)
+async def start_refund(order_id: int, data: RefundStartIn, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> RefundOut:
+    refund = await operations.start_refund(db, order_id, data.amount_xof, data.reason, admin.id, client_ip(request))
+    await db.commit()
+    return RefundOut.model_validate(refund)
+
+
 @router.post("/{order_id}/ready-for-pickup")
 async def ready_for_pickup(order_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = pickup_desk, db: AsyncSession = Depends(get_session)) -> dict[str, str]:
     code = await operations.mark_ready_for_pickup(db, order_id, data.pickup_point_id, admin.id, client_ip(request))
@@ -358,9 +368,12 @@ async def payment_proof(order_id: int, _: AdminContext = viewer, db: AsyncSessio
         select(Payment).where(Payment.order_id == order_id, Payment.proof_content_type.is_not(None))
         .order_by(Payment.id.desc()).limit(1).options(undefer(Payment.proof_image))
     )
-    if payment is None or payment.proof_image is None:
+    if payment is None:
         raise NotFound()
-    return Response(payment.proof_image, media_type=payment.proof_content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
+    image = await to_thread.run_sync(storage.get, payment.proof_key) if payment.proof_key else payment.proof_image
+    if image is None:
+        raise NotFound()
+    return Response(image, media_type=payment.proof_content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
 
 
 class WhatsAppMessageIn(BaseModel):
@@ -384,7 +397,7 @@ async def archive_order(order_id: int, request: Request, admin: AdminContext = o
 
 @router.delete("/{order_id}")
 async def delete_order(
-    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid"] = Query(), admin: AdminContext = operator,
+    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid", "payment_problem"] = Query(), admin: AdminContext = operator,
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str | None]:
     """Permanent deletion (see operations.delete_order). For a wrong link, returns the WhatsApp
@@ -415,9 +428,12 @@ async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Requ
     point = await db.get(PickupPoint, order.pickup_point_id) if order.pickup_point_id else None
     if data.kind == "quote" and quote is None:
         raise Conflict("no_quote")
-    if data.kind == "pickup" and (point is None or data.code is None):
+    code = data.code
+    if data.kind == "pickup" and code is None and order.status == OrderStatus.READY_FOR_PICKUP:
+        code = await operations.current_pickup_code(db, order.id)  # resend the same code, no new one needed
+    if data.kind == "pickup" and (point is None or code is None):
         raise Conflict("pickup_not_ready")
-    text = wa.text_for(data.kind, customer, order, quote, point, data.code)
+    text = wa.text_for(data.kind, customer, order, quote, point, code)
     await audit(db, actor_type="admin", actor_id=admin.id, action=f"whatsapp.{data.kind}", entity="order", entity_id=order.id, ip=client_ip(request))
     await db.commit()
     return {"url": wa.wa_link(decrypt(customer.phone_enc), text), "text": text}

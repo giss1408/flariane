@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/whatsapp.dart';
 import '../order/order_screen.dart';
 import 'dispatch_screen.dart';
 
@@ -163,6 +164,7 @@ class ShipmentScreen extends ConsumerWidget {
                       },
                       child: const Text('Arrivée à Abidjan'),
                     ),
+                  'ARRIVED' => FilledButton(onPressed: () => _readyForPickup(context, ref, shipment.value!), child: const Text('Tout marquer prêt au retrait')),
                   _ => const SizedBox.shrink(),
                 },
               ),
@@ -233,6 +235,54 @@ class ShipmentScreen extends ConsumerWidget {
       await ref.read(adminApiProvider).addToShipment(s.id, selected.toList());
       ref.invalidate(_shipmentProvider(shipmentId));
       ref.invalidate(_toShipProvider);
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
+
+  /// One tap for the whole shipment. Orders without a pickup point come back as errors: pick one and retry for them.
+  Future<void> _readyForPickup(BuildContext context, WidgetRef ref, Shipment s) async {
+    final api = ref.read(adminApiProvider);
+    try {
+      var results = await api.readyShipmentForPickup(s.id);
+      if (results.any((r) => r['error'] == 'pickup_point_required') && context.mounted) {
+        final points = await ref.read(pickupPointsProvider.future);
+        if (!context.mounted) return;
+        final id = await showModalBottomSheet<int>(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: ListView(shrinkWrap: true, children: [
+              const ListTile(title: Text('Point de retrait pour les commandes sans point', style: TextStyle(fontWeight: FontWeight.w700))),
+              for (final p in points) ListTile(title: Text(p.name), subtitle: Text(p.address), onTap: () => Navigator.pop(ctx, p.id)),
+            ]),
+          ),
+        );
+        if (id != null) results = [...results.where((r) => r['ok'] == true), ...await api.readyShipmentForPickup(s.id, pickupPointId: id)];
+      }
+      ref.invalidate(_shipmentProvider(s.id));
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(results.isEmpty ? 'Rien à faire' : '${results.where((r) => r['ok'] == true).length} commande(s) prête(s)'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: results.isEmpty
+                ? const Text('Aucune commande de cette expédition n’est en attente.')
+                : ListView(shrinkWrap: true, children: [
+                    for (final r in results)
+                      ListTile(
+                        dense: true,
+                        title: Text('${r['ref']}'),
+                        subtitle: r['ok'] == true ? const Text('Prête au retrait') : Text('Non traitée : ${r['error']}'),
+                        // The code is stored on the server: the message carries the same code the customer sees in the app.
+                        trailing: r['ok'] == true ? IconButton(icon: const Icon(Icons.chat_rounded, color: whatsappGreen), onPressed: () => sendWhatsApp(ctx, ref, r['order_id'] as int, 'pickup')) : null,
+                      ),
+                  ]),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer'))],
+        ),
+      );
     } catch (e) {
       if (context.mounted) showError(context, e);
     }

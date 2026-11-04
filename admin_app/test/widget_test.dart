@@ -5,7 +5,6 @@ import 'package:flariane_admin/core/theme.dart';
 import 'package:flariane_admin/data/admin_api.dart';
 import 'package:flariane_admin/data/models.dart';
 import 'package:flariane_admin/features/auth/auth_screens.dart';
-import 'package:flariane_admin/features/account/account_screen.dart';
 import 'package:flariane_admin/features/account/backoffice_screens.dart';
 import 'package:flariane_admin/features/inbox/inbox_screen.dart';
 import 'package:flariane_admin/features/inbox/payments_to_confirm.dart';
@@ -293,39 +292,117 @@ void main() {
     });
   });
 
-  group('test alerts', () {
-    List<Override> asSuperAdmin(MockApi api) => [adminApiProvider.overrideWithValue(api), sessionProvider.overrideWith(_SuperAdminSession.new)];
+  group('refunds', () {
+    Map<String, dynamic> paidOrder({String status = 'PAID', bool proof = true}) => {
+          'id': 42,
+          'public_ref': 'FLR-AAAAA',
+          'created_at': '2026-10-01T10:00:00Z',
+          'status': status,
+          'customer_id': 1,
+          'customer_name': 'Awa',
+          'customer_phone_masked': '+225 07 •• •• 04',
+          'source_cart_url': null,
+          'submitted_links': <String>[],
+          'customer_note': null,
+          'pickup_point': null,
+          'items': <dynamic>[],
+          'quotes': <dynamic>[],
+          'change_requests': <dynamic>[],
+          'attachments': <dynamic>[],
+          'payments': [
+            {'status': 'SUCCEEDED', 'amount_xof': 30000, 'provider': 'MANUAL', 'declared': true, 'method': 'ORANGE', 'has_proof': proof},
+          ],
+          'purchase': null,
+          'history': <dynamic>[],
+        };
 
-    Future<void> openTest(WidgetTester tester, MockApi api) async {
-      await tester.pumpWidget(host(const AccountScreen(), asSuperAdmin(api)));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Tester les alertes'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Tester les alertes'));
-      await tester.pumpAndSettle();
-    }
+    List<Override> as_(MockApi api, SessionController Function() session) =>
+        [adminApiProvider.overrideWithValue(api), sessionProvider.overrideWith(session)];
 
-    testWidgets('says the alert was sent and which topic to look for', (tester) async {
+    testWidgets('a super admin refunds a paid order; the full amount sends no amount', (tester) async {
       final api = MockApi();
-      when(() => api.ntfyTest()).thenAnswer((_) async => {'sent': true, 'topic_hint': 'fl•••••••••ic', 'topic_length': 19, 'server': 'https://ntfy.sh'});
-      await openTest(tester, api);
-      expect(find.text('Alerte envoyée'), findsOneWidget);
-      expect(find.textContaining('fl•••••••••ic (19 caractères)'), findsOneWidget);
+      when(() => api.order(42)).thenAnswer((_) async => OrderDetail.fromJson(paidOrder()));
+      when(() => api.startRefund(any(), amountXof: any(named: 'amountXof'), reason: any(named: 'reason'))).thenAnswer((_) async {});
+      await tester.pumpWidget(host(const OrderScreen(orderId: 42), as_(api, _SuperAdminSession.new)));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Rembourser la cliente…'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Rembourser la cliente…'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Orange Money'), findsOneWidget);
+      await tester.tap(find.text('Rembourser')); // reason is required
+      await tester.pumpAndSettle();
+      expect(find.text('Motif requis'), findsOneWidget);
+      verifyNever(() => api.startRefund(any(), amountXof: any(named: 'amountXof'), reason: any(named: 'reason')));
+      await tester.enterText(find.widgetWithText(TextFormField, 'Motif'), 'Cliente annule');
+      await tester.tap(find.text('Rembourser'));
+      await tester.pumpAndSettle();
+      verify(() => api.startRefund(42, amountXof: null, reason: 'Cliente annule')).called(1);
     });
 
-    testWidgets('shows why ntfy refused the alert', (tester) async {
+    testWidgets('a partial amount is sent and an amount above the payment is refused', (tester) async {
       final api = MockApi();
-      when(() => api.ntfyTest())
-          .thenAnswer((_) async => {'sent': false, 'error': 'ntfy a répondu 403 : forbidden', 'topic_hint': 'fl•••••••••ic', 'topic_length': 19, 'server': 'https://ntfy.sh'});
-      await openTest(tester, api);
-      expect(find.text('Alerte refusée'), findsOneWidget);
-      expect(find.textContaining('403'), findsOneWidget);
+      when(() => api.order(42)).thenAnswer((_) async => OrderDetail.fromJson(paidOrder()));
+      when(() => api.startRefund(any(), amountXof: any(named: 'amountXof'), reason: any(named: 'reason'))).thenAnswer((_) async {});
+      await tester.pumpWidget(host(const OrderScreen(orderId: 42), as_(api, _SuperAdminSession.new)));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Rembourser la cliente…'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Rembourser la cliente…'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextFormField, 'Montant à rembourser (FCFA)'), '99999');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Motif'), 'Geste');
+      await tester.tap(find.text('Rembourser'));
+      await tester.pumpAndSettle();
+      expect(find.text('Entre 1 et 30000'), findsOneWidget);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Montant à rembourser (FCFA)'), '5000');
+      await tester.tap(find.text('Rembourser'));
+      await tester.pumpAndSettle();
+      verify(() => api.startRefund(42, amountXof: 5000, reason: 'Geste')).called(1);
     });
 
-    testWidgets('operators do not see the test', (tester) async {
-      await tester.pumpWidget(host(const AccountScreen(), [adminApiProvider.overrideWithValue(MockApi()), sessionProvider.overrideWith(_OperatorSession.new)]));
+    testWidgets('an operator does not get the refund action', (tester) async {
+      final api = MockApi();
+      when(() => api.order(42)).thenAnswer((_) async => OrderDetail.fromJson(paidOrder()));
+      await tester.pumpWidget(host(const OrderScreen(orderId: 42), as_(api, _OperatorSession.new)));
       await tester.pumpAndSettle();
-      expect(find.text('Tester les alertes'), findsNothing);
+      expect(find.text('Rembourser la cliente…'), findsNothing);
+    });
+
+    testWidgets('a refund waiting to be paid shows a warning and the proof button', (tester) async {
+      final api = MockApi();
+      when(() => api.order(42)).thenAnswer((_) async => OrderDetail.fromJson(paidOrder(status: 'REFUND_PENDING')));
+      await tester.pumpWidget(host(const OrderScreen(orderId: 42), as_(api, _OperatorSession.new)));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.textContaining('Remboursement à envoyer'), 300, scrollable: find.byType(Scrollable).first);
+      expect(find.textContaining('Remboursement à envoyer'), findsOneWidget);
+      expect(find.text('Voir la capture du paiement'), findsOneWidget);
+      expect(find.text('Rembourser la cliente…'), findsNothing);
+    });
+
+    testWidgets('the refunds list shows the order reference, how she paid and the screenshot button', (tester) async {
+      final api = MockApi();
+      Map<String, dynamic> refund(int id, {bool proof = true, String status = 'PENDING', String? method = 'ORANGE'}) => {
+            'id': id,
+            'order_id': 40 + id,
+            'payment_id': id,
+            'amount_xof': 30000,
+            'reason': 'Cliente annule',
+            'status': status,
+            'created_at': '2026-10-01T10:00:00Z',
+            'completed_at': null,
+            'external_ref': status == 'COMPLETED' ? 'OM-123' : null,
+            'order_ref': 'FLR-0000$id',
+            'method': method,
+            'has_proof': proof,
+          };
+      when(() => api.refunds()).thenAnswer((_) async => [refund(1), refund(2, proof: false, method: null), refund(3, status: 'COMPLETED')]);
+      await tester.pumpWidget(host(const RefundsScreen(), [adminApiProvider.overrideWithValue(api)]));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('FLR-00001'), findsOneWidget);
+      expect(find.textContaining('À rembourser par Orange Money'), findsOneWidget);
+      expect(find.textContaining('À rembourser par mobile money'), findsOneWidget);
+      expect(find.text('Voir la capture'), findsNWidgets(2)); // the second refund has no screenshot
+      expect(find.text('Fait'), findsNWidgets(2));
+      expect(find.textContaining('Remboursé (OM-123)'), findsOneWidget);
     });
   });
 }

@@ -1,8 +1,12 @@
+import 'dart:math';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../data/models.dart';
 import 'format.dart';
+import 'response_cache.dart';
 
 class ApiException implements Exception {
   ApiException(this.status, this.code);
@@ -11,7 +15,7 @@ class ApiException implements Exception {
   final String code;
 
   String get message =>
-      status == null ? 'Pas de connexion. Vérifiez votre réseau.' : (errorMessages[code] ?? 'Une erreur est survenue.');
+      status == null ? 'Pas de connexion. Vérifie ton réseau.' : (errorMessages[code] ?? 'Une erreur est survenue.');
 }
 
 ApiException toApiException(Object e) {
@@ -51,11 +55,18 @@ class MemoryTokenStore implements TokenStore {
   Future<void> write(String? t) async => token = t;
 }
 
+/// One per user action (not per HTTP attempt): a retry after a timeout sends the same key, so the server
+/// answers with the first result instead of creating a second order or payment declaration.
+String newIdempotencyKey() {
+  final r = Random.secure();
+  return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+}
+
 enum RefreshOutcome { ok, expired, offline }
 
 /// Customer API. Access token in memory; refresh token in Keychain/Keystore, rotated on use.
 class CustomerApi {
-  CustomerApi({required String baseUrl, required this.tokens, Dio? dio, Dio? authDio})
+  CustomerApi({required String baseUrl, required this.tokens, this.cache = const NoCache(), Dio? dio, Dio? authDio})
       // Free hosting sleeps when idle and can take ~1 min to wake up.
       : dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))),
         _auth = authDio ?? Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60))) {
@@ -64,7 +75,13 @@ class CustomerApi {
             if (accessToken != null) o.headers['Authorization'] = 'Bearer $accessToken';
             h.next(o);
           },
+          onResponse: (res, h) {
+            online.value = true;
+            h.next(res);
+          },
           onError: (err, h) async {
+            // No answer at all (no network, DNS, timeout) = offline; any HTTP answer, even an error, = online.
+            online.value = err.response != null;
             final req = err.requestOptions;
             if (err.response?.statusCode == 401 && req.extra['retried'] != true) {
               final outcome = await refresh();
@@ -84,9 +101,12 @@ class CustomerApi {
         ));
   }
 
+  /// False after a request got no answer, true again after the next one that does. Drives the offline banner.
+  final ValueNotifier<bool> online = ValueNotifier(true);
   final Dio dio;
   final Dio _auth; // no interceptors: refresh must not recurse into the queued error handler
   final TokenStore tokens;
+  final ResponseCache cache;
   String? accessToken;
   void Function()? onSessionExpired;
   Future<RefreshOutcome>? _inflight;
@@ -142,6 +162,7 @@ class CustomerApi {
     } catch (_) {}
     accessToken = null;
     await tokens.write(null);
+    await cache.clear();
   }
 
   // ---- account
@@ -181,9 +202,10 @@ class CustomerApi {
 
   String get waveQrUrl => '${dio.options.baseUrl}/public/wave-qr';
 
-  Future<Payment> declarePayment(String ref, {required String method, required String proofPath}) => _call(
+  Future<Payment> declarePayment(String ref, {required String method, required String proofPath, String? idempotencyKey}) => _call(
         () async => dio.post('/orders/$ref/payment/declare',
-            data: FormData.fromMap({'method': method, 'file': await MultipartFile.fromFile(proofPath)})),
+            data: FormData.fromMap({'method': method, 'file': await MultipartFile.fromFile(proofPath)}),
+            options: _idem(idempotencyKey)),
         (j) => Payment.fromJson(j as Map<String, dynamic>),
       );
 
@@ -192,13 +214,32 @@ class CustomerApi {
   Future<List<PickupPoint>> pickupPoints() => _call(() => dio.get('/pickup-points'),
       (j) => (j as List).cast<Map<String, dynamic>>().map(PickupPoint.fromJson).toList());
 
-  Future<List<OrderSummary>> orders() => _call(
-      () => dio.get('/orders'), (j) => (j as List).cast<Map<String, dynamic>>().map(OrderSummary.fromJson).toList());
+  /// GET that remembers the last good answer and returns it when there is no connection at all
+  /// (an HTTP error, including 4xx/5xx, is still an error). The offline banner tells her it may be old.
+  Future<T> _cached<T>(String key, String path, T Function(dynamic) parse) async {
+    try {
+      final data = (await dio.get(path)).data;
+      await cache.write(key, data);
+      return parse(data);
+    } catch (e) {
+      final err = toApiException(e);
+      if (err.status == null) {
+        final saved = await cache.read(key);
+        if (saved != null) return parse(saved);
+      }
+      throw err;
+    }
+  }
 
-  Future<Order> order(String ref) => _call(() => dio.get('/orders/$ref'), (j) => Order.fromJson(j as Map<String, dynamic>));
+  Future<List<OrderSummary>> orders() =>
+      _cached('orders', '/orders', (j) => (j as List).cast<Map<String, dynamic>>().map(OrderSummary.fromJson).toList());
 
-  Future<Order> createOrder({required String shareText, int? pickupPointId, String? note}) => _call(
-      () => dio.post('/orders', data: {'share_text': shareText, 'pickup_point_id': pickupPointId, 'note': note}),
+  Future<Order> order(String ref) => _cached('order.$ref', '/orders/$ref', (j) => Order.fromJson(j as Map<String, dynamic>));
+
+  Options? _idem(String? key) => key == null ? null : Options(headers: {'Idempotency-Key': key});
+
+  Future<Order> createOrder({required String shareText, int? pickupPointId, String? note, String? idempotencyKey}) => _call(
+      () => dio.post('/orders', data: {'share_text': shareText, 'pickup_point_id': pickupPointId, 'note': note}, options: _idem(idempotencyKey)),
       (j) => Order.fromJson(j as Map<String, dynamic>));
 
   Future<void> uploadScreenshot(String ref, String path) => _call(
@@ -208,9 +249,6 @@ class CustomerApi {
   Future<Payment> acceptQuote(String ref, int version) => _call(
       () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true}),
       (j) => Payment.fromJson(j as Map<String, dynamic>));
-
-  Future<Payment> retryPayment(String ref) =>
-      _call(() => dio.post('/orders/$ref/payment'), (j) => Payment.fromJson(j as Map<String, dynamic>));
 
   Future<void> requestChange(String ref, int version, Map<String, dynamic> body) =>
       _call(() => dio.post('/orders/$ref/quotes/$version/change-request', data: body), (_) {});

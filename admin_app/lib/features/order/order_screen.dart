@@ -9,7 +9,9 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_proof.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/whatsapp.dart';
 import '../purchase/purchase_screen.dart';
@@ -43,7 +45,7 @@ class OrderScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(order.valueOrNull?.publicRef ?? 'Commande'),
         actions: [
-          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid))
+          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid || order.value!.canDeletePaymentProblem))
             _DeleteMenu(order: order.value!),
         ],
       ),
@@ -106,6 +108,7 @@ class OrderScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              _RefundSection(order: o, canRefund: me?.role == 'SUPER_ADMIN', onChanged: () => ref.invalidate(orderProvider(orderId))),
               _ItemsSection(order: o, canOperate: me?.canOperate ?? false),
               const SectionTitle('Historique'),
               Card(
@@ -282,13 +285,12 @@ class _CartSection extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => Scaffold(
                     appBar: AppBar(title: const Text('Capture du panier')),
-                    body: InteractiveViewer(child: Center(child: Image.network(order.attachments[i].url))),
+                    body: InteractiveViewer(child: Center(child: CachedImage(order.attachments[i].url))),
                   ),
                 )),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(order.attachments[i].url, width: 100, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(width: 100, child: Icon(Icons.broken_image_outlined))),
+                  child: CachedImage(order.attachments[i].url, width: 100, height: 100, fit: BoxFit.cover, errorText: ''),
                 ),
               ),
             ),
@@ -316,7 +318,7 @@ class _QuoteSummary extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(q.screenshotUrl!, height: 200, width: double.infinity, fit: BoxFit.cover, alignment: Alignment.topCenter),
+                  child: CachedImage(q.screenshotUrl!, height: 200, width: double.infinity, fit: BoxFit.cover, alignment: Alignment.topCenter),
                 ),
               ),
             for (final l in q.lines)
@@ -452,7 +454,7 @@ class _PrimaryAction extends ConsumerWidget {
               OutlinedButton.icon(
                 icon: const Icon(Icons.receipt_rounded),
                 label: const Text('Voir la capture du paiement'),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ProofScreen(orderId: order.id))),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentProofScreen(orderId: order.id))),
               ),
             const SizedBox(height: 8),
           ] else ...[
@@ -589,9 +591,14 @@ class _PrimaryAction extends ConsumerWidget {
             if (open.isEmpty)
               const ListTile(
                 leading: Icon(Icons.info_outline_rounded),
-                title: Text('Aucun départ prévu'),
-                subtitle: Text('Fixez le prochain départ dans Paramètres pour créer l’expédition.'),
+                title: Text('Aucun départ ouvert'),
+                subtitle: Text('Crée le prochain départ ci-dessus.'),
               ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline_rounded),
+              title: const Text('Créer un nouveau départ'),
+              onTap: () => Navigator.pop(ctx, -1),
+            ),
             for (final s in open)
               ListTile(
                 leading: const Icon(Icons.flight_takeoff_rounded),
@@ -604,7 +611,20 @@ class _PrimaryAction extends ConsumerWidget {
         ),
       );
       if (choice == null) return;
-      await api.addToShipment(choice, [order.id]);
+      var shipmentId = choice;
+      if (choice == -1) {
+        if (!context.mounted) return;
+        final date = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 14)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+          helpText: 'Date de départ',
+        );
+        if (date == null) return;
+        shipmentId = (await api.createShipment(date)).id;
+      }
+      await api.addToShipment(shipmentId, [order.id]);
       ref.invalidate(orderProvider(order.id));
       if (context.mounted) showInfo(context, 'Commande ajoutée. Marquez l’expédition comme partie au départ.');
     } catch (e) {
@@ -676,23 +696,95 @@ class _PrimaryAction extends ConsumerWidget {
   }
 }
 
-class _ProofScreen extends ConsumerWidget {
-  const _ProofScreen({required this.orderId});
+/// SUPER_ADMIN: send money back for a paid order; everyone sees a pending refund and can open the proof.
+class _RefundSection extends ConsumerWidget {
+  const _RefundSection({required this.order, required this.canRefund, required this.onChanged});
 
-  final int orderId;
+  final OrderDetail order;
+  final bool canRefund;
+  final VoidCallback onChanged;
+
+  PaymentInfo? get _paid => order.payments.where((p) => p.status == 'SUCCEEDED').firstOrNull;
+
+  Future<void> _start(BuildContext context, WidgetRef ref) async {
+    final paid = _paid;
+    if (paid == null) return;
+    final amount = TextEditingController(text: '${paid.amountXof}');
+    final reason = TextEditingController();
+    final form = GlobalKey<FormState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rembourser la cliente'),
+        content: Form(
+          key: form,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Payé : ${fcfa(paid.amountXof)} par ${paid.methodName}. Si tu rembourses tout, la commande est terminée.'),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(labelText: 'Montant à rembourser (FCFA)'),
+              validator: (v) {
+                final n = int.tryParse(v ?? '');
+                return n == null || n <= 0 || n > paid.amountXof ? 'Entre 1 et ${paid.amountXof}' : null;
+              },
+            ),
+            TextFormField(
+              controller: reason,
+              maxLength: 200,
+              decoration: const InputDecoration(labelText: 'Motif'),
+              validator: (v) => (v ?? '').trim().length < 3 ? 'Motif requis' : null,
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => form.currentState!.validate() ? Navigator.pop(ctx, true) : null, child: const Text('Rembourser')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      final n = int.parse(amount.text);
+      await ref.read(adminApiProvider).startRefund(order.id, amountXof: n == paid.amountXof ? null : n, reason: reason.text.trim());
+      onChanged();
+      if (context.mounted) showInfo(context, 'Remboursement créé. Envoie l’argent puis marque-le « Fait » dans Remboursements.');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        appBar: AppBar(title: const Text('Capture du paiement')),
-        body: FutureBuilder<List<int>>(
-          future: ref.read(adminApiProvider).paymentProof(orderId),
-          builder: (context, snap) {
-            if (snap.hasError) return ErrorView(snap.error!, onRetry: () => (context as Element).markNeedsBuild());
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            return InteractiveViewer(maxScale: 5, child: Center(child: Image.memory(Uint8List.fromList(snap.data!))));
-          },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = order.status == 'REFUND_PENDING';
+    final startable = canRefund && (order.status == 'PAID' || order.status == 'PURCHASED') && _paid != null;
+    if (!pending && !startable) return const SizedBox.shrink();
+    final proof = order.payments.any((p) => p.hasProof);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SectionTitle('Remboursement'),
+      if (pending) ...[
+        const WarningBox('Remboursement à envoyer à la cliente. Quand c’est fait, marque-le « Fait » dans Compte › Remboursements.'),
+      ],
+      if (pending && proof)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.receipt_rounded),
+            label: const Text('Voir la capture du paiement'),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentProofScreen(orderId: order.id))),
+          ),
         ),
-      );
+      if (startable)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.undo_rounded, color: AppColors.danger),
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+          label: const Text('Rembourser la cliente…'),
+          onPressed: () => _start(context, ref),
+        ),
+    ]);
+  }
 }
 
 class _DeleteMenu extends ConsumerWidget {
@@ -708,6 +800,8 @@ class _DeleteMenu extends ConsumerWidget {
             const PopupMenuItem(value: 'wrong_link', child: Text('Lien incorrect · supprimer')),
           if (order.canDeleteUnpaid)
             const PopupMenuItem(value: 'unpaid', child: Text('Supprimer (non payée)')),
+          if (order.canDeletePaymentProblem)
+            const PopupMenuItem(value: 'payment_problem', child: Text('Problème de paiement · supprimer')),
         ],
       );
 
@@ -719,8 +813,11 @@ class _DeleteMenu extends ConsumerWidget {
       body: wrongLink
           ? 'Le lien ne mène pas à un panier ${order.storeName} valide. La commande est supprimée définitivement, '
               'puis WhatsApp s’ouvre avec un message demandant à la cliente de renvoyer son panier.'
-          : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '
-              '(devis, captures, articles) et disparaît aussi de l’app de la cliente.',
+          : reason == 'payment_problem'
+              ? 'Problème de paiement (preuve fausse, illisible ou jamais confirmée). Aucun paiement n’est confirmé : '
+                  'la commande est supprimée définitivement (devis, captures, articles) et disparaît aussi de l’app de la cliente.'
+              : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '
+                  '(devis, captures, articles) et disparaît aussi de l’app de la cliente.',
       ok: 'Supprimer',
     );
     if (!ok) return;

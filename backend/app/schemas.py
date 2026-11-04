@@ -204,7 +204,7 @@ class PaymentOut(BaseModel):
     status: str
     amount_xof: int
     launch_url: str | None
-    provider: str = "WAVE"  # WAVE (checkout) | MANUAL (mobile money + screenshot, confirmed by an admin)
+    provider: str = "MANUAL"  # mobile money + screenshot, confirmed by an admin
     declared: bool = False  # MANUAL: the customer sent her payment screenshot
     method: str | None = None  # WAVE | ORANGE | MOOV
     has_proof: bool = False
@@ -239,6 +239,7 @@ class OrderDetailOut(OrderSummaryOut):
     can_cancel: bool
     can_request_requote: bool
     payment_deadline: datetime | None = None  # cancelled automatically if not paid by then
+    pickup_code: str | None = None  # only while the parcel waits at the pickup point, only for its owner
 
 
 class AcceptQuoteIn(In):
@@ -422,6 +423,10 @@ class ShipmentOut(Out):
     order_refs: list[str] = []
 
 
+class ShipmentCreateIn(In):
+    departure_date: date
+
+
 class ReadyForPickupIn(In):
     pickup_point_id: int | None = None
 
@@ -444,6 +449,16 @@ class RefundOut(Out):
     created_at: datetime
     completed_at: datetime | None
     external_ref: str | None
+    # Filled by the refunds list so the admin sees which order and where the customer paid from.
+    order_ref: str | None = None
+    method: str | None = None  # WAVE | ORANGE | MOOV
+    has_proof: bool = False  # the customer's payment screenshot can be opened
+
+
+class RefundStartIn(In):
+    """Start a refund for a paid order. No amount = everything not refunded yet."""
+    amount_xof: Annotated[int, Field(gt=0)] | None = None
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=200)]
 
 
 class RefundCompleteIn(In):
@@ -461,7 +476,7 @@ class SettingsIn(In):
     freight_default_xof: Annotated[int, Field(ge=0)] | None = None
     payment_deadline_days: Annotated[int, Field(ge=1, le=30)] | None = None
     support_whatsapp: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
-    payment_mode: Literal["manual", "wave_qr", "wave_checkout"] | None = None
+    payment_mode: Literal["manual"] | None = None
     payment_accounts: dict[Literal["WAVE", "ORANGE", "MOOV"], Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None] | None = None
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     next_departure_date: date | None = None

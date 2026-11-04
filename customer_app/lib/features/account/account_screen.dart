@@ -66,7 +66,7 @@ class AccountScreen extends ConsumerWidget {
             ListTile(
               leading: Icon(Icons.delete_outline_rounded, color: context.pal.danger),
               title: Text('Supprimer mon compte', style: TextStyle(color: context.pal.danger)),
-              subtitle: const Text('Vos données personnelles sont effacées (loi 2013-450).'),
+              subtitle: const Text('Tes données personnelles sont effacées (loi 2013-450).'),
               onTap: () => _delete(context, ref),
             ),
           ]),
@@ -80,7 +80,7 @@ class AccountScreen extends ConsumerWidget {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Votre prénom'),
+        title: const Text('Ton prénom'),
         content: TextField(controller: c, autofocus: true, maxLength: 80),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
@@ -101,7 +101,7 @@ class AccountScreen extends ConsumerWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer votre compte ?'),
+        title: const Text('Supprimer ton compte ?'),
         content: const Text('Impossible si une commande est en cours. Cette action est définitive.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),

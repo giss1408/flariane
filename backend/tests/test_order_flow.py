@@ -3,7 +3,6 @@
 from httpx import AsyncClient
 
 from app import tasks
-from app.integrations import wave
 from tests.conftest import AdminFixture, create_order, order_id, pay, quote_and_send
 
 
@@ -49,14 +48,13 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
     assert r.status_code == 200, r.text
     payment = r.json()
     assert payment["status"] == "PENDING" and payment["amount_xof"] == 13560
-    session = next(iter(wave.FAKE_SESSIONS.values()))
-    assert session["amount"] == "13560" and session["client_reference"] == ref and session["currency"] == "XOF"
+    assert payment["provider"] == "MANUAL" and payment["launch_url"] is None
 
-    # Double tap returns the same checkout, no second session.
+    # Double tap returns the same payment, no second one.
     r2 = await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)
-    assert r2.json()["launch_url"] == payment["launch_url"] and len(wave.FAKE_SESSIONS) == 1
+    assert r2.json()["provider"] == "MANUAL" and r2.json()["amount_xof"] == payment["amount_xof"]
 
-    assert await pay(client, payment["launch_url"]) == 200
+    assert await pay(client, customer, admin, ref) == 200
     r = await client.get(f"/orders/{ref}", headers=customer)
     assert r.json()["status"] == "PAID"
     assert recorded("send_customer_whatsapp")[-1]["template"] == "payment_received"
@@ -110,7 +108,7 @@ async def test_happy_path(client: AsyncClient, customer: dict, admin: AdminFixtu
     code = r.json()["code"]
     assert recorded("send_customer_whatsapp")[-1]["params"][4] == code
     wa = (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "pickup", "code": code}, headers=admin.headers)).json()
-    assert wa["url"].startswith("https://wa.me/2250701020304?text=") and code in wa["text"]
+    assert wa["url"].startswith("https://wa.me/4917612345678?text=") and code in wa["text"]
     wa = (await client.post(f"/admin/orders/{oid}/whatsapp", json={"kind": "quote"}, headers=admin.headers)).json()
     assert "13 560 FCFA" in wa["text"]
     wrong = "000000" if code != "000000" else "111111"
@@ -248,14 +246,10 @@ async def test_cancel_rules(client: AsyncClient, customer: dict, admin: AdminFix
     oid = await order_id(ref)
     await quote_and_send(client, admin, oid)
     r = await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)
-    launch = r.json()["launch_url"]
-    # Pending Wave payment: cannot cancel or change.
+    # Pending payment: cannot cancel or change.
     assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 409
     r = await client.post(f"/orders/{ref}/quotes/1/change-request", json={"note": "x"}, headers=customer)
     assert r.status_code == 409 and r.json()["detail"] == "payment_in_progress"
-    # After a failed payment the customer may cancel.
-    assert await pay(client, launch, outcome="failed") == 200
-    assert (await client.post(f"/orders/{ref}/cancel", headers=customer)).status_code == 204
 
 
 async def test_order_without_pickup_point(client: AsyncClient, customer: dict) -> None:
@@ -313,7 +307,7 @@ async def test_cart_mode_quote_with_screenshot(client: AsyncClient, customer: di
     assert detail["attachments"] == 0  # the quote screenshot isn't one of her uploads
 
     p = (await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)).json()
-    assert await pay(client, p["launch_url"]) == 200
+    assert await pay(client, customer, admin, ref) == 200
     r = await client.post(f"/admin/orders/{oid}/purchase", json={"store_order_ref": "GSH9", "paid_amount": "32500", "currency": "XOF"}, headers=admin.headers)
     assert r.status_code == 200 and r.json()["estimated_margin_xof"] == 0
 
@@ -358,3 +352,14 @@ async def test_attention_counts(client: AsyncClient, customer: dict, admin: Admi
     await create_order(client, customer, pickup_point)
     a = (await client.get("/admin/orders/attention", headers=admin.headers)).json()
     assert a["to_quote"] == 1 and a["to_buy"] == 0 and a["registrations_to_verify"] == 0
+
+
+def test_non_eu_links_are_detected() -> None:
+    from app.services.links import is_non_eu_link
+
+    assert is_non_eu_link("Mon panier https://us.shein.com/cart/share/abc")
+    assert is_non_eu_link("https://www.shein.co.uk/product-p-123.html")
+    assert is_non_eu_link("https://www.temu.com/us-en/goods.html?goods_id=1")
+    assert not is_non_eu_link("https://onelink.shein.com/16/5abc")
+    assert not is_non_eu_link("https://fr.shein.com/cart")
+    assert not is_non_eu_link("https://www.temu.com/fr-en/goods.html?goods_id=1")

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     Numeric,
@@ -114,6 +115,8 @@ class PickupPoint(TimestampMixin, Base):
 
 class Order(TimestampMixin, Base):
     __tablename__ = "orders"
+    # The admin inbox filters by status and sorts by status_changed_at.
+    __table_args__ = (Index("ix_orders_status_changed", "status", "status_changed_at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     public_ref: Mapped[str] = mapped_column(String(16), unique=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
@@ -228,7 +231,7 @@ class Payment(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
     quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"), index=True)
-    provider: Mapped[str] = mapped_column(String(16), default="WAVE")
+    provider: Mapped[str] = mapped_column(String(16), default="MANUAL")
     checkout_session_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     launch_url: Mapped[str | None] = mapped_column(Text)
     provider_txn_id: Mapped[str | None] = mapped_column(String(80))
@@ -237,10 +240,13 @@ class Payment(TimestampMixin, Base):
     idempotency_key: Mapped[str] = mapped_column(String(80), unique=True)
     confirmed_at: Mapped[datetime | None] = _ts()
     status_reason: Mapped[str | None] = mapped_column(Text)
-    # Manual mobile-money payments: method chosen and the customer's screenshot (kept in the DB).
+    # Manual mobile-money payments: method chosen and the customer's screenshot.
     method: Mapped[str | None] = mapped_column(String(8))  # WAVE | ORANGE | MOOV
     proof_image: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
     proof_content_type: Mapped[str | None] = mapped_column(String(40))
+    # New proofs live in storage (like cart screenshots). `proof_image` only holds proofs from before that
+    # change, until `python -m app.cli migrate-proofs` has moved them; then the column can be dropped.
+    proof_key: Mapped[str | None] = mapped_column(String(160))
 
 
 class Refund(TimestampMixin, Base):
@@ -297,6 +303,8 @@ class PickupCode(TimestampMixin, Base):
     __tablename__ = "pickup_codes"
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), primary_key=True)
     code_hash: Mapped[str] = mapped_column(String(64))
+    # Encrypted copy so the owner can see the code in the app and the admin can resend it without a new one.
+    code_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
     used_at: Mapped[datetime | None] = _ts()
 
@@ -370,3 +378,17 @@ class AuditLog(Base):
     after: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     ip: Mapped[str | None] = mapped_column(String(45))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdempotencyKey(Base):
+    """Replay protection for customer POSTs that create something (order, payment declaration): a retry with
+    the same Idempotency-Key gets the stored answer instead of running again. Purged after 24 h."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("customer_id", "endpoint", "key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(60))
+    key: Mapped[str] = mapped_column(String(80))
+    response: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

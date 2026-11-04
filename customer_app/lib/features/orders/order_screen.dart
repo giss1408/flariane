@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/auto_refresh.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/delivery_estimate.dart';
@@ -27,47 +27,19 @@ class OrderScreen extends ConsumerStatefulWidget {
   ConsumerState<OrderScreen> createState() => _OrderScreenState();
 }
 
-class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingObserver {
-  Timer? _poll;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _poll?.cancel();
-    super.dispose();
-  }
-
-  /// Back from the Wave app: re-read the order (the webhook confirms payment server-side).
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) ref.invalidate(orderProvider(widget.orderRef));
-  }
-
-  void _syncPolling(Order o) {
-    if (o.paymentPending && _poll == null) {
-      _poll = Timer.periodic(const Duration(seconds: 5), (_) => ref.invalidate(orderProvider(widget.orderRef)));
-    } else if (!o.paymentPending) {
-      _poll?.cancel();
-      _poll = null;
-    }
-  }
-
+class _OrderScreenState extends ConsumerState<OrderScreen> {
   @override
   Widget build(BuildContext context) {
     final order = ref.watch(orderProvider(widget.orderRef));
-    order.whenData(_syncPolling);
-    return Scaffold(
+    return AutoRefresh(
+      onRefresh: () => ref.invalidate(orderProvider(widget.orderRef)),
+      child: Scaffold(
       appBar: FlarianeHeader(subtitle: 'Commande ${widget.orderRef}', actions: [
         if (order.valueOrNull != null) Padding(padding: const EdgeInsets.only(right: 16), child: Center(child: StoreBadge(order.value!.store))),
       ]),
       floatingActionButton: AskButton(orderRef: widget.orderRef),
       body: order.when(
+        skipLoadingOnReload: true, // the silent auto-refresh must not flash a spinner
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorView(e, onRetry: () => ref.invalidate(orderProvider(widget.orderRef))),
         data: (o) => RefreshIndicator(
@@ -103,7 +75,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> with WidgetsBindingOb
           ]),
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _cancel(Order o) async {
@@ -136,15 +108,16 @@ class _StatusBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (text, color) = switch (order.status) {
-      'QUOTE_REQUESTED' => ('Devis en préparation — vous recevrez un message WhatsApp.', context.pal.accent),
-      'QUOTED' when order.canRequestRequote => ('Votre devis a expiré.', context.pal.warning),
-      'QUOTED' => ('Votre devis est prêt.', context.pal.accent),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true && order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
-      'AWAITING_PAYMENT' when order.payment?.isQr == true => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
-      'AWAITING_PAYMENT' when order.paymentPending => ('Nous confirmons votre paiement Wave…', context.pal.accent),
-      'AWAITING_PAYMENT' => ('Paiement non abouti. Vous pouvez réessayer.', context.pal.warning),
-      'PAID' => ('Paiement reçu. Nous achetons vos articles.', context.pal.success),
-      'READY_FOR_PICKUP' => ('Votre colis vous attend ! Présentez le code reçu sur WhatsApp.', context.pal.success),
+      'QUOTE_REQUESTED' => ('Devis en préparation : on te prévient sur WhatsApp.', context.pal.accent),
+      'QUOTED' when order.canRequestRequote => ('Ton devis a expiré.', context.pal.warning),
+      'QUOTED' => ('Ton devis est prêt.', context.pal.accent),
+      'AWAITING_PAYMENT' when order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
+      'AWAITING_PAYMENT' => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
+      'PAID' => ('Paiement reçu. On achète tes articles.', context.pal.success),
+      'READY_FOR_PICKUP' => (
+        order.pickupCode != null ? 'Ton colis t’attend ! Présente ce code au point de retrait.' : 'Ton colis t’attend ! Présente le code reçu sur WhatsApp.',
+        context.pal.success
+      ),
       'CANCELLED' => ('Commande annulée.', context.pal.danger),
       'REFUND_PENDING' => ('Remboursement en cours.', context.pal.warning),
       'REFUNDED' => ('Commande remboursée.', context.pal.muted),
@@ -156,12 +129,34 @@ class _StatusBanner extends ConsumerWidget {
       decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          if (order.paymentPending) ...[
-            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            const SizedBox(width: 10),
-          ],
           Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
         ]),
+        if (order.status == 'READY_FOR_PICKUP' && order.pickupCode != null) ...[
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: order.pickupCode!));
+              showInfo(context, 'Code copié');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color)),
+              child: Column(children: [
+                Text('Code de retrait', style: TextStyle(color: context.pal.muted, fontSize: 13)),
+                const SizedBox(height: 4),
+                Semantics(
+                  label: 'Code de retrait ${order.pickupCode!.split('').join(' ')}',
+                  child: Text(order.pickupCode!, style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: 6, color: color)),
+                ),
+              ]),
+            ),
+          ),
+          if (order.pickupPoint != null) ...[
+            const SizedBox(height: 8),
+            Text('${order.pickupPoint!.name} · ${order.pickupPoint!.address}\n${order.pickupPoint!.openingHours}', style: TextStyle(color: context.pal.muted)),
+          ],
+        ],
         if (order.paymentDeadline != null && !(order.payment?.declared ?? false)) ...[
           const SizedBox(height: 8),
           Text('À payer avant le ${dateTime(order.paymentDeadline)}, sinon la commande sera annulée.',
@@ -181,7 +176,7 @@ class _StatusBanner extends ConsumerWidget {
             child: const Text('Demander un nouveau devis'),
           ),
         ],
-        if (order.status == 'AWAITING_PAYMENT' && order.payment?.isQr == true) ...[
+        if (order.status == 'AWAITING_PAYMENT' && order.payment != null) ...[
           const SizedBox(height: 10),
           FilledButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
@@ -190,30 +185,9 @@ class _StatusBanner extends ConsumerWidget {
             child: Text(order.payment!.declared ? 'Preuve envoyée' : 'Payer (Wave, Orange, Moov)'),
           ),
         ],
-        if (order.status == 'AWAITING_PAYMENT' && !order.paymentPending && order.payment?.isQr != true) ...[
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: () async {
-              try {
-                final p = await ref.read(apiProvider).retryPayment(order.ref);
-                await openWave(p);
-                ref.invalidate(orderProvider(order.ref));
-              } catch (e) {
-                if (context.mounted) showError(context, e);
-              }
-            },
-            child: const Text('Réessayer le paiement Wave'),
-          ),
-        ],
       ]),
     );
   }
-}
-
-Future<void> openWave(Payment p) async {
-  if (p.launchUrl == null) throw ApiException(502, 'wave_unavailable');
-  // Opens the Wave app if installed (universal link), otherwise Wave's web checkout.
-  await launchUrl(Uri.parse(p.launchUrl!), mode: LaunchMode.externalApplication);
 }
 
 String variant(QuoteLine l) => [l.size, l.color].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
@@ -236,14 +210,11 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
     setState(() => _busy = true);
     try {
       final p = await ref.read(apiProvider).acceptQuote(widget.order.ref, widget.quote.version);
-      if (p.isQr) {
-        if (mounted) {
-          await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => PayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
-          ));
-        }
-      } else {
-        await openWave(p);
+      // Payment is always manual (number / QR + screenshot); the checkout link, if any, is ignored.
+      if (mounted) {
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => PayScreen(orderRef: widget.order.ref, amountXof: p.amountXof),
+        ));
       }
       ref.invalidate(orderProvider(widget.order.ref));
     } on ApiException catch (e) {
@@ -267,6 +238,18 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         const Spacer(),
         if (q.expiresAt != null && open) Text('valable jusqu’au ${dateTime(q.expiresAt)}', style: TextStyle(color: context.pal.muted)),
       ]),
+      if (open) ...[
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(color: context.pal.accent.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
+          child: Row(children: [
+            Text('Total à payer', style: TextStyle(color: context.pal.muted)),
+            const Spacer(),
+            Text(fcfa(q.totalXof), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
+          ]),
+        ),
+      ],
       const SizedBox(height: 8),
       if (q.screenshotUrl != null) ...[
         const PriceAdvice(),
@@ -433,7 +416,7 @@ class _ChangeRequestSheetState extends ConsumerState<ChangeRequestSheet> {
     try {
       await ref.read(apiProvider).requestChange(widget.order.ref, widget.quote.version, body);
       if (!mounted) return;
-      showInfo(context, 'Demande envoyée — vous recevrez un nouveau devis.');
+      showInfo(context, 'Demande envoyée : tu recevras un nouveau devis.');
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) showError(context, e);

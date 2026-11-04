@@ -7,6 +7,7 @@ environment settings). Afterwards admins are managed from the app.
 import hmac
 
 import pyotp
+from anyio import to_thread
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,7 +48,7 @@ async def first_admin(
     if await db.scalar(select(func.count()).select_from(AdminUser).where(AdminUser.email != LEGACY_DEV_ADMIN)):
         raise HTTPException(status_code=409, detail="already_set_up")
     secret = pyotp.random_base32()
-    user = AdminUser(email=data.email, name=data.name, role="SUPER_ADMIN", password_hash=hash_password(data.password), totp_secret_enc=encrypt(secret))
+    user = AdminUser(email=data.email, name=data.name, role="SUPER_ADMIN", password_hash=await to_thread.run_sync(hash_password, data.password), totp_secret_enc=encrypt(secret))
     db.add(user)
     await db.flush()
     await audit(db, actor_type="system", actor_id=None, action="setup.first_admin", entity="admin_user", entity_id=user.id, ip=client_ip(request))
@@ -78,7 +79,7 @@ async def reset_admin(
         user = AdminUser(email=data.email, name=data.name, role="SUPER_ADMIN", password_hash="", totp_secret_enc=b"")
         db.add(user)
     user.name, user.role, user.active = data.name, "SUPER_ADMIN", True
-    user.password_hash, user.totp_secret_enc, user.totp_last_step = hash_password(data.password), encrypt(secret), 0
+    user.password_hash, user.totp_secret_enc, user.totp_last_step = await to_thread.run_sync(hash_password, data.password), encrypt(secret), 0
     await db.flush()
     # Revoke every device so the bootstrap rule (no approved device left) approves the next login.
     for device in (await db.scalars(select(AdminDevice).where(AdminDevice.revoked_at.is_(None)))).all():

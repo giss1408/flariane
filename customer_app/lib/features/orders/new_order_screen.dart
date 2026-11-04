@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api.dart' show newIdempotencyKey;
+import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
@@ -16,6 +18,12 @@ bool looksLikeSheinLink(String text) =>
     RegExp(r'https://([a-z0-9-]+\.)*(shein|temu)\.com/\S+', caseSensitive: false)
         .hasMatch(text);
 
+/// Carts from the US, UK, Canada or Australia stores: refused (we buy on the European stores).
+bool looksNonEuLink(String text) =>
+    RegExp(r'https://([a-z0-9-]+\.)*(us\.shein\.com|ca\.shein\.com|au\.shein\.com|shein\.co\.uk|shein\.com\.au)/', caseSensitive: false)
+        .hasMatch(text) ||
+    RegExp(r'https://([a-z0-9-]+\.)*temu\.com/(us|uk|gb|ca|au)(-[a-z]{2})?(/|$)', caseSensitive: false).hasMatch(text);
+
 class NewOrderScreen extends ConsumerStatefulWidget {
   const NewOrderScreen({super.key});
 
@@ -24,18 +32,27 @@ class NewOrderScreen extends ConsumerStatefulWidget {
 }
 
 class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
+  // Same key for every tap of "Envoyer" on this form, so a double tap or a retry never makes two orders.
+  final _idemKey = newIdempotencyKey();
   late final _link =
       TextEditingController(text: ref.read(sharedTextProvider) ?? '');
   final _note = TextEditingController();
   final _screenshots = <XFile>[];
   int? _pointId;
   bool _busy = false;
+  String? _clipboardLink; // a SHEIN/Temu link found in the clipboard: offered, never filled silently
 
   @override
   void initState() {
     super.initState();
     Future.microtask(
         () => ref.read(sharedTextProvider.notifier).state = null); // consumed
+    if (_link.text.isEmpty) _checkClipboard();
+  }
+
+  Future<void> _checkClipboard() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    if (mounted && text != null && looksLikeSheinLink(text) && _link.text.isEmpty) setState(() => _clipboardLink = text);
   }
 
   Future<void> _paste() async {
@@ -50,6 +67,9 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   }
 
   Future<void> _submit() async {
+    if (looksNonEuLink(_link.text)) {
+      return showInfo(context, errorMessages['non_eu_cart']!);
+    }
     if (!looksLikeSheinLink(_link.text)) {
       return showInfo(context, 'Colle le lien de partage de ton panier SHEIN ou Temu.');
     }
@@ -60,6 +80,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         shareText: _link.text,
         pickupPointId: _pointId,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+        idempotencyKey: _idemKey,
       );
       var failed = 0;
       for (final f in _screenshots) {
@@ -73,7 +94,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
       showInfo(
           context,
           failed == 0
-              ? 'Demande envoyée — vous recevrez votre devis sur WhatsApp.'
+              ? 'Demande envoyée : tu recevras ton devis sur WhatsApp.'
               : 'Demande envoyée, mais $failed capture(s) n’ont pas pu être envoyées.');
       Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => OrderScreen(orderRef: order.ref)));
@@ -91,6 +112,18 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
     return Scaffold(
       appBar: const FlarianeHeader(subtitle: 'Nouveau panier'),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        if (_clipboardLink != null && _link.text.isEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: context.pal.success.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+            child: Row(children: [
+              Icon(Icons.check_circle_rounded, color: context.pal.success),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('On a trouvé le lien de ton panier dans ce que tu viens de copier.', style: TextStyle(fontWeight: FontWeight.w600))),
+              TextButton(onPressed: () => setState(() => _link.text = _clipboardLink!), child: const Text('Utiliser')),
+            ]),
+          ),
         TextField(
           controller: _link,
           minLines: 2,
@@ -112,6 +145,17 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
             onPressed: () => showShareHelp(context),
           ),
         ),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.public_rounded, size: 18, color: context.pal.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+                'Panier de la boutique européenne uniquement (prix en €). Si tu es sur la boutique USA ou Royaume-Uni, '
+                'passe ton app sur la France ou l’Allemagne et refais ton panier.',
+                style: TextStyle(color: context.pal.muted)),
+          ),
+        ]),
+        const SizedBox(height: 12),
         Text(
             'Vérifie tailles et couleurs dans ton panier avant d’envoyer. Les prix affichés à Abidjan peuvent changer au moment de notre commande : ton devis te donnera le prix réel.',
             style: TextStyle(color: context.pal.warning)),
@@ -131,7 +175,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           error: (e, _) =>
               ErrorView(e, onRetry: () => ref.invalidate(pickupPointsProvider)),
           data: (list) => list.isEmpty
-              ? const Text('Point de retrait : choisi plus tard avec vous.')
+              ? const Text('Point de retrait : choisi plus tard avec toi.')
               : DropdownButtonFormField<int>(
                   value: _pointId,
                   isExpanded: true,

@@ -34,6 +34,7 @@ class DeliveryEstimate extends ConsumerWidget {
     final (from, to) = abidjanArrival(store, DateTime.now(), departure);
     final (min, max) = storeDeliveryDays[store] ?? storeDeliveryDays['SHEIN']!;
     final d = DateFormat('d MMMM', 'fr');
+    final sameDay = d.format(from) == d.format(to);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -42,7 +43,10 @@ class DeliveryEstimate extends ConsumerWidget {
             Icon(Icons.local_shipping_rounded, color: context.pal.accent),
             const SizedBox(width: 10),
             Expanded(
-              child: Text('Arrivée à Abidjan : entre le ${d.format(from)} et le ${d.format(to)}',
+              child: Text(
+                  sameDay
+                      ? 'Arrivée à Abidjan : vers le ${d.format(from)}'
+                      : 'Arrivée à Abidjan : entre le ${d.format(from)} et le ${d.format(to)}',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ]),

@@ -3,8 +3,10 @@ import 'package:flariane/core/providers.dart';
 import 'package:flariane/core/theme.dart';
 import 'package:flariane/data/models.dart';
 import 'package:flariane/features/orders/home_screen.dart';
+import 'package:flariane/features/orders/new_order_screen.dart';
 import 'package:flariane/widgets/offer_banner.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -95,6 +97,56 @@ void main() {
       await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
       await tester.pumpAndSettle();
       expect(find.text('-10 % cette semaine'), findsOneWidget);
+    });
+
+    testWidgets('a first-time customer sees the three steps and a shortcut to SHEIN', (tester) async {
+      final api = homeApi(orders: [[]]);
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Ouvrir SHEIN'), 300, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Ta première commande en 3 étapes'), findsOneWidget);
+      expect(find.text('Ouvrir Temu'), findsOneWidget);
+    });
+
+    testWidgets('new order: a copied SHEIN link is offered, and used only when she taps', (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': 'Mon panier https://onelink.shein.com/57/abc123'};
+        return null;
+      });
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      final api = homeApi(orders: [[]]);
+      when(() => api.pickupPoints()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const NewOrderScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('On a trouvé le lien de ton panier'), findsOneWidget);
+      expect(find.text('Mon panier https://onelink.shein.com/57/abc123'), findsNothing); // not filled silently
+      await tester.tap(find.text('Utiliser'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mon panier https://onelink.shein.com/57/abc123'), findsOneWidget);
+      expect(find.textContaining('On a trouvé le lien'), findsNothing);
+    });
+
+    testWidgets('a link shared before the home screen exists still opens the new order', (tester) async {
+      // Cold start from "Partager → Flariane": the share arrives during start-up / login, before HomeScreen is built.
+      final api = homeApi(orders: [[]]);
+      when(() => api.pickupPoints()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const HomeScreen(),
+          overrides: [...with_(api), sharedTextProvider.overrideWith((_) => 'Regarde https://onelink.shein.com/57/abc123')], disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsOneWidget);
+      expect(find.text('Regarde https://onelink.shein.com/57/abc123'), findsOneWidget); // the link is already in the field
+    });
+
+    testWidgets('a link shared while the home screen is open opens the new order once', (tester) async {
+      final api = homeApi(orders: [[]]);
+      when(() => api.pickupPoints()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsNothing);
+      final container = ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
+      container.read(sharedTextProvider.notifier).state = 'https://onelink.shein.com/57/xyz';
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsOneWidget);
     });
 
     testWidgets('no offer, no banner', (tester) async {

@@ -6,3 +6,6 @@
 backend/var/
 **/build/
 **/.dart_tool/
+
+# Local test accounts and passwords
+TEST_USERS.md

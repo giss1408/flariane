@@ -5,6 +5,7 @@ import '../../core/config.dart';
 import '../../core/session.dart';
 import '../../widgets/common.dart';
 import 'backoffice_screens.dart';
+import 'push_status_screen.dart';
 
 const roleLabels = {'PICKUP': 'Agent de retrait', 'VIEWER': 'Lecture seule', 'OPERATOR': 'Opérateur', 'SUPER_ADMIN': 'Super admin'};
 
@@ -51,16 +52,11 @@ class AccountScreen extends ConsumerWidget {
             _link(context, Icons.report_gmailerrorred_rounded, 'Paiements à vérifier', const HeldPaymentsScreen()),
             if (me?.role == 'SUPER_ADMIN') ...[
               _link(context, Icons.phonelink_lock_rounded, 'Appareils', const DevicesScreen()),
+              _link(context, Icons.notifications_active_rounded, 'Notifications', const PushStatusScreen()),
               _link(context, Icons.group_rounded, 'Administrateurs', const AdminUsersScreen()),
               _link(context, Icons.place_rounded, 'Points de retrait', const PickupPointsAdminScreen()),
               _link(context, Icons.campaign_rounded, 'Offres clientes', const OffersAdminScreen()),
               _link(context, Icons.tune_rounded, 'Paramètres', const SettingsScreen()),
-              ListTile(
-                leading: const Icon(Icons.notifications_active_rounded),
-                title: const Text('Tester les alertes'),
-                subtitle: const Text('Envoie une notification ntfy de test'),
-                onTap: () => _testAlerts(context, ref),
-              ),
             ],
           ]),
         ),
@@ -68,29 +64,6 @@ class AccountScreen extends ConsumerWidget {
         const Text('Serveur : ${AppConfig.apiBaseUrl}', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
       ]),
     );
-  }
-}
-
-/// Sends a test alert and explains the result, so a missing notification can be traced.
-Future<void> _testAlerts(BuildContext context, WidgetRef ref) async {
-  try {
-    final r = await ref.read(adminApiProvider).ntfyTest();
-    if (!context.mounted) return;
-    final sent = r['sent'] == true;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(sent ? 'Alerte envoyée' : 'Alerte refusée'),
-        content: Text(sent
-            ? 'Sujet : ${r['topic_hint']} (${r['topic_length']} caractères)\nServeur : ${r['server']}\n\n'
-                'La notification doit arriver dans l’app ntfy dans quelques secondes. Sinon, vérifie que l’app ntfy est abonnée '
-                'exactement à ce sujet (même nombre de caractères) et que ses notifications sont autorisées.'
-            : 'ntfy n’a pas accepté le message.\n\n${r['error']}\n\nSujet : ${r['topic_hint']} (${r['topic_length']} caractères)'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-      ),
-    );
-  } catch (e) {
-    if (context.mounted) showError(context, e);
   }
 }
 

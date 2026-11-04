@@ -1,10 +1,9 @@
-import time
 from decimal import Decimal
 
 import pytest
 
 from app.errors import BadRequest
-from app.integrations import wave, whatsapp
+from app.integrations import whatsapp
 from app.services.links import extract_shein_urls, log_safe, product_id_from_url
 from app.services.customer_auth import normalize_ci_phone
 from app.services.pricing import LineInput, compute_quote, default_customs, to_xof
@@ -75,31 +74,6 @@ class TestPhone:
             normalize_ci_phone(raw)
 
 
-class TestWaveSignature:
-    body = b'{"id":"EV_1"}'
-
-    def test_valid(self) -> None:
-        assert wave.verify_signature(wave.sign_payload(self.body, SECRET), self.body, SECRET, 300)
-
-    def test_second_v1_valid(self) -> None:
-        good = wave.sign_payload(self.body, SECRET)
-        t, v1 = good.split(",")
-        assert wave.verify_signature(f"{t},v1=deadbeef,{v1}", self.body, SECRET, 300)
-
-    @pytest.mark.parametrize(
-        "header",
-        [None, "", "garbage", "t=abc,v1=00", "t=1,v1=", f"t={int(time.time())},v1=é"],
-    )
-    def test_malformed(self, header: str | None) -> None:
-        assert not wave.verify_signature(header, self.body, SECRET, 300)
-
-    def test_wrong_secret_tampered_body_and_stale(self) -> None:
-        assert not wave.verify_signature(wave.sign_payload(self.body, "other"), self.body, SECRET, 300)
-        assert not wave.verify_signature(wave.sign_payload(self.body, SECRET), self.body + b" ", SECRET, 300)
-        old = int(time.time()) - 1000
-        assert not wave.verify_signature(wave.sign_payload(self.body, SECRET, old), self.body, SECRET, 300)
-
-
 def test_whatsapp_signature() -> None:
     import hashlib
     import hmac
@@ -133,7 +107,7 @@ def test_database_url_normalised(raw: str, expected: str) -> None:
 def test_dev_routes_never_in_prod() -> None:
     from app.config import Settings
 
-    base = {"jwt_secret": "x" * 32, "field_encryption_key": "k", "hash_key": "k", "wave_webhook_secret": "secret12"}
+    base = {"jwt_secret": "x" * 32, "field_encryption_key": "k", "hash_key": "k"}
     assert Settings(env="prod", dev_routes=True, **base).dev_routes_enabled is False
     assert Settings(env="staging", **base).dev_routes_enabled is False
     assert Settings(env="staging", dev_routes=True, **base).dev_routes_enabled is True
@@ -159,12 +133,18 @@ def test_german_test_numbers(raw: str, expected: str) -> None:
     assert normalize_ci_phone(raw) == expected
 
 
-def test_german_numbers_refused_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_german_numbers_refused_in_prod_unless_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import get_settings
 
     monkeypatch.setattr(get_settings(), "env", "prod")
     with pytest.raises(BadRequest):
         normalize_ci_phone("+4915123456789")
+    # The team tests from Germany on production: allowed by FLR_ALLOW_GERMAN_NUMBERS, Ivorian numbers still work.
+    monkeypatch.setattr(get_settings(), "allow_german_numbers", True)
+    assert normalize_ci_phone("+49 151 23456789") == "+4915123456789"
+    assert normalize_ci_phone("07 01 02 03 04") == "+2250701020304"
+    with pytest.raises(BadRequest):
+        normalize_ci_phone("+33 6 12 34 56 78")  # other countries stay refused
 
 
 async def test_legal_pages() -> None:

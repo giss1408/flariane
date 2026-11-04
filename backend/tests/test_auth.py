@@ -45,15 +45,15 @@ async def test_unknown_phone_same_error(client: AsyncClient) -> None:
 
 
 async def test_admin_reset_and_customer_change_password(client: AsyncClient, admin: AdminFixture) -> None:
-    from tests.conftest import PASSWORD
+    from tests.conftest import PASSWORD, PHONE
 
     headers = await login_customer(client)
     cid = (await client.get("/me", headers=headers)).json()["id"]
     r = await client.post(f"/admin/customers/{cid}/reset-password", headers=admin.headers)
     temp = r.json()["temporary_password"]
     # Old password no longer works; temp works and the app is told to ask for a new one.
-    assert (await client.post("/auth/login", json={"phone": "0701020304", "password": PASSWORD})).status_code == 401
-    r = await client.post("/auth/login", json={"phone": "0701020304", "password": temp})
+    assert (await client.post("/auth/login", json={"phone": PHONE, "password": PASSWORD})).status_code == 401
+    r = await client.post("/auth/login", json={"phone": PHONE, "password": temp})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     assert (await client.get("/me", headers=h)).json()["must_change_password"] is True
     r = await client.post("/me/password", headers=h, json={"current_password": "wrong", "new_password": "nouveau-2026"})
@@ -61,7 +61,7 @@ async def test_admin_reset_and_customer_change_password(client: AsyncClient, adm
     r = await client.post("/me/password", headers=h, json={"current_password": temp, "new_password": "nouveau-2026"})
     assert r.status_code == 204
     assert (await client.get("/me", headers=h)).json()["must_change_password"] is False
-    assert (await client.post("/auth/login", json={"phone": "0701020304", "password": "nouveau-2026"})).status_code == 200
+    assert (await client.post("/auth/login", json={"phone": PHONE, "password": "nouveau-2026"})).status_code == 200
 
 
 async def test_web_refresh_cookie_rotation_and_reuse_detection(client: AsyncClient) -> None:
@@ -176,7 +176,7 @@ async def test_unknown_fields_rejected(client: AsyncClient, customer: dict, pick
 
 async def test_delete_account_anonymises(client: AsyncClient, pickup_point) -> None:  # type: ignore[no-untyped-def]
     headers = await login_customer(client)
-    assert (await client.get("/me", headers=headers)).json()["phone_masked"] == "+225 07 •• •• 04"
+    assert (await client.get("/me", headers=headers)).json()["phone_masked"] == "+491 •• 78"
     assert (await client.delete("/me", headers=headers)).status_code == 204
     assert (await client.get("/me", headers=headers)).status_code == 401
 
@@ -396,3 +396,16 @@ async def test_operator_reinstall_still_needs_approval(client: AsyncClient) -> N
     op = await make_admin(role="OPERATOR", email="op@flariane.ci")
     r = await _login(client, op, {"name": "Test phone", "platform": "android"})
     assert r["status"] == "device_pending"
+
+
+async def test_register_rate_limited_per_ip_and_forwarded_header_ignored(client: AsyncClient, monkeypatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "register_per_ip_hour", 2)
+    monkeypatch.setattr(get_settings(), "trusted_proxy_hops", 1)
+    for i in range(2):
+        # The leftmost X-Forwarded-For entry is client-controlled: changing it must not reset the limit.
+        r = await client.post("/auth/register", json={"phone": f"070000000{i}", "password": "bonjour-2026", "consent": True}, headers={"x-forwarded-for": f"9.9.9.{i}, 5.5.5.5"})
+        assert r.status_code == 201
+    r = await client.post("/auth/register", json={"phone": "0700000009", "password": "bonjour-2026", "consent": True}, headers={"x-forwarded-for": "1.2.3.4, 5.5.5.5"})
+    assert r.status_code == 429 and r.json()["detail"] == "register_rate_limited"

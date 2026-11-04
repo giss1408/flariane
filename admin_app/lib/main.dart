@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,8 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/app_lock.dart';
 import 'core/config.dart';
+import 'core/monitoring.dart';
+import 'core/push.dart';
 import 'core/session.dart';
 import 'core/theme.dart';
 import 'features/account/account_screen.dart';
@@ -16,8 +19,9 @@ import 'features/shipments/shipments_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await initializeDateFormatting('fr');
-  runApp(const ProviderScope(child: FlarianeAdminApp()));
+  await runWithMonitoring(const ProviderScope(child: FlarianeAdminApp()));
 }
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -90,15 +94,18 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   late final AttentionPoller _poller = AttentionPoller(ref);
+  late final PushService _push = PushService(ref);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(_poller);
+    _push.start();
   }
 
   @override
   void dispose() {
+    _push.dispose();
     WidgetsBinding.instance.removeObserver(_poller);
     _poller.dispose();
     super.dispose();

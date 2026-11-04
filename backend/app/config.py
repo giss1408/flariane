@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FLR_", extra="ignore")
 
     env: Literal["dev", "test", "staging", "prod"] = "dev"
-    # Test-only routes (simulated Wave checkout page). Default: on in dev only.
+    # Test-only routes. Default: on in dev only.
     # Never mounted in prod, whatever this says.
     dev_routes: bool | None = None
     api_base_url: str = "http://localhost:8000"
@@ -34,11 +34,6 @@ class Settings(BaseSettings):
     customer_refresh_days: int = 30
     admin_refresh_days: int = 30  # sliding: renewed at each use; a revoked device loses access at once
 
-    # Wave
-    wave_mode: Literal["fake", "live"] = "fake"
-    wave_api_key: str = ""
-    wave_webhook_secret: str = Field(min_length=8)
-    wave_api_base: str = "https://api.wave.com"
     webhook_tolerance_seconds: int = 300
 
     # WhatsApp Cloud API
@@ -54,10 +49,6 @@ class Settings(BaseSettings):
     fcm_project_id: str = ""
     fcm_service_account_json: str = ""
 
-    # Admin alerts via ntfy (no Firebase needed). Empty topic = disabled. Use a long random topic.
-    ntfy_url: str = "https://ntfy.sh"
-    ntfy_topic: str = ""
-    ntfy_token: str = ""
 
     # File storage for cart screenshots
     storage_mode: Literal["local", "s3"] = "local"
@@ -69,7 +60,19 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_attachments_per_order: int = 10
 
+    # Error tracking (Sentry). Empty = off. No personal data is sent: no request bodies, no cookies/headers.
+    sentry_dsn: str = ""
     rate_limit_storage: str = "memory://"
+    # How many reverse proxies sit in front of the API (0 = none, use the socket address). The client IP
+    # is read from X-Forwarded-For counting from the right, so a header the client sends itself is ignored.
+    # Render: 1. Cloudflare in front of Render: 2.
+    trusted_proxy_hops: int = 0
+    # German mobiles (+49 15x/16x/17x) are accepted for sign-up outside production. Set true to accept them in
+    # production too (the team tests from Germany); turn it off again when the service opens to the public.
+    allow_german_numbers: bool = False
+    # Account creation limits (bots, admin push spam). Per IP is low-ish but CGNAT shares IPs, hence the hourly window.
+    register_per_ip_hour: int = 5
+    register_global_hour: int = 300
 
     # One-time creation of the first super admin over HTTP (hosts without a shell). Empty = disabled.
     setup_token: str = ""

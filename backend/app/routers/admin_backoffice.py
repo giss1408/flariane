@@ -5,6 +5,7 @@ import io
 from datetime import UTC, date, datetime, time, timedelta
 
 import pyotp
+from anyio import to_thread
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
@@ -13,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.enums import AdminRole, PaymentStatus, RefundStatus
 from app.errors import BadRequest, Conflict, NotFound
-from app.models import AdminDevice, AdminUser, AuditLog, Customer, Offer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
+from app.config import get_settings as app_settings
+from app.integrations import push
+from app.models import AdminDevice, AdminUser, AuditLog, Customer, Notification, Offer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
 from app.ratelimit import admin_limited
 from typing import Annotated
 
@@ -122,25 +125,6 @@ async def whatsapp_test(data: WhatsAppTestIn, request: Request, admin: AdminCont
     return {"mode": mode, "message_id": message_id, "sent": mode == "live"}
 
 
-@router.post("/ntfy/test")
-async def ntfy_test(_: AdminContext = super_admin) -> dict:
-    """Sends a real test alert and says what happened, so a missing notification can be traced:
-    no topic on the server, refused by ntfy, or sent (then the ntfy app must be on the same topic)."""
-    from app.config import get_settings as app_settings
-    from app.integrations import ntfy
-
-    s = app_settings()
-    if not s.ntfy_topic:
-        raise BadRequest("ntfy_not_configured", "FLR_NTFY_TOPIC n’est pas défini sur le serveur")
-    topic = s.ntfy_topic
-    info = {"topic_hint": topic[:2] + "•" * max(len(topic) - 4, 0) + topic[-2:], "topic_length": len(topic), "server": s.ntfy_url}
-    try:
-        await ntfy.send("Test d’alerte Flariane", "Si tu vois ce message, les alertes fonctionnent.", tags=["white_check_mark"])
-    except Exception as exc:  # network error, refusal: report it, don't crash
-        return {"sent": False, "error": str(exc)[:300] or type(exc).__name__, **info}
-    return {"sent": True, **info}
-
-
 # ---------------------------------------------------------------- customers
 
 
@@ -197,7 +181,7 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
     if customer is None or customer.anonymised_at is not None:
         raise NotFound()
     temp = customer_auth.temporary_password()
-    customer.password_hash, customer.must_change_password = hash_password(temp), True
+    customer.password_hash, customer.must_change_password = await to_thread.run_sync(hash_password, temp), True
     for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id, RefreshToken.revoked_at.is_(None)))).all():
         t.revoked_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="customer.password_reset", entity="customer", entity_id=customer.id, ip=client_ip(request))
@@ -211,6 +195,33 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
 @router.get("/devices", response_model=list[AdminDeviceOut])
 async def devices(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> list[AdminDevice]:
     return list((await db.scalars(select(AdminDevice).order_by(AdminDevice.id.desc()))).all())
+
+
+@router.get("/notifications/push")
+async def push_status(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
+    """Why did (or didn't) admins get an alert: config seen by the server + the last push attempts."""
+    s = app_settings()
+    rows = (await db.scalars(select(Notification).where(Notification.channel == "push").order_by(Notification.id.desc()).limit(30))).all()
+    devices = (await db.scalars(select(AdminDevice).where(AdminDevice.revoked_at.is_(None)))).all()
+    return {
+        "mode": s.push_mode,
+        "project_id": s.fcm_project_id,
+        "has_service_account": bool(s.fcm_service_account_json.strip()),
+        "devices": [{"id": d.id, "name": d.name, "approved": d.approved_at is not None, "has_push_token": bool(d.push_token)} for d in devices],
+        "recent": [{"id": n.id, "event": n.template, "status": n.status, "error": n.error, "device_id": n.admin_device_id, "at": n.created_at.isoformat()} for n in rows],
+    }
+
+
+@router.post("/notifications/push-test")
+async def push_test(admin: AdminContext = super_admin) -> dict:
+    """Send a test alert to this phone and report what Firebase answered."""
+    if not admin.device.push_token:
+        return {"ok": False, "error": "no_push_token: this phone has not registered a push token"}
+    try:
+        await push.send_push(admin.device.push_token, "Test Flariane", "Les notifications fonctionnent ✅", {"event": "test"})
+    except Exception as exc:  # shown to the super admin to fix the configuration
+        return {"ok": False, "error": str(exc)[:300]}
+    return {"ok": True, "error": None}
 
 
 @router.post("/devices/{device_id}/approve", response_model=AdminDeviceOut)
@@ -259,7 +270,7 @@ async def reset_credentials(user_id: int, request: Request, admin: AdminContext 
         raise NotFound()
     password = "-".join(secrets.token_urlsafe(4) for _ in range(3))
     secret = pyotp.random_base32()
-    user.password_hash, user.totp_secret_enc, user.totp_last_step = hash_password(password), encrypt(secret), 0
+    user.password_hash, user.totp_secret_enc, user.totp_last_step = await to_thread.run_sync(hash_password, password), encrypt(secret), 0
     for device in (await db.scalars(select(AdminDevice).where(AdminDevice.admin_user_id == user.id))).all():
         await revoke_device_tokens(db, device.id)
     await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.credentials_reset", entity="admin_user", entity_id=user.id, ip=client_ip(request))
@@ -276,7 +287,7 @@ async def create_user(data: AdminUserIn, request: Request, admin: AdminContext =
         raise Conflict("email_taken")
     secret = pyotp.random_base32()
     totp_required = data.totp_required or data.role == "SUPER_ADMIN"
-    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=hash_password(data.password),
+    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=await to_thread.run_sync(hash_password, data.password),
                      totp_secret_enc=encrypt(secret), totp_required=totp_required)
     db.add(user)
     await db.flush()
@@ -443,11 +454,20 @@ async def delete_offer(offer_id: int, admin: AdminContext = super_admin, db: Asy
 
 
 @router.get("/refunds", response_model=list[RefundOut])
-async def refunds(status: RefundStatus | None = None, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[Refund]:
-    stmt = select(Refund).order_by(Refund.id.desc()).limit(200)
+async def refunds(status: RefundStatus | None = None, _: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[RefundOut]:
+    stmt = (
+        select(Refund, Order.public_ref, Payment.method, Payment.proof_content_type)
+        .join(Order, Order.id == Refund.order_id)
+        .join(Payment, Payment.id == Refund.payment_id)
+        .order_by(Refund.id.desc())
+        .limit(200)
+    )
     if status:
         stmt = stmt.where(Refund.status == status)
-    return list((await db.scalars(stmt)).all())
+    return [
+        RefundOut.model_validate(r).model_copy(update={"order_ref": ref, "method": method, "has_proof": proof is not None})
+        for r, ref, method, proof in (await db.execute(stmt)).all()
+    ]
 
 
 @router.post("/refunds/{refund_id}/complete", response_model=RefundOut)

@@ -14,10 +14,6 @@ envVarGroups:
         generateValue: true
       - key: FLR_HASH_KEY
         generateValue: true
-      - key: FLR_WAVE_WEBHOOK_SECRET
-        sync: false # required by the API at startup (8+ chars); Wave Checkout is not used
-      - key: FLR_WAVE_API_KEY
-        sync: false
       - key: FLR_WHATSAPP_TOKEN
         sync: false
       - key: FLR_WHATSAPP_PHONE_NUMBER_ID
@@ -39,17 +35,28 @@ envVarGroups:
         value: "false"
       - key: FLR_WHATSAPP_MODE
         value: log
+      # Accept German mobiles (+49) at sign-up so the team can test from Germany. Remove before opening to the public.
+      - key: FLR_ALLOW_GERMAN_NUMBERS
+        value: "true"
       - key: FLR_PUSH_MODE
-        value: log
-      # Admin alerts via the ntfy app: set a long random topic (+ token if the topic is reserved).
-      - key: FLR_NTFY_TOPIC
-        sync: false
-      - key: FLR_NTFY_TOKEN
-        sync: false
+        value: live
+      - key: FLR_FCM_PROJECT_ID
+        value: flariane
+      - key: FLR_FCM_SERVICE_ACCOUNT_JSON
+        sync: false # service-account key: paste it in the Render dashboard, never in this file
       - key: FLR_TASK_MODE
         value: celery
       - key: FLR_STORAGE_MODE
         value: local # ephemeral on Render: switch to s3 (R2/S3 keys) before real use
+      # Fill these in the Render dashboard, then set FLR_STORAGE_MODE to s3 (Cloudflare R2 or AWS S3).
+      - key: FLR_S3_BUCKET
+        sync: false
+      - key: FLR_S3_ENDPOINT_URL
+        sync: false
+      - key: FLR_S3_ACCESS_KEY
+        sync: false
+      - key: FLR_S3_SECRET_KEY
+        sync: false
 
 services:
   - type: web
@@ -59,9 +66,11 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: FLR_TRUSTED_PROXY_HOPS
+        value: "1"
       - fromGroup: flariane-secrets
       - fromGroup: flariane-config
       - key: FLR_DATABASE_URL

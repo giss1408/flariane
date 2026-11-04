@@ -17,10 +17,8 @@ from app.routers import (
     auth_admin,
     auth_customer,
     customer,
-    dev,
     files,
     legal,
-    payment_return,
     setup,
     webhooks,
 )
@@ -35,7 +33,7 @@ async def _inline_scheduler() -> None:
     ticks = 0
     while True:
         # Runs once right after start-up (free hosting wakes up on demand), then every 5 minutes.
-        for name, every in (("expire_quotes", 1), ("reconcile_payments", 2), ("cancel_unpaid_orders", 1)):
+        for name, every in (("expire_quotes", 1), ("cancel_unpaid_orders", 1), ("purge_idempotency_keys", 12)):
             if ticks % every == 0:
                 try:
                     await tasks.TASKS[name]()
@@ -53,11 +51,30 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         job.cancel()
 
 
+def _init_sentry(dsn: str, env: str) -> None:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=env,
+        send_default_pii=False,
+        max_request_body_size="never",  # bodies hold passwords and phone numbers
+        traces_sample_rate=0,
+    )
+
+
 def create_app() -> FastAPI:
     s = get_settings()
+    if s.sentry_dsn:
+        _init_sentry(s.sentry_dsn, s.env)
     prod = s.env == "prod"
-    # Production may run with manual mobile-money payments and admin-sent WhatsApp; the simulated
-    # Wave page is never mounted in prod (dev_routes_enabled is False), and checkout refuses fake Wave.
+    if prod and s.storage_mode == "local":
+        logging.getLogger("flariane").error(
+            "FLR_STORAGE_MODE=local in production: cart screenshots are lost at every restart. Configure S3/R2 (FLR_STORAGE_MODE=s3)"
+        )
+    if prod and s.setup_token:
+        # /setup/reset-admin can take over the super admin account while this is set.
+        logging.getLogger("flariane").warning("FLR_SETUP_TOKEN is set in production: remove it once the first super admin exists")
 
     app = FastAPI(
         title="Flariane API",
@@ -88,10 +105,8 @@ def create_app() -> FastAPI:
         return response
 
     install_error_handlers(app)
-    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, payment_return, setup, legal):
+    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, setup, legal):
         app.include_router(module.router)
-    if s.dev_routes_enabled and s.wave_mode == "fake":
-        app.include_router(dev.router)  # simulated Wave checkout page
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:

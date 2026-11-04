@@ -7,7 +7,7 @@ from app.enums import AdminRole
 from app.errors import NotFound
 from app.models import Order, Shipment, ShipmentOrder
 from app.ratelimit import admin_limited
-from app.schemas import ShipmentDepartIn, ShipmentOrdersIn, ShipmentOut
+from app.schemas import ReadyForPickupIn, ShipmentCreateIn, ShipmentDepartIn, ShipmentOrdersIn, ShipmentOut
 from app.security.deps import AdminContext, client_ip, require_role
 from app.services import operations
 
@@ -32,6 +32,21 @@ async def _out(db: AsyncSession, shipment: Shipment) -> ShipmentOut:
 async def list_shipments(_: AdminContext = viewer, db: AsyncSession = Depends(get_session)) -> list[ShipmentOut]:
     rows = (await db.scalars(select(Shipment).order_by(Shipment.id.desc()).limit(50))).all()
     return [await _out(db, s) for s in rows]
+
+
+@router.post("", response_model=ShipmentOut, status_code=201)
+async def create_shipment(data: ShipmentCreateIn, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> ShipmentOut:
+    shipment = await operations.create_departure(db, data.departure_date, admin.id)
+    await db.commit()
+    return await _out(db, shipment)
+
+
+@router.post("/{shipment_id}/ready-for-pickup")
+async def ready_for_pickup(shipment_id: int, data: ReadyForPickupIn, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> list[dict]:
+    """After arrival: every order of the shipment becomes ready for pickup in one go (one code each)."""
+    results = await operations.mark_shipment_ready(db, shipment_id, data.pickup_point_id, admin.id, client_ip(request))
+    await db.commit()
+    return results
 
 
 @router.get("/{shipment_id}", response_model=ShipmentOut)

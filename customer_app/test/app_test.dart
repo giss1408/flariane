@@ -51,6 +51,20 @@ Map<String, dynamic> orderJson(String status) => {
 void main() {
   setUpAll(() => initializeDateFormatting('fr'));
 
+  test('fcfa already carries the currency (screens must not add it again)', () {
+    expect(fcfa(24679).replaceAll(RegExp(r'\s'), ' '), '24 679 FCFA'); // separators may be non-breaking spaces
+    expect(fcfa(24679), isNot(contains('FCFA FCFA')));
+  });
+
+  test('next step is plain words, and "À toi" marks what waits on the customer', () {
+    expect(nextStep('QUOTED'), startsWith('À toi'));
+    expect(nextStep('AWAITING_PAYMENT'), startsWith('À toi'));
+    expect(nextStep('READY_FOR_PICKUP'), startsWith('À toi'));
+    expect(nextStep('PAID'), isNot(startsWith('À toi')));
+    expect(nextStep('PICKED_UP'), isNull);
+    expect(nextStep('CANCELLED'), isNull);
+  });
+
   test('stepper maps statuses and side exits', () {
     expect(stepIndex('QUOTED'), 0);
     expect(stepIndex('PAID'), 1);
