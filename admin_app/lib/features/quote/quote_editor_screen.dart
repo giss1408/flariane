@@ -10,6 +10,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/store_badge.dart';
 import '../../widgets/whatsapp.dart';
@@ -277,10 +278,10 @@ class _ScreenshotBox extends StatelessWidget {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => Scaffold(
               appBar: AppBar(title: const Text('Capture du panier')),
-              body: InteractiveViewer(child: Center(child: Image.network(url!))),
+              body: InteractiveViewer(child: Center(child: CachedImage(url!))),
             ),
           )),
-          child: Image.network(url!, height: 260, fit: BoxFit.cover, alignment: Alignment.topCenter),
+          child: CachedImage(url!, height: 260, fit: BoxFit.cover, alignment: Alignment.topCenter),
         ),
       ),
       TextButton.icon(onPressed: onPick, icon: const Icon(Icons.refresh_rounded), label: const Text('Remplacer la capture')),

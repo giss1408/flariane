@@ -54,6 +54,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     s = get_settings()
     prod = s.env == "prod"
+    if prod and s.setup_token:
+        # /setup/reset-admin can take over the super admin account while this is set.
+        logging.getLogger("flariane").warning("FLR_SETUP_TOKEN is set in production: remove it once the first super admin exists")
 
     app = FastAPI(
         title="Flariane API",

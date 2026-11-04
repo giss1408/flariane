@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     Numeric,
@@ -114,6 +115,8 @@ class PickupPoint(TimestampMixin, Base):
 
 class Order(TimestampMixin, Base):
     __tablename__ = "orders"
+    # The admin inbox filters by status and sorts by status_changed_at.
+    __table_args__ = (Index("ix_orders_status_changed", "status", "status_changed_at"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     public_ref: Mapped[str] = mapped_column(String(16), unique=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)

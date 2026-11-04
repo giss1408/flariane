@@ -9,6 +9,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/payment_proof.dart';
 import '../../widgets/store_badge.dart';
@@ -284,13 +285,12 @@ class _CartSection extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => Scaffold(
                     appBar: AppBar(title: const Text('Capture du panier')),
-                    body: InteractiveViewer(child: Center(child: Image.network(order.attachments[i].url))),
+                    body: InteractiveViewer(child: Center(child: CachedImage(order.attachments[i].url))),
                   ),
                 )),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(order.attachments[i].url, width: 100, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(width: 100, child: Icon(Icons.broken_image_outlined))),
+                  child: CachedImage(order.attachments[i].url, width: 100, height: 100, fit: BoxFit.cover, errorText: ''),
                 ),
               ),
             ),
@@ -318,7 +318,7 @@ class _QuoteSummary extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(q.screenshotUrl!, height: 200, width: double.infinity, fit: BoxFit.cover, alignment: Alignment.topCenter),
+                  child: CachedImage(q.screenshotUrl!, height: 200, width: double.infinity, fit: BoxFit.cover, alignment: Alignment.topCenter),
                 ),
               ),
             for (final l in q.lines)

@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../order/order_screen.dart';
 
@@ -158,7 +159,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
             if (_quote.screenshotUrl != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.network(_quote.screenshotUrl!,
+                child: CachedImage(_quote.screenshotUrl!,
                     height: 320,
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter),

@@ -28,7 +28,8 @@ Goal: a stolen admin password + authenticator code is not enough, and the admin 
 - [ ] Put `/admin/*` and `/setup/*` behind Cloudflare Access, an IP allowlist, or a VPN (e.g. Tailscale), ideally
       on a separate hostname from the customer API.
 - [ ] Confirm `FLR_SETUP_TOKEN` is unset in production once the first super admin exists
-      (`/setup/reset-admin` can take over the super admin account).
+      (`/setup/reset-admin` can take over the super admin account). The API now logs a warning at start-up
+      in prod while it is set.
 - [ ] If Cloudflare ends up in front of Render, set `FLR_TRUSTED_PROXY_HOPS=2`.
 
 ## 5. Certificate pinning
@@ -60,5 +61,6 @@ Goal: less battery, data and server load; the apps refresh when something actual
 - [ ] Admin app: same for the 60 s attention timer in `core/attention.dart`.
 - [ ] Backend: `ETag` / `If-None-Match` on `GET /orders`, `GET /orders/{ref}` and the admin inbox, so an unchanged
       poll answers `304` with no body (today every response is `Cache-Control: no-store`).
-- [ ] Add keyset pagination to the admin inbox (limit 200) and customer list (limit 100) with a composite index on
-      `(status, status_changed_at)`.
+- [ ] Add keyset pagination to the admin inbox (limit 200) and customer list (limit 100). The composite index on
+      `(status, status_changed_at)` is done.
+- [x] Admin app images use the disk-cached `CachedImage` (same widget as the customer app).
