@@ -33,7 +33,7 @@ async def _inline_scheduler() -> None:
     ticks = 0
     while True:
         # Runs once right after start-up (free hosting wakes up on demand), then every 5 minutes.
-        for name, every in (("expire_quotes", 1), ("cancel_unpaid_orders", 1)):
+        for name, every in (("expire_quotes", 1), ("cancel_unpaid_orders", 1), ("purge_idempotency_keys", 12)):
             if ticks % every == 0:
                 try:
                     await tasks.TASKS[name]()

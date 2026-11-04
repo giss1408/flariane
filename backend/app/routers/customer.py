@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Request, Response, UploadFile
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +46,7 @@ from app.schemas import (
 from app.security.crypto import decrypt, encrypt, mask_phone, phone_hash
 from app.security.deps import client_ip
 from app.security.tokens import utcnow
-from app.services import customer_auth, notify, phone_verification, quotes
+from app.services import customer_auth, idempotency, notify, phone_verification, quotes
 from app.services.audit import audit
 from app.services import location as loc
 from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, pick_cart_url, store_of
@@ -294,7 +294,17 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
 
 
 @router.post("/orders", response_model=OrderDetailOut, status_code=201)
-async def create_order(data: OrderCreateIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> OrderDetailOut:
+async def create_order(
+    data: OrderCreateIn,
+    request: Request,
+    customer: Customer = authed,
+    db: AsyncSession = Depends(get_session),
+    idempotency_key: str | None = Header(default=None, max_length=80),
+) -> OrderDetailOut:
+    return await idempotency.run(db, customer.id, "create_order", idempotency_key, lambda: _create_order(data, request, customer, db))  # type: ignore[return-value]
+
+
+async def _create_order(data: OrderCreateIn, request: Request, customer: Customer, db: AsyncSession) -> OrderDetailOut:
     if customer.phone_verified_at is None:
         raise Forbidden("phone_not_verified")
     if is_non_eu_link(data.share_text):
@@ -422,9 +432,14 @@ async def declare_payment(
     file: UploadFile = File(...),
     customer: Customer = authed,
     db: AsyncSession = Depends(get_session),
+    idempotency_key: str | None = Header(default=None, max_length=80),
 ) -> PaymentOut:
     """She paid from her Wave / Orange Money / Moov Money app and sends the screenshot.
     An admin checks it against their account and confirms."""
+    return await idempotency.run(db, customer.id, f"declare:{ref}", idempotency_key, lambda: _declare_payment(ref, request, method, file, customer, db))  # type: ignore[return-value]
+
+
+async def _declare_payment(ref: str, request: Request, method: str, file: UploadFile, customer: Customer, db: AsyncSession) -> PaymentOut:
     order = await _order_for(db, customer, ref)
     payment = await db.scalar(
         select(Payment).where(Payment.order_id == order.id, Payment.status.in_((PaymentStatus.PENDING, PaymentStatus.INITIATED)))

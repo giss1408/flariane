@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api.dart' show newIdempotencyKey;
 import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -31,6 +32,8 @@ class NewOrderScreen extends ConsumerStatefulWidget {
 }
 
 class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
+  // Same key for every tap of "Envoyer" on this form, so a double tap or a retry never makes two orders.
+  final _idemKey = newIdempotencyKey();
   late final _link =
       TextEditingController(text: ref.read(sharedTextProvider) ?? '');
   final _note = TextEditingController();
@@ -70,6 +73,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         shareText: _link.text,
         pickupPointId: _pointId,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+        idempotencyKey: _idemKey,
       );
       var failed = 0;
       for (final f in _screenshots) {

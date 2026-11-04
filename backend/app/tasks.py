@@ -11,14 +11,14 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import db as db_module
 from app.config import get_settings
 from app.enums import PaymentStatus, QuoteStatus
 from app.integrations import push, whatsapp
-from app.models import AdminDevice, AdminUser, Customer, Notification, Payment, Quote
+from app.models import AdminDevice, AdminUser, Customer, IdempotencyKey, Notification, Payment, Quote
 from app.security.crypto import decrypt
 from app.security.tokens import utcnow
 
@@ -95,6 +95,14 @@ async def push_admins(event: str, order_ref: str, order_id: int) -> None:
         await db.commit()
 
 
+async def purge_idempotency_keys() -> int:
+    """Retries come within seconds or minutes; a day is plenty."""
+    async with session_factory() as db:
+        result = await db.execute(delete(IdempotencyKey).where(IdempotencyKey.created_at < utcnow() - timedelta(hours=24)))
+        await db.commit()
+        return result.rowcount or 0
+
+
 async def expire_quotes() -> int:
     """Mark SENT quotes past their expiry as EXPIRED. The order stays QUOTED until the customer asks again."""
     async with session_factory() as db:
@@ -155,6 +163,7 @@ TASKS: dict[str, Callable[..., Awaitable[Any]]] = {
     "push_admins": push_admins,
     "expire_quotes": expire_quotes,
     "cancel_unpaid_orders": cancel_unpaid_orders,
+    "purge_idempotency_keys": purge_idempotency_keys,
 }
 
 

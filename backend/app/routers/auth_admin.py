@@ -9,6 +9,7 @@ sessions end after 12 h (full login with TOTP again).
 import time
 
 import pyotp
+from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Request
 from limits import parse
 from sqlalchemy import func, select
@@ -107,7 +108,8 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         raise HTTPException(status_code=429, detail="rate_limited")
 
     user = await db.scalar(select(AdminUser).where(AdminUser.email == data.email).with_for_update())
-    password_ok = verify_password(user.password_hash if user else _DUMMY_HASH, data.password)
+    # argon2 is CPU-bound: run it in a thread so other requests keep being served.
+    password_ok = await to_thread.run_sync(verify_password, user.password_hash if user else _DUMMY_HASH, data.password)
     # Same answer whatever failed (unknown email, password or code): no hint for an attacker.
     totp_ok = user is not None and (_check_totp(user, data.totp) if user.totp_required else True)
     if user is None or not user.active or not password_ok or not totp_ok:

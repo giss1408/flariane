@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/api.dart' show newIdempotencyKey;
 import '../../core/format.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -36,10 +37,15 @@ class _PayScreenState extends ConsumerState<PayScreen> {
   XFile? _proof;
   late bool _declared = widget.declared;
   bool _busy = false;
+  // Renewed whenever the method or the screenshot changes: a different declaration is a different request.
+  String _idemKey = newIdempotencyKey();
 
   Future<void> _pick() async {
     final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1280); // payment proof: readable, light to upload
-    if (f != null) setState(() => _proof = f);
+    if (f != null) {
+      _idemKey = newIdempotencyKey();
+      setState(() => _proof = f);
+    }
   }
 
   Future<void> _send() async {
@@ -47,7 +53,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
     if (_proof == null) return showInfo(context, 'Ajoute la capture de ton paiement.');
     setState(() => _busy = true);
     try {
-      await ref.read(apiProvider).declarePayment(widget.orderRef, method: _method!, proofPath: _proof!.path);
+      await ref.read(apiProvider).declarePayment(widget.orderRef, method: _method!, proofPath: _proof!.path, idempotencyKey: _idemKey);
       ref.invalidate(orderProvider(widget.orderRef));
       setState(() => _declared = true);
     } catch (e) {
@@ -109,7 +115,10 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                 ChoiceChip(
                   label: Text(methods[key]?.$1 ?? key),
                   selected: _method == key,
-                  onSelected: (_) => setState(() => _method = key),
+                  onSelected: (_) => setState(() {
+                    _method = key;
+                    _idemKey = newIdempotencyKey();
+                  }),
                   selectedColor: methods[key]?.$2 ?? AppColors.primary,
                   backgroundColor: context.pal.card,
                   labelStyle: TextStyle(color: _method == key ? Colors.white : context.pal.ink, fontWeight: FontWeight.w700),

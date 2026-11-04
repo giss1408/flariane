@@ -95,10 +95,10 @@ async def login(db: AsyncSession, raw_phone: str, password: str) -> Customer:
 
 
 async def change_password(customer: Customer, current: str, new: str) -> None:
-    if not customer.password_hash or not verify_password(customer.password_hash, current):
+    if not customer.password_hash or not await to_thread.run_sync(verify_password, customer.password_hash, current):
         raise InvalidCredentials("invalid_credentials")
     check_password_strength(new)
-    customer.password_hash = hash_password(new)
+    customer.password_hash = await to_thread.run_sync(hash_password, new)
     customer.must_change_password = False
 
 

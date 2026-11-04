@@ -5,6 +5,7 @@ import io
 from datetime import UTC, date, datetime, time, timedelta
 
 import pyotp
+from anyio import to_thread
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
@@ -178,7 +179,7 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
     if customer is None or customer.anonymised_at is not None:
         raise NotFound()
     temp = customer_auth.temporary_password()
-    customer.password_hash, customer.must_change_password = hash_password(temp), True
+    customer.password_hash, customer.must_change_password = await to_thread.run_sync(hash_password, temp), True
     for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id, RefreshToken.revoked_at.is_(None)))).all():
         t.revoked_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="customer.password_reset", entity="customer", entity_id=customer.id, ip=client_ip(request))
@@ -240,7 +241,7 @@ async def reset_credentials(user_id: int, request: Request, admin: AdminContext 
         raise NotFound()
     password = "-".join(secrets.token_urlsafe(4) for _ in range(3))
     secret = pyotp.random_base32()
-    user.password_hash, user.totp_secret_enc, user.totp_last_step = hash_password(password), encrypt(secret), 0
+    user.password_hash, user.totp_secret_enc, user.totp_last_step = await to_thread.run_sync(hash_password, password), encrypt(secret), 0
     for device in (await db.scalars(select(AdminDevice).where(AdminDevice.admin_user_id == user.id))).all():
         await revoke_device_tokens(db, device.id)
     await audit(db, actor_type="admin", actor_id=admin.id, action="admin_user.credentials_reset", entity="admin_user", entity_id=user.id, ip=client_ip(request))
@@ -257,7 +258,7 @@ async def create_user(data: AdminUserIn, request: Request, admin: AdminContext =
         raise Conflict("email_taken")
     secret = pyotp.random_base32()
     totp_required = data.totp_required or data.role == "SUPER_ADMIN"
-    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=hash_password(data.password),
+    user = AdminUser(email=data.email, name=data.name, role=data.role, password_hash=await to_thread.run_sync(hash_password, data.password),
                      totp_secret_enc=encrypt(secret), totp_required=totp_required)
     db.add(user)
     await db.flush()

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -50,6 +52,13 @@ class MemoryTokenStore implements TokenStore {
 
   @override
   Future<void> write(String? t) async => token = t;
+}
+
+/// One per user action (not per HTTP attempt): a retry after a timeout sends the same key, so the server
+/// answers with the first result instead of creating a second order or payment declaration.
+String newIdempotencyKey() {
+  final r = Random.secure();
+  return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
 }
 
 enum RefreshOutcome { ok, expired, offline }
@@ -190,9 +199,10 @@ class CustomerApi {
 
   String get waveQrUrl => '${dio.options.baseUrl}/public/wave-qr';
 
-  Future<Payment> declarePayment(String ref, {required String method, required String proofPath}) => _call(
+  Future<Payment> declarePayment(String ref, {required String method, required String proofPath, String? idempotencyKey}) => _call(
         () async => dio.post('/orders/$ref/payment/declare',
-            data: FormData.fromMap({'method': method, 'file': await MultipartFile.fromFile(proofPath)})),
+            data: FormData.fromMap({'method': method, 'file': await MultipartFile.fromFile(proofPath)}),
+            options: _idem(idempotencyKey)),
         (j) => Payment.fromJson(j as Map<String, dynamic>),
       );
 
@@ -206,8 +216,10 @@ class CustomerApi {
 
   Future<Order> order(String ref) => _call(() => dio.get('/orders/$ref'), (j) => Order.fromJson(j as Map<String, dynamic>));
 
-  Future<Order> createOrder({required String shareText, int? pickupPointId, String? note}) => _call(
-      () => dio.post('/orders', data: {'share_text': shareText, 'pickup_point_id': pickupPointId, 'note': note}),
+  Options? _idem(String? key) => key == null ? null : Options(headers: {'Idempotency-Key': key});
+
+  Future<Order> createOrder({required String shareText, int? pickupPointId, String? note, String? idempotencyKey}) => _call(
+      () => dio.post('/orders', data: {'share_text': shareText, 'pickup_point_id': pickupPointId, 'note': note}, options: _idem(idempotencyKey)),
       (j) => Order.fromJson(j as Map<String, dynamic>));
 
   Future<void> uploadScreenshot(String ref, String path) => _call(

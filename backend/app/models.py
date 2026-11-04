@@ -370,3 +370,17 @@ class AuditLog(Base):
     after: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     ip: Mapped[str | None] = mapped_column(String(45))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IdempotencyKey(Base):
+    """Replay protection for customer POSTs that create something (order, payment declaration): a retry with
+    the same Idempotency-Key gets the stored answer instead of running again. Purged after 24 h."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("customer_id", "endpoint", "key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(60))
+    key: Mapped[str] = mapped_column(String(80))
+    response: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
