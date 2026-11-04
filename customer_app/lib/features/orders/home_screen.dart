@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/open_app.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
@@ -146,7 +147,7 @@ class HomeScreen extends ConsumerWidget {
             loading: () => [const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))],
             error: (e, _) => [ErrorView(e, onRetry: () => ref.invalidate(ordersProvider))],
             data: (all) => all.isEmpty
-                ? [const _EmptyOrders()]
+                ? [const _FirstSteps()]
                 : [
                     for (final o in all)
                       Padding(
@@ -437,22 +438,35 @@ class _OrderRow extends StatelessWidget {
   }
 }
 
-class _EmptyOrders extends StatelessWidget {
-  const _EmptyOrders();
+/// First order: three steps and a shortcut to the shopping app, since "where do I find the link?" is the hardest part.
+class _FirstSteps extends StatelessWidget {
+  const _FirstSteps();
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: context.pal.lilac, width: 2),
-        ),
-        child: Column(children: [
-          Icon(Icons.shopping_bag_outlined, size: 36, color: context.pal.accent),
-          const SizedBox(height: 8),
-          const Text('Pas encore de commande', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text('Partage ton premier panier SHEIN ou Temu pour recevoir ton devis.', textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: context.pal.lilac, width: 2)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Ta première commande en 3 étapes', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+          const SizedBox(height: 12),
+          for (final (i, t) in const [
+            'Remplis ton panier dans SHEIN ou Temu.',
+            'Touche Partager, puis choisis Flariane (ou copie le lien).',
+            'Reçois ton devis en FCFA, puis paie avec Wave.',
+          ].indexed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                CircleAvatar(radius: 12, backgroundColor: context.pal.accent, child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700))),
+                const SizedBox(width: 10),
+                Expanded(child: Text(t)),
+              ]),
+            ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ouvrir SHEIN'), onPressed: () => openPartnerApp(context, PartnerApp.shein)),
+            OutlinedButton.icon(icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ouvrir Temu'), onPressed: () => openPartnerApp(context, PartnerApp.temu)),
+          ]),
         ]),
       );
 }

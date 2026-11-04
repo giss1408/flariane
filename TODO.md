@@ -110,3 +110,17 @@ button, and the last attempts with Firebase's error.
 - [ ] Most likely: `FLR_FCM_SERVICE_ACCOUNT_JSON` missing/invalid on the test service, or the Firebase Cloud Messaging API
       not enabled for the `flariane` project / the service account lacking the "Firebase Cloud Messaging API Admin" role.
 - [ ] Remember: with the admin app in the foreground the alert is a snackbar, not a system notification.
+
+## 11. Customer app ease of use (next)
+
+Done: first-order steps with "Ouvrir SHEIN / Temu", copied-link suggestion on the new-order screen, Wave shortcut +
+amount copy on the payment screen.
+
+- [ ] Verify the shortcut package ids on a phone with the apps installed (`com.zzkko`, `com.einnovation.temu`,
+      `com.wave.personal`) and add Orange Money / Moov Money ids if wanted.
+- [ ] Quote screen: total and "Accepter et payer" first, details below; fold "J'ai vérifié mon panier" into the confirmation.
+- [ ] Order list: group active / finished, show the next step in plain words ("Paie avant vendredi", "Retire à Cocody").
+- [ ] Ask for the Abidjan address once, in context, before the first quote.
+- [ ] Use "tu" everywhere (some screens still say "vous").
+- [ ] "Réessayer" on every failed load.
+- [ ] Customer push notifications instead of 20 s polling (item 7).

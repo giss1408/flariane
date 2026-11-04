@@ -40,12 +40,19 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   final _screenshots = <XFile>[];
   int? _pointId;
   bool _busy = false;
+  String? _clipboardLink; // a SHEIN/Temu link found in the clipboard: offered, never filled silently
 
   @override
   void initState() {
     super.initState();
     Future.microtask(
         () => ref.read(sharedTextProvider.notifier).state = null); // consumed
+    if (_link.text.isEmpty) _checkClipboard();
+  }
+
+  Future<void> _checkClipboard() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    if (mounted && text != null && looksLikeSheinLink(text) && _link.text.isEmpty) setState(() => _clipboardLink = text);
   }
 
   Future<void> _paste() async {
@@ -105,6 +112,18 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
     return Scaffold(
       appBar: const FlarianeHeader(subtitle: 'Nouveau panier'),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        if (_clipboardLink != null && _link.text.isEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: context.pal.success.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+            child: Row(children: [
+              Icon(Icons.check_circle_rounded, color: context.pal.success),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('On a trouvé le lien de ton panier dans ce que tu viens de copier.', style: TextStyle(fontWeight: FontWeight.w600))),
+              TextButton(onPressed: () => setState(() => _link.text = _clipboardLink!), child: const Text('Utiliser')),
+            ]),
+          ),
         TextField(
           controller: _link,
           minLines: 2,

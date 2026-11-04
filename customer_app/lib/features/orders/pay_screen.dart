@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api.dart' show newIdempotencyKey;
 import '../../core/format.dart';
+import '../../core/open_app.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/cached_image.dart';
@@ -138,8 +139,22 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                   child: CachedImage(ref.read(apiProvider).waveQrUrl, width: 200, height: 200),
                 ),
               ),
+            if (_method == 'WAVE')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text('Copier le numéro et ouvrir Wave'),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: number));
+                    openPartnerApp(context, PartnerApp.wave);
+                    showInfo(context, 'Numéro copié : colle-le dans Wave');
+                  },
+                ),
+              ),
             _CopyTile(label: 'Numéro ${methods[_method]!.$1}', value: number, onCopy: () => _copy(number, 'Numéro')),
-            _CopyTile(label: 'Référence à mettre en note', value: widget.orderRef, big: true, onCopy: () => _copy(widget.orderRef, 'Référence')),
+            _CopyTile(label: 'Montant exact', value: '${fcfa(widget.amountXof)} FCFA', onCopy: () => _copy('${widget.amountXof}', 'Montant')),
+            _CopyTile(label: 'Référence : écris-la dans la note du paiement', value: widget.orderRef, big: true, onCopy: () => _copy(widget.orderRef, 'Référence')),
             const SizedBox(height: 18),
             const Text('3. Envoie-nous la capture du paiement', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
