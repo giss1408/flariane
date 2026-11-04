@@ -451,13 +451,18 @@ async def _declare_payment(ref: str, request: Request, method: str, file: Upload
         payment.provider, payment.launch_url = "MANUAL", None  # started under the old Wave Checkout mode
     if payment.status == PaymentStatus.INITIATED:
         await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
-    data, content_type, _ = storage.sanitize_image(await file.read(10 * 1024 * 1024 + 1))
-    payment.method, payment.proof_image, payment.proof_content_type = method, data, content_type
+    data, content_type, ext = storage.sanitize_image(await file.read(10 * 1024 * 1024 + 1))
+    old_key = payment.proof_key
+    payment.proof_key = storage.new_proof_key(order.id, ext)
+    storage.put(payment.proof_key, data, content_type)
+    payment.method, payment.proof_image, payment.proof_content_type = method, None, content_type
     payment.status_reason = "declared"
     await audit(db, actor_type="customer", actor_id=customer.id, action="payment.declared", entity="payment", entity_id=payment.id,
                 after={"method": method}, ip=client_ip(request))
     notify.admins(db, "payment_declared", order)
     await db.commit()
+    if old_key:
+        storage.delete(old_key)  # she sent a better screenshot: drop the previous one
     return PaymentOut.of(payment, launch=False)
 
 

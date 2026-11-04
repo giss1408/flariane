@@ -47,10 +47,11 @@ Goal: block man-in-the-middle proxies (Burp, mitmproxy) on the phone.
 
 Goal: keep the database small (Neon free tier, backups) and serve proofs like the cart screenshots.
 
-- [ ] Store `Payment.proof_image` through the existing `storage` layer (S3 or local) and keep only the storage key
-      and content type on the row.
-- [ ] Migration: copy existing blobs to storage, then drop the `proof_image` column.
-- [ ] Admin proof endpoint (`admin_orders.py`) returns a short-lived signed URL, or streams from storage.
+- [x] New proofs are stored through the `storage` layer (`payments.proof_key`); the admin proof endpoint streams
+      them from storage (and still reads old blobs).
+- [ ] After deploying: run `python -m app.cli migrate-proofs` once (Render shell) to move the old blobs, and make
+      sure S3 storage is configured in production (`FLR_STORAGE_MODE=s3`; local disk is lost on redeploy).
+- [ ] Then add a migration that drops `payments.proof_image` and the fallback in `admin_orders.payment_proof`.
 
 ## 7. Push instead of polling + ETags
 

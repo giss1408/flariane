@@ -240,10 +240,13 @@ class Payment(TimestampMixin, Base):
     idempotency_key: Mapped[str] = mapped_column(String(80), unique=True)
     confirmed_at: Mapped[datetime | None] = _ts()
     status_reason: Mapped[str | None] = mapped_column(Text)
-    # Manual mobile-money payments: method chosen and the customer's screenshot (kept in the DB).
+    # Manual mobile-money payments: method chosen and the customer's screenshot.
     method: Mapped[str | None] = mapped_column(String(8))  # WAVE | ORANGE | MOOV
     proof_image: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
     proof_content_type: Mapped[str | None] = mapped_column(String(40))
+    # New proofs live in storage (like cart screenshots). `proof_image` only holds proofs from before that
+    # change, until `python -m app.cli migrate-proofs` has moved them; then the column can be dropped.
+    proof_key: Mapped[str | None] = mapped_column(String(160))
 
 
 class Refund(TimestampMixin, Base):

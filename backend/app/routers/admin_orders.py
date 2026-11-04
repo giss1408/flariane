@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
+from anyio import to_thread
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
@@ -367,9 +368,12 @@ async def payment_proof(order_id: int, _: AdminContext = viewer, db: AsyncSessio
         select(Payment).where(Payment.order_id == order_id, Payment.proof_content_type.is_not(None))
         .order_by(Payment.id.desc()).limit(1).options(undefer(Payment.proof_image))
     )
-    if payment is None or payment.proof_image is None:
+    if payment is None:
         raise NotFound()
-    return Response(payment.proof_image, media_type=payment.proof_content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
+    image = await to_thread.run_sync(storage.get, payment.proof_key) if payment.proof_key else payment.proof_image
+    if image is None:
+        raise NotFound()
+    return Response(image, media_type=payment.proof_content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
 
 
 class WhatsAppMessageIn(BaseModel):

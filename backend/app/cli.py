@@ -4,6 +4,7 @@
     python -m app.cli approve-device --device-id 1
     python -m app.cli seed-pickup-points
     python -m app.cli gen-keys
+    python -m app.cli migrate-proofs   # one-off: payment proofs from the database into storage
 """
 
 import argparse
@@ -45,6 +46,25 @@ async def approve_device(device_id: int) -> None:
     print(f"Device {device_id} ({device.name}, {device.platform}) approved.")
 
 
+async def migrate_proofs() -> None:
+    """Move payment proofs stored in the database (before they went to storage) into storage. Safe to re-run."""
+    from app.integrations import storage
+    from app.models import Payment
+    from sqlalchemy.orm import undefer
+
+    moved = 0
+    async with SessionLocal() as db:
+        rows = (await db.scalars(select(Payment).where(Payment.proof_image.is_not(None), Payment.proof_key.is_(None)).options(undefer(Payment.proof_image)))).all()
+        for p in rows:
+            ext = "png" if p.proof_content_type == "image/png" else "webp" if p.proof_content_type == "image/webp" else "jpg"
+            key = storage.new_proof_key(p.order_id, ext)
+            storage.put(key, p.proof_image, p.proof_content_type or "image/jpeg")
+            p.proof_key, p.proof_image = key, None
+            moved += 1
+        await db.commit()
+    print(f"Moved {moved} payment proof(s) to storage.")
+
+
 async def list_devices() -> None:
     async with SessionLocal() as db:
         for d in (await db.scalars(select(AdminDevice).order_by(AdminDevice.id))).all():
@@ -84,6 +104,7 @@ def main() -> None:
     sub.add_parser("list-devices")
     sub.add_parser("seed-pickup-points")
     sub.add_parser("gen-keys")
+    sub.add_parser("migrate-proofs")
     args = parser.parse_args()
 
     if args.cmd == "gen-keys":
@@ -94,6 +115,8 @@ def main() -> None:
         asyncio.run(approve_device(args.device_id))
     elif args.cmd == "list-devices":
         asyncio.run(list_devices())
+    elif args.cmd == "migrate-proofs":
+        asyncio.run(migrate_proofs())
     elif args.cmd == "seed-pickup-points":
         asyncio.run(seed_pickup_points())
 
