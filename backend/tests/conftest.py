@@ -15,6 +15,8 @@ os.environ.update(
         "FLR_PUSH_MODE": "log",
         "FLR_TASK_MODE": "record",
         "FLR_RATE_LIMIT_STORAGE": "memory://",
+        "FLR_REGISTER_PER_IP_HOUR": "1000",
+        "FLR_REGISTER_GLOBAL_HOUR": "1000",
         "FLR_STORAGE_LOCAL_DIR": "/tmp/flariane-test-uploads",
     }
 )

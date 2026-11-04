@@ -54,9 +54,11 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: FLR_TRUSTED_PROXY_HOPS
+        value: "1"
       - fromGroup: flariane-secrets
       - fromGroup: flariane-config
       - key: FLR_DATABASE_URL

@@ -396,3 +396,16 @@ async def test_operator_reinstall_still_needs_approval(client: AsyncClient) -> N
     op = await make_admin(role="OPERATOR", email="op@flariane.ci")
     r = await _login(client, op, {"name": "Test phone", "platform": "android"})
     assert r["status"] == "device_pending"
+
+
+async def test_register_rate_limited_per_ip_and_forwarded_header_ignored(client: AsyncClient, monkeypatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "register_per_ip_hour", 2)
+    monkeypatch.setattr(get_settings(), "trusted_proxy_hops", 1)
+    for i in range(2):
+        # The leftmost X-Forwarded-For entry is client-controlled: changing it must not reset the limit.
+        r = await client.post("/auth/register", json={"phone": f"070000000{i}", "password": "bonjour-2026", "consent": True}, headers={"x-forwarded-for": f"9.9.9.{i}, 5.5.5.5"})
+        assert r.status_code == 201
+    r = await client.post("/auth/register", json={"phone": "0700000009", "password": "bonjour-2026", "consent": True}, headers={"x-forwarded-for": "1.2.3.4, 5.5.5.5"})
+    assert r.status_code == 429 and r.json()["detail"] == "register_rate_limited"

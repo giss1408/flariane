@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     max_attachments_per_order: int = 10
 
     rate_limit_storage: str = "memory://"
+    # How many reverse proxies sit in front of the API (0 = none, use the socket address). The client IP
+    # is read from X-Forwarded-For counting from the right, so a header the client sends itself is ignored.
+    # Render: 1. Cloudflare in front of Render: 2.
+    trusted_proxy_hops: int = 0
+    # Account creation limits (bots, admin push spam). Per IP is low-ish but CGNAT shares IPs, hence the hourly window.
+    register_per_ip_hour: int = 5
+    register_global_hour: int = 300
 
     # One-time creation of the first super admin over HTTP (hosts without a shell). Empty = disabled.
     setup_token: str = ""
