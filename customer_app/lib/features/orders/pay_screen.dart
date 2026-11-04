@@ -153,7 +153,7 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                 ),
               ),
             _CopyTile(label: 'Numéro ${methods[_method]!.$1}', value: number, onCopy: () => _copy(number, 'Numéro')),
-            _CopyTile(label: 'Montant exact', value: '${fcfa(widget.amountXof)} FCFA', onCopy: () => _copy('${widget.amountXof}', 'Montant')),
+            _CopyTile(label: 'Montant exact', value: fcfa(widget.amountXof), onCopy: () => _copy('${widget.amountXof}', 'Montant')),
             _CopyTile(label: 'Référence : écris-la dans la note du paiement', value: widget.orderRef, big: true, onCopy: () => _copy(widget.orderRef, 'Référence')),
             const SizedBox(height: 18),
             const Text('3. Envoie-nous la capture du paiement', style: TextStyle(fontWeight: FontWeight.w700)),

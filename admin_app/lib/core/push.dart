@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/inbox/inbox_screen.dart' show inboxProvider;
 import '../features/order/order_screen.dart';
 import '../main.dart' show navigatorKey;
 import 'attention.dart';
@@ -53,14 +55,23 @@ class PushService {
     }
   }
 
-  /// App in front: the system shows nothing, so show it in the app and refresh the counters.
+  /// App in front: the system shows nothing, so make the alert unmissable in the app (sound, vibration, a snackbar
+  /// that stays 12 s) and refresh the counters and the order lists behind it.
   void _foreground(RemoteMessage m) {
     ref.invalidate(attentionProvider);
+    ref.invalidate(inboxProvider);
+    SystemSound.play(SystemSoundType.alert);
+    HapticFeedback.heavyImpact();
     final context = navigatorKey.currentContext;
     if (context == null) return;
     final n = m.notification;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text([n?.title, n?.body].whereType<String>().join(' · ')),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 12),
+      behavior: SnackBarBehavior.floating,
+      showCloseIcon: true,
+      content: Text([n?.title, n?.body].whereType<String>().join(' · '), style: const TextStyle(fontWeight: FontWeight.w700)),
       action: _orderId(m) == null ? null : SnackBarAction(label: 'Ouvrir', onPressed: () => _open(m)),
     ));
   }

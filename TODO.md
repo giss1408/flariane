@@ -106,7 +106,7 @@ The API creates the push correctly (tested), so the cause is on the server's Fir
 **Compte › Notifications** shows the mode, whether the service-account key is set, the devices' push tokens, a test
 button, and the last attempts with Firebase's error.
 
-- [ ] Deploy, open that screen on the admin phone, tap "Envoyer un test" and read the error.
+- [x] Diagnosed on the test server: Firebase is configured and every alert is accepted (`SENT`); system notifications arrive when the admin app is in the background. The "missing" alerts were because the app was in front, where Android shows nothing: the app now plays a sound, vibrates, shows a 12 s snackbar and refreshes the order lists.
 - [ ] Most likely: `FLR_FCM_SERVICE_ACCOUNT_JSON` missing/invalid on the test service, or the Firebase Cloud Messaging API
       not enabled for the `flariane` project / the service account lacking the "Firebase Cloud Messaging API Admin" role.
 - [ ] Remember: with the admin app in the foreground the alert is a snackbar, not a system notification.

@@ -246,7 +246,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
           child: Row(children: [
             Text('Total à payer', style: TextStyle(color: context.pal.muted)),
             const Spacer(),
-            Text('${fcfa(q.totalXof)} FCFA', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
+            Text(fcfa(q.totalXof), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
           ]),
         ),
       ],
