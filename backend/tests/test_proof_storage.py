@@ -11,8 +11,20 @@ from sqlalchemy.orm import undefer
 from app.cli import migrate_proofs
 from app.config import get_settings
 from app.db import SessionLocal
+from app.integrations import storage
 from app.models import Payment, PickupPoint
 from tests.conftest import AdminFixture, create_order, order_id, quote_and_send
+
+
+def _put_local(key: str, data: bytes) -> None:
+    path = Path(get_settings().storage_local_dir) / key
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def _get_local(key: str) -> bytes | None:
+    path = Path(get_settings().storage_local_dir) / key
+    return path.read_bytes() if path.is_file() else None
 
 
 def _jpeg(color: str) -> bytes:
@@ -26,7 +38,11 @@ async def _payment(oid: int) -> Payment:
         return await db.scalar(select(Payment).where(Payment.order_id == oid).options(undefer(Payment.proof_image)))  # type: ignore[return-value]
 
 
-async def test_proof_goes_to_storage_and_legacy_is_migrated(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point: PickupPoint) -> None:
+async def test_proof_goes_to_storage_and_legacy_is_migrated(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point: PickupPoint, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(get_settings(), "storage_mode", "s3")
+    monkeypatch.setattr(storage, "put", lambda key, data, ct: _put_local(key, data))
+    monkeypatch.setattr(storage, "get", lambda key: _get_local(key))
+    monkeypatch.setattr(storage, "delete", lambda key: (Path(get_settings().storage_local_dir) / key).unlink(missing_ok=True))
     await client.put("/admin/settings", json={"payment_mode": "manual", "payment_accounts": {"WAVE": "0700000000"}}, headers=admin.headers)
     ref = (await create_order(client, customer, pickup_point))["public_ref"]
     oid = await order_id(ref)
@@ -60,3 +76,17 @@ async def test_proof_goes_to_storage_and_legacy_is_migrated(client: AsyncClient,
     p = await _payment(oid)
     assert p.proof_image is None and p.proof_key
     assert (await client.get(f"/admin/orders/{oid}/payment-proof", headers=admin.headers)).content == legacy
+
+
+async def test_proof_stays_in_database_while_storage_is_local(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point: PickupPoint) -> None:
+    """Local disk is lost at restart: until S3 is configured the proof must live in the database."""
+    await client.put("/admin/settings", json={"payment_mode": "manual", "payment_accounts": {"WAVE": "0700000000"}}, headers=admin.headers)
+    ref = (await create_order(client, customer, pickup_point))["public_ref"]
+    oid = await order_id(ref)
+    await quote_and_send(client, admin, oid)
+    await client.post(f"/orders/{ref}/quotes/1/accept", json={"sizes_confirmed": True}, headers=customer)
+    r = await client.post(f"/orders/{ref}/payment/declare", data={"method": "WAVE"}, files={"file": ("p.jpg", _jpeg("red"), "image/jpeg")}, headers=customer)
+    assert r.status_code == 200
+    p = await _payment(oid)
+    assert p.proof_key is None and p.proof_image
+    assert (await client.get(f"/admin/orders/{oid}/payment-proof", headers=admin.headers)).status_code == 200

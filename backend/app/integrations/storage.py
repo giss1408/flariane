@@ -77,6 +77,11 @@ def put(key: str, data: bytes, content_type: str) -> None:
     path.write_bytes(data)
 
 
+def is_durable() -> bool:
+    """Local disk is wiped when a free/starter host restarts or redeploys; only object storage keeps files."""
+    return get_settings().storage_mode == "s3"
+
+
 def get(key: str) -> bytes | None:
     s = get_settings()
     if s.storage_mode == "s3":

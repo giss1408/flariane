@@ -68,6 +68,10 @@ def create_app() -> FastAPI:
     if s.sentry_dsn:
         _init_sentry(s.sentry_dsn, s.env)
     prod = s.env == "prod"
+    if prod and s.storage_mode == "local":
+        logging.getLogger("flariane").error(
+            "FLR_STORAGE_MODE=local in production: cart screenshots are lost at every restart. Configure S3/R2 (FLR_STORAGE_MODE=s3)"
+        )
     if prod and s.setup_token:
         # /setup/reset-admin can take over the super admin account while this is set.
         logging.getLogger("flariane").warning("FLR_SETUP_TOKEN is set in production: remove it once the first super admin exists")

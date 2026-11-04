@@ -453,9 +453,15 @@ async def _declare_payment(ref: str, request: Request, method: str, file: Upload
         await transition_payment(db, payment, PaymentStatus.PENDING, actor="system")
     data, content_type, ext = storage.sanitize_image(await file.read(10 * 1024 * 1024 + 1))
     old_key = payment.proof_key
-    payment.proof_key = storage.new_proof_key(order.id, ext)
-    storage.put(payment.proof_key, data, content_type)
-    payment.method, payment.proof_image, payment.proof_content_type = method, None, content_type
+    payment.method, payment.proof_content_type = method, content_type
+    if storage.is_durable():
+        payment.proof_key = storage.new_proof_key(order.id, ext)
+        storage.put(payment.proof_key, data, content_type)
+        payment.proof_image = None
+    else:
+        # Local disk would lose the proof at the next restart, and it is the evidence for the money:
+        # keep it in the database until object storage is configured.
+        payment.proof_key, payment.proof_image = None, data
     payment.status_reason = "declared"
     await audit(db, actor_type="customer", actor_id=customer.id, action="payment.declared", entity="payment", entity_id=payment.id,
                 after={"method": method}, ip=client_ip(request))

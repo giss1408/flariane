@@ -49,8 +49,12 @@ Goal: keep the database small (Neon free tier, backups) and serve proofs like th
 
 - [x] New proofs are stored through the `storage` layer (`payments.proof_key`); the admin proof endpoint streams
       them from storage (and still reads old blobs).
-- [ ] After deploying: run `python -m app.cli migrate-proofs` once (Render shell) to move the old blobs, and make
-      sure S3 storage is configured in production (`FLR_STORAGE_MODE=s3`; local disk is lost on redeploy).
+- [ ] **Configure object storage (Cloudflare R2 or S3)** on the test and production services: fill
+      `FLR_S3_BUCKET`, `FLR_S3_ENDPOINT_URL`, `FLR_S3_ACCESS_KEY`, `FLR_S3_SECRET_KEY` in the Render dashboard, then
+      set `FLR_STORAGE_MODE=s3`. Until then cart screenshots are lost at every restart (seen on the test server:
+      old orders show "Image indisponible"). Payment proofs stay in the database while storage is local, and the API
+      logs an error at start-up in prod.
+- [ ] After S3 is on: run `python -m app.cli migrate-proofs` once (Render shell); it refuses to run without S3.
 - [ ] Then add a migration that drops `payments.proof_image` and the fallback in `admin_orders.payment_proof`.
 
 ## 7. Push instead of polling + ETags
@@ -77,3 +81,21 @@ The code is in place in the API and both apps, and does nothing until a DSN is s
 - [ ] Mention Sentry in the privacy policy (crash reports, no personal data sent: no request bodies, no IP/user,
       no screenshots) for ARTCI.
 - [ ] Optional: upload Dart debug symbols so stack traces are readable (`sentry_dart_plugin`).
+
+## 9. Process flow improvements (from the end-to-end run, Nov 2026)
+
+Ordered by value. Details and reasoning were given in the chat; tick when done.
+
+- [ ] **Departure dead end:** "Ajouter à une expédition" says "Aucun départ prévu" when the next-departure date already
+      has a shipment that left or arrived. Offer "Créer le prochain départ" right in that sheet (date picker), and
+      suggest a new date when a shipment is marked departed.
+- [ ] **Messages to send by hand:** the quote, the arrival + pickup code and the payment confirmation each open WhatsApp
+      and nothing records whether the admin really sent it. Add a "messages à envoyer" list with "marqué comme envoyé"
+      until the WhatsApp Cloud API templates are approved; then send automatically.
+- [ ] **Batch "prête au retrait":** after a shipment arrives, every order needs its own pickup point choice and message.
+      Add one action per shipment / pickup point.
+- [ ] **Pickup code in the customer app:** today it exists only in WhatsApp, so a lost code means "Renvoyer le code",
+      which invalidates the old one. Show it to the signed-in owner on the order screen.
+- [ ] **Payment check:** the admin matches the Wave screenshot by eye. Flag amount/reference mismatches, and reconcile with
+      the Wave Business API later.
+- [ ] **Freshness:** orders update after up to 20 s on the customer phone; see item 7 (push + ETag).

@@ -52,6 +52,8 @@ async def migrate_proofs() -> None:
     from app.models import Payment
     from sqlalchemy.orm import undefer
 
+    if not storage.is_durable():
+        raise SystemExit("Refusing: FLR_STORAGE_MODE is not s3, the files would land on a disk that is wiped at restart.")
     moved = 0
     async with SessionLocal() as db:
         rows = (await db.scalars(select(Payment).where(Payment.proof_image.is_not(None), Payment.proof_key.is_(None)).options(undefer(Payment.proof_image)))).all()
