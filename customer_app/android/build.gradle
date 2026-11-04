@@ -17,6 +17,10 @@ subprojects {
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
             }
+            // Kotlin must match (sentry_flutter's plugin defaults to 1.8).
+            project.tasks.matching { it.class.name.contains("KotlinCompile") }.configureEach {
+                it.kotlinOptions.jvmTarget = "17"
+            }
         }
     }
 }

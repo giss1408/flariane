@@ -110,6 +110,10 @@ flutter:
 dependency_overrides:
   # Newer geolocator_android needs a newer Flutter Gradle plugin than 3.24 ships.
   geolocator_android: 4.6.1
+  # Pulled in by sentry_flutter; 9.x needs a newer Flutter Gradle plugin than 3.24 ships.
+  package_info_plus: 8.0.2
+  # 2.4.x fails to compile on the Gradle/Kotlin versions of Flutter 3.24 (JVM target mismatch).
+  shared_preferences_android: 2.3.4
 
 # Native launch screen (iOS + Android). Regenerate with: dart run flutter_native_splash:create
 flutter_native_splash:
