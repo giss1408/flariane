@@ -58,6 +58,8 @@
 			<string>UIInterfaceOrientationPortrait</string>
 			<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		</array>
+		<key>UIRequiresFullScreen</key>
+		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>
