@@ -46,7 +46,7 @@ from app.schemas import (
 from app.security.crypto import decrypt, encrypt, mask_phone, phone_hash
 from app.security.deps import client_ip
 from app.security.tokens import utcnow
-from app.services import customer_auth, idempotency, notify, phone_verification, quotes
+from app.services import customer_auth, idempotency, notify, operations, phone_verification, quotes
 from app.services.audit import audit
 from app.services import location as loc
 from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, pick_cart_url, store_of
@@ -290,6 +290,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         can_cancel=await quotes.can_cancel(db, order),
         can_request_requote=order.status == OrderStatus.QUOTED and expired,
         payment_deadline=await quotes.payment_deadline(db, order),
+        pickup_code=await operations.current_pickup_code(db, order.id) if order.status == OrderStatus.READY_FOR_PICKUP else None,
     )
 
 

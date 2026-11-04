@@ -591,9 +591,14 @@ class _PrimaryAction extends ConsumerWidget {
             if (open.isEmpty)
               const ListTile(
                 leading: Icon(Icons.info_outline_rounded),
-                title: Text('Aucun départ prévu'),
-                subtitle: Text('Fixez le prochain départ dans Paramètres pour créer l’expédition.'),
+                title: Text('Aucun départ ouvert'),
+                subtitle: Text('Crée le prochain départ ci-dessus.'),
               ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline_rounded),
+              title: const Text('Créer un nouveau départ'),
+              onTap: () => Navigator.pop(ctx, -1),
+            ),
             for (final s in open)
               ListTile(
                 leading: const Icon(Icons.flight_takeoff_rounded),
@@ -606,7 +611,20 @@ class _PrimaryAction extends ConsumerWidget {
         ),
       );
       if (choice == null) return;
-      await api.addToShipment(choice, [order.id]);
+      var shipmentId = choice;
+      if (choice == -1) {
+        if (!context.mounted) return;
+        final date = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 14)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+          helpText: 'Date de départ',
+        );
+        if (date == null) return;
+        shipmentId = (await api.createShipment(date)).id;
+      }
+      await api.addToShipment(shipmentId, [order.id]);
       ref.invalidate(orderProvider(order.id));
       if (context.mounted) showInfo(context, 'Commande ajoutée. Marquez l’expédition comme partie au départ.');
     } catch (e) {

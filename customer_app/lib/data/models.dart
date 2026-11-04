@@ -200,6 +200,7 @@ class Order {
     required this.canCancel,
     required this.canRequestRequote,
     this.paymentDeadline,
+    this.pickupCode,
   });
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
@@ -216,6 +217,7 @@ class Order {
         canCancel: j['can_cancel'] as bool? ?? false,
         canRequestRequote: j['can_request_requote'] as bool? ?? false,
         paymentDeadline: _date(j['payment_deadline']),
+        pickupCode: j['pickup_code'] as String?,
       );
 
   final String ref;
@@ -231,6 +233,7 @@ class Order {
   final bool canCancel;
   final bool canRequestRequote;
   final DateTime? paymentDeadline; // cancelled automatically if not paid by then
+  final String? pickupCode; // 6 digits, only while the parcel waits at the pickup point
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 

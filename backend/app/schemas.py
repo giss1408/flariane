@@ -239,6 +239,7 @@ class OrderDetailOut(OrderSummaryOut):
     can_cancel: bool
     can_request_requote: bool
     payment_deadline: datetime | None = None  # cancelled automatically if not paid by then
+    pickup_code: str | None = None  # only while the parcel waits at the pickup point, only for its owner
 
 
 class AcceptQuoteIn(In):
@@ -420,6 +421,10 @@ class ShipmentOut(Out):
     arrived_at: datetime | None
     order_ids: list[int] = []  # same order as order_refs
     order_refs: list[str] = []
+
+
+class ShipmentCreateIn(In):
+    departure_date: date
 
 
 class ReadyForPickupIn(In):

@@ -114,7 +114,10 @@ class _StatusBanner extends ConsumerWidget {
       'AWAITING_PAYMENT' when order.payment?.declared == true => ('Preuve de paiement reçue : on la vérifie.', context.pal.accent),
       'AWAITING_PAYMENT' => ('Ton devis est accepté : paie et envoie-nous la capture pour lancer la commande.', context.pal.warning),
       'PAID' => ('Paiement reçu. Nous achetons vos articles.', context.pal.success),
-      'READY_FOR_PICKUP' => ('Votre colis vous attend ! Présentez le code reçu sur WhatsApp.', context.pal.success),
+      'READY_FOR_PICKUP' => (
+        order.pickupCode != null ? 'Votre colis vous attend ! Présentez ce code au point de retrait.' : 'Votre colis vous attend ! Présentez le code reçu sur WhatsApp.',
+        context.pal.success
+      ),
       'CANCELLED' => ('Commande annulée.', context.pal.danger),
       'REFUND_PENDING' => ('Remboursement en cours.', context.pal.warning),
       'REFUNDED' => ('Commande remboursée.', context.pal.muted),
@@ -128,6 +131,32 @@ class _StatusBanner extends ConsumerWidget {
         Row(children: [
           Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
         ]),
+        if (order.status == 'READY_FOR_PICKUP' && order.pickupCode != null) ...[
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: order.pickupCode!));
+              showInfo(context, 'Code copié');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color)),
+              child: Column(children: [
+                Text('Code de retrait', style: TextStyle(color: context.pal.muted, fontSize: 13)),
+                const SizedBox(height: 4),
+                Semantics(
+                  label: 'Code de retrait ${order.pickupCode!.split('').join(' ')}',
+                  child: Text(order.pickupCode!, style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: 6, color: color)),
+                ),
+              ]),
+            ),
+          ),
+          if (order.pickupPoint != null) ...[
+            const SizedBox(height: 8),
+            Text('${order.pickupPoint!.name} · ${order.pickupPoint!.address}\n${order.pickupPoint!.openingHours}', style: TextStyle(color: context.pal.muted)),
+          ],
+        ],
         if (order.paymentDeadline != null && !(order.payment?.declared ?? false)) ...[
           const SizedBox(height: 8),
           Text('À payer avant le ${dateTime(order.paymentDeadline)}, sinon la commande sera annulée.',

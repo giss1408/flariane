@@ -428,9 +428,12 @@ async def whatsapp_message(order_id: int, data: WhatsAppMessageIn, request: Requ
     point = await db.get(PickupPoint, order.pickup_point_id) if order.pickup_point_id else None
     if data.kind == "quote" and quote is None:
         raise Conflict("no_quote")
-    if data.kind == "pickup" and (point is None or data.code is None):
+    code = data.code
+    if data.kind == "pickup" and code is None and order.status == OrderStatus.READY_FOR_PICKUP:
+        code = await operations.current_pickup_code(db, order.id)  # resend the same code, no new one needed
+    if data.kind == "pickup" and (point is None or code is None):
         raise Conflict("pickup_not_ready")
-    text = wa.text_for(data.kind, customer, order, quote, point, data.code)
+    text = wa.text_for(data.kind, customer, order, quote, point, code)
     await audit(db, actor_type="admin", actor_id=admin.id, action=f"whatsapp.{data.kind}", entity="order", entity_id=order.id, ip=client_ip(request))
     await db.commit()
     return {"url": wa.wa_link(decrypt(customer.phone_enc), text), "text": text}

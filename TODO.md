@@ -86,16 +86,27 @@ The code is in place in the API and both apps, and does nothing until a DSN is s
 
 Ordered by value. Details and reasoning were given in the chat; tick when done.
 
-- [ ] **Departure dead end:** "Ajouter à une expédition" says "Aucun départ prévu" when the next-departure date already
+- [x] **Departure dead end:** "Ajouter à une expédition" says "Aucun départ prévu" when the next-departure date already
       has a shipment that left or arrived. Offer "Créer le prochain départ" right in that sheet (date picker), and
       suggest a new date when a shipment is marked departed.
 - [ ] **Messages to send by hand:** the quote, the arrival + pickup code and the payment confirmation each open WhatsApp
       and nothing records whether the admin really sent it. Add a "messages à envoyer" list with "marqué comme envoyé"
       until the WhatsApp Cloud API templates are approved; then send automatically.
-- [ ] **Batch "prête au retrait":** after a shipment arrives, every order needs its own pickup point choice and message.
+- [x] **Batch "prête au retrait":** after a shipment arrives, every order needs its own pickup point choice and message.
       Add one action per shipment / pickup point.
-- [ ] **Pickup code in the customer app:** today it exists only in WhatsApp, so a lost code means "Renvoyer le code",
+- [x] **Pickup code in the customer app:** today it exists only in WhatsApp, so a lost code means "Renvoyer le code",
       which invalidates the old one. Show it to the signed-in owner on the order screen.
 - [ ] **Payment check:** the admin matches the Wave screenshot by eye. Flag amount/reference mismatches, and reconcile with
       the Wave Business API later.
 - [ ] **Freshness:** orders update after up to 20 s on the customer phone; see item 7 (push + ETag).
+
+## 10. Admin push alerts not arriving (test server, Nov 2026)
+
+The API creates the push correctly (tested), so the cause is on the server's Firebase side. New super-admin screen
+**Compte › Notifications** shows the mode, whether the service-account key is set, the devices' push tokens, a test
+button, and the last attempts with Firebase's error.
+
+- [ ] Deploy, open that screen on the admin phone, tap "Envoyer un test" and read the error.
+- [ ] Most likely: `FLR_FCM_SERVICE_ACCOUNT_JSON` missing/invalid on the test service, or the Firebase Cloud Messaging API
+      not enabled for the `flariane` project / the service account lacking the "Firebase Cloud Messaging API Admin" role.
+- [ ] Remember: with the admin app in the foreground the alert is a snackbar, not a system notification.

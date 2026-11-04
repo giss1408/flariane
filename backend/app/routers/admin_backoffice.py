@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.enums import AdminRole, PaymentStatus, RefundStatus
 from app.errors import BadRequest, Conflict, NotFound
-from app.models import AdminDevice, AdminUser, AuditLog, Customer, Offer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
+from app.config import get_settings as app_settings
+from app.integrations import push
+from app.models import AdminDevice, AdminUser, AuditLog, Customer, Notification, Offer, Order, Payment, PickupPoint, Quote, Refund, RefreshToken
 from app.ratelimit import admin_limited
 from typing import Annotated
 
@@ -193,6 +195,33 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
 @router.get("/devices", response_model=list[AdminDeviceOut])
 async def devices(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> list[AdminDevice]:
     return list((await db.scalars(select(AdminDevice).order_by(AdminDevice.id.desc()))).all())
+
+
+@router.get("/notifications/push")
+async def push_status(_: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> dict:
+    """Why did (or didn't) admins get an alert: config seen by the server + the last push attempts."""
+    s = app_settings()
+    rows = (await db.scalars(select(Notification).where(Notification.channel == "push").order_by(Notification.id.desc()).limit(30))).all()
+    devices = (await db.scalars(select(AdminDevice).where(AdminDevice.revoked_at.is_(None)))).all()
+    return {
+        "mode": s.push_mode,
+        "project_id": s.fcm_project_id,
+        "has_service_account": bool(s.fcm_service_account_json.strip()),
+        "devices": [{"id": d.id, "name": d.name, "approved": d.approved_at is not None, "has_push_token": bool(d.push_token)} for d in devices],
+        "recent": [{"id": n.id, "event": n.template, "status": n.status, "error": n.error, "device_id": n.admin_device_id, "at": n.created_at.isoformat()} for n in rows],
+    }
+
+
+@router.post("/notifications/push-test")
+async def push_test(admin: AdminContext = super_admin) -> dict:
+    """Send a test alert to this phone and report what Firebase answered."""
+    if not admin.device.push_token:
+        return {"ok": False, "error": "no_push_token: this phone has not registered a push token"}
+    try:
+        await push.send_push(admin.device.push_token, "Test Flariane", "Les notifications fonctionnent ✅", {"event": "test"})
+    except Exception as exc:  # shown to the super admin to fix the configuration
+        return {"ok": False, "error": str(exc)[:300]}
+    return {"ok": True, "error": None}
 
 
 @router.post("/devices/{device_id}/approve", response_model=AdminDeviceOut)

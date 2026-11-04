@@ -303,6 +303,8 @@ class PickupCode(TimestampMixin, Base):
     __tablename__ = "pickup_codes"
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), primary_key=True)
     code_hash: Mapped[str] = mapped_column(String(64))
+    # Encrypted copy so the owner can see the code in the app and the admin can resend it without a new one.
+    code_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
     used_at: Mapped[datetime | None] = _ts()
 
