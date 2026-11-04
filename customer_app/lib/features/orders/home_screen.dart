@@ -21,17 +21,28 @@ import 'order_screen.dart';
 
 const _finished = {'PICKED_UP', 'CANCELLED', 'REFUNDED'};
 
+/// True while the new-order screen opened by a share is on screen (a rebuild must not open a second one).
+final _openingShareProvider = StateProvider<bool>((_) => false);
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // A share from the SHEIN app opens the new-order screen directly.
+    // A share from the SHEIN app opens the new-order screen directly: whether it arrives while this screen is
+    // open (listener) or before it exists, e.g. the share started the app or she had to log in first (checked here).
+    void openSharedOrder() {
+      if (ref.read(_openingShareProvider) || !context.mounted || ref.read(sharedTextProvider) == null) return;
+      ref.read(_openingShareProvider.notifier).state = true;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen())).whenComplete(() {
+        if (context.mounted) ref.read(_openingShareProvider.notifier).state = false;
+      });
+    }
+
     ref.listen(sharedTextProvider, (_, text) {
-      if (text != null) {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewOrderScreen()));
-      }
+      if (text != null) openSharedOrder();
     });
+    if (ref.read(sharedTextProvider) != null) WidgetsBinding.instance.addPostFrameCallback((_) => openSharedOrder());
     final orders = ref.watch(ordersProvider);
     final departure = ref.watch(nextDepartureProvider).valueOrNull;
     final me = ref.watch(meProvider).valueOrNull;

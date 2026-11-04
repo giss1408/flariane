@@ -126,6 +126,29 @@ void main() {
       expect(find.textContaining('On a trouvé le lien'), findsNothing);
     });
 
+    testWidgets('a link shared before the home screen exists still opens the new order', (tester) async {
+      // Cold start from "Partager → Flariane": the share arrives during start-up / login, before HomeScreen is built.
+      final api = homeApi(orders: [[]]);
+      when(() => api.pickupPoints()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const HomeScreen(),
+          overrides: [...with_(api), sharedTextProvider.overrideWith((_) => 'Regarde https://onelink.shein.com/57/abc123')], disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsOneWidget);
+      expect(find.text('Regarde https://onelink.shein.com/57/abc123'), findsOneWidget); // the link is already in the field
+    });
+
+    testWidgets('a link shared while the home screen is open opens the new order once', (tester) async {
+      final api = homeApi(orders: [[]]);
+      when(() => api.pickupPoints()).thenAnswer((_) async => []);
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsNothing);
+      final container = ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
+      container.read(sharedTextProvider.notifier).state = 'https://onelink.shein.com/57/xyz';
+      await tester.pumpAndSettle();
+      expect(find.byType(NewOrderScreen), findsOneWidget);
+    });
+
     testWidgets('no offer, no banner', (tester) async {
       final api = homeApi(orders: [[]]);
       await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
