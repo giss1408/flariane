@@ -131,8 +131,17 @@ class CustomerApi {
     }
   }
 
-  Future<void> register(String phone, String password, {String? name}) =>
-      _session('/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true});
+  Future<void> register(String phone, String password, {String? name, String? referralCode}) => _session(
+      '/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true, if (referralCode != null) 'referral_code': referralCode});
+
+  /// Forgotten password: the team is told and sends a temporary password on WhatsApp. Same answer for any number.
+  Future<void> requestPasswordReset(String phone) async {
+    try {
+      await _auth.post('/auth/password-reset-request', data: {'phone': phone});
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
 
   Future<void> login(String phone, String password) => _session('/auth/login', {'phone': phone, 'password': password});
 
@@ -246,8 +255,10 @@ class CustomerApi {
       () async => dio.post('/orders/$ref/attachments', data: FormData.fromMap({'file': await MultipartFile.fromFile(path)})),
       (_) {});
 
-  Future<Payment> acceptQuote(String ref, int version) => _call(
-      () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true}),
+  Future<Loyalty> loyalty() => _cached('loyalty', '/me/loyalty', (j) => Loyalty.fromJson(j as Map<String, dynamic>));
+
+  Future<Payment> acceptQuote(String ref, int version, {bool usePoints = false}) => _call(
+      () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true, 'use_points': usePoints}),
       (j) => Payment.fromJson(j as Map<String, dynamic>));
 
   Future<void> requestChange(String ref, int version, Map<String, dynamic> body) =>

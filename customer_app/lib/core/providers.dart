@@ -39,8 +39,8 @@ class AuthController extends Notifier<AuthStatus> {
     state = AuthStatus.loggedIn;
   }
 
-  Future<void> register(String phone, String password, {String? name}) async {
-    await _api.register(phone, password, name: name);
+  Future<void> register(String phone, String password, {String? name, String? referralCode}) async {
+    await _api.register(phone, password, name: name, referralCode: referralCode);
     state = AuthStatus.loggedIn;
   }
 
@@ -65,6 +65,7 @@ final offersProvider = FutureProvider.autoDispose<List<Offer>>((ref) async {
     return const [];
   }
 });
+final loyaltyProvider = FutureProvider.autoDispose<Loyalty>((ref) => ref.watch(apiProvider).loyalty());
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 
 /// Text shared into the app from SHEIN (Partager → Flariane), waiting to prefill a new order.

@@ -1,6 +1,7 @@
 """Customer accounts: Ivorian phone number + password (no SMS/WhatsApp code)."""
 
 import re
+from datetime import timedelta
 
 from anyio import to_thread
 from limits import parse
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.errors import BadRequest, Conflict, DomainError, TooManyRequests
 from app.models import Customer
 from app.ratelimit import limiter
+from app.services import loyalty
 from app.security.tokens import utcnow
 from app.security.crypto import encrypt, hash_password, phone_hash, random_token, verify_password
 
@@ -67,15 +69,17 @@ def check_password_strength(password: str) -> None:
         raise BadRequest("weak_password", "Mot de passe trop simple")
 
 
-async def register(db: AsyncSession, raw_phone: str, password: str, display_name: str | None) -> Customer:
+async def register(db: AsyncSession, raw_phone: str, password: str, display_name: str | None, referral_code: str | None = None) -> Customer:
     phone = normalize_ci_phone(raw_phone)
     check_password_strength(password)
     ph = phone_hash(phone)
     password_hash = await to_thread.run_sync(hash_password, password)  # argon2 is CPU-bound: keep the event loop free
     if await db.scalar(select(Customer.id).where(Customer.phone_hash == ph)):
         raise Conflict("phone_taken")
+    referrer = await loyalty.referrer_for_code(db, referral_code) if referral_code else None
     customer = Customer(phone_enc=encrypt(phone), phone_hash=ph, display_name=display_name, password_hash=password_hash,
-                        consent_at=utcnow(), consent_version=CONSENT_VERSION)
+                        consent_at=utcnow(), consent_version=CONSENT_VERSION, referred_by_id=referrer.id if referrer else None)
+    await loyalty.assign_referral_code(db, customer)
     db.add(customer)
     await db.flush()
     return customer
@@ -93,6 +97,8 @@ async def login(db: AsyncSession, raw_phone: str, password: str) -> Customer:
     if customer is None or customer.anonymised_at is not None or not customer.password_hash or not ok:
         limiter().hit(FAILED_LOGIN_LIMIT, key)
         raise InvalidCredentials("invalid_credentials")
+    if customer.must_change_password and customer.temp_password_expires_at and customer.temp_password_expires_at < utcnow():
+        raise InvalidCredentials("temp_password_expired")  # only said once the password itself was right
     return customer
 
 
@@ -102,6 +108,24 @@ async def change_password(customer: Customer, current: str, new: str) -> None:
     check_password_strength(new)
     customer.password_hash = await to_thread.run_sync(hash_password, new)
     customer.must_change_password = False
+    customer.password_reset_requested_at = customer.temp_password_expires_at = None
+
+
+RESET_REQUEST_COOLDOWN = timedelta(hours=1)
+TEMP_PASSWORD_TTL = timedelta(hours=24)
+
+
+async def request_password_reset(db: AsyncSession, phone: str) -> Customer | None:
+    """Marks the account as waiting for an admin. Returns the customer only when the admins should be notified
+    (not for unknown numbers, nor for a repeated request within the hour)."""
+    customer = await db.scalar(select(Customer).where(Customer.phone_hash == phone_hash(phone)))
+    if customer is None or customer.anonymised_at is not None or not customer.password_hash:
+        return None
+    now = utcnow()
+    if customer.password_reset_requested_at and now - customer.password_reset_requested_at < RESET_REQUEST_COOLDOWN:
+        return None
+    customer.password_reset_requested_at = now
+    return customer
 
 
 def temporary_password() -> str:

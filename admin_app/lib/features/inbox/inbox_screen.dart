@@ -81,7 +81,7 @@ class InboxScreen extends ConsumerWidget {
           ),
         ),
         body: Column(children: [
-          if (ref.watch(sessionProvider).me?.canOperate ?? false) ...const [VerificationsBanner(), PaymentsToConfirmBanner()],
+          if (ref.watch(sessionProvider).me?.canOperate ?? false) ...const [VerificationsBanner(), PasswordResetsBanner(), PaymentsToConfirmBanner()],
           Expanded(child: TabBarView(children: [for (final t in inboxTabs) _OrderList(tab: t.key)])),
         ]),
       ),

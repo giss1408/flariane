@@ -7,6 +7,7 @@ import '../../core/api.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/consent_tick.dart';
+import '../../widgets/help.dart';
 import '../../widgets/logo.dart';
 
 /// Sign in or create an account with an Ivorian phone number and a password.
@@ -23,6 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _name = TextEditingController();
+  final _referral = TextEditingController();
   bool _creating = false;
   bool _busy = false;
   bool _obscure = true;
@@ -38,7 +40,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.read(authProvider.notifier);
     try {
       if (_creating) {
-        await auth.register(_phone.text, _password.text, name: _name.text.trim().isEmpty ? null : _name.text.trim());
+        await auth.register(_phone.text, _password.text,
+            name: _name.text.trim().isEmpty ? null : _name.text.trim(),
+            referralCode: _referral.text.trim().isEmpty ? null : _referral.text.trim());
       } else {
         await auth.login(_phone.text, _password.text);
       }
@@ -119,6 +123,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     if (_creating) ...[
                       const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _referral,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [LengthLimitingTextInputFormatter(20)],
+                        decoration: const InputDecoration(labelText: 'Code de parrainage (facultatif)', hintText: 'AWA-7K3Q'),
+                      ),
+                    ],
+                    if (_creating) ...[
+                      const SizedBox(height: 12),
                       ConsentTick(value: _consent, onChanged: (v) => setState(() => _consent = v)),
                     ],
                     if (_error != null) ...[
@@ -134,15 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     if (!_creating)
                       TextButton(
-                        onPressed: () => showDialog<void>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Mot de passe oublié'),
-                            content: const Text('Écris-nous sur WhatsApp depuis ton numéro : on t’enverra un '
-                                'mot de passe temporaire, à changer à la connexion.'),
-                            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-                          ),
-                        ),
+                        onPressed: () => showDialog<void>(context: context, builder: (_) => _ForgotPasswordDialog(phone: _phone.text.trim())),
                         child: const Text('Mot de passe oublié ?'),
                       ),
                     TextButton(
@@ -239,5 +244,84 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             FilledButton(onPressed: _busy ? null : _submit, child: const Text('Enregistrer')),
           ]),
         ),
+      );
+}
+
+/// "Mot de passe oublié": asks the team for a temporary password; WhatsApp is the fallback.
+class _ForgotPasswordDialog extends ConsumerStatefulWidget {
+  const _ForgotPasswordDialog({required this.phone});
+
+  final String phone;
+
+  @override
+  ConsumerState<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
+  late final _phone = TextEditingController(text: widget.phone);
+  bool _busy = false;
+  bool _sent = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _request() async {
+    if (_phone.text.trim().isEmpty) {
+      setState(() => _error = 'Saisis ton numéro de téléphone.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiProvider).requestPasswordReset(_phone.text.trim());
+      if (mounted) setState(() => _sent = true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Mot de passe oublié'),
+        content: _sent
+            ? const Text('Demande envoyée. L’équipe Flariane t’écrit sur WhatsApp avec un mot de passe temporaire, '
+                'à changer à ta première connexion.')
+            : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Indique ton numéro : l’équipe t’envoie un mot de passe temporaire sur WhatsApp.'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Téléphone', hintText: '07 01 02 03 04'),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: TextStyle(color: context.pal.danger)),
+                ],
+              ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
+          if (!_sent) ...[
+            TextButton(
+              onPressed: () => askOnWhatsApp(
+                context,
+                ref,
+                message: _phone.text.trim().isEmpty
+                    ? 'Bonjour Flariane, j’ai oublié mon mot de passe.'
+                    : 'Bonjour Flariane, j’ai oublié mon mot de passe. Mon numéro : ${_phone.text.trim()}',
+              ),
+              child: const Text('WhatsApp'),
+            ),
+            FilledButton(onPressed: _busy ? null : _request, child: const Text('Demander')),
+          ],
+        ],
       );
 }

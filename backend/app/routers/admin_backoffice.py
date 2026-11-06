@@ -40,6 +40,7 @@ from app.schemas import (
     RefundOut,
     ReportSummaryOut,
     SettingsIn,
+    PasswordResetRequestOut,
     TempPasswordOut,
     TotpRequiredIn,
     UnverifiedCustomerOut,
@@ -173,6 +174,19 @@ async def reject_registration(customer_id: int, request: Request, admin: AdminCo
     await db.commit()
 
 
+@router.get("/customers/password-resets", response_model=list[PasswordResetRequestOut])
+async def password_reset_requests(_: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> list[PasswordResetRequestOut]:
+    rows = (await db.scalars(
+        select(Customer).where(Customer.password_reset_requested_at.is_not(None), Customer.anonymised_at.is_(None), Customer.phone_enc.is_not(None))
+        .order_by(Customer.password_reset_requested_at)
+    )).all()
+    return [
+        PasswordResetRequestOut(id=c.id, display_name=c.display_name, phone_masked=mask_phone(decrypt(c.phone_enc)) if c.phone_enc else "",
+                                requested_at=c.password_reset_requested_at)
+        for c in rows
+    ]
+
+
 @router.post("/customers/{customer_id}/reset-password", response_model=TempPasswordOut)
 async def reset_customer_password(customer_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> TempPasswordOut:
     """Forgotten password: issue a one-time temporary password for the admin to pass on (WhatsApp/phone).
@@ -180,13 +194,18 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
     customer = await db.get(Customer, customer_id)
     if customer is None or customer.anonymised_at is not None:
         raise NotFound()
+    from app.services.wa_messages import temp_password_text, wa_link
+
     temp = customer_auth.temporary_password()
     customer.password_hash, customer.must_change_password = await to_thread.run_sync(hash_password, temp), True
+    customer.password_reset_requested_at = None
+    customer.temp_password_expires_at = utcnow() + customer_auth.TEMP_PASSWORD_TTL
     for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id, RefreshToken.revoked_at.is_(None)))).all():
         t.revoked_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="customer.password_reset", entity="customer", entity_id=customer.id, ip=client_ip(request))
     await db.commit()
-    return TempPasswordOut(temporary_password=temp)
+    url = wa_link(decrypt(customer.phone_enc), temp_password_text(customer, temp)) if customer.phone_enc else None
+    return TempPasswordOut(temporary_password=temp, url=url)
 
 
 # ---------------------------------------------------------------- devices

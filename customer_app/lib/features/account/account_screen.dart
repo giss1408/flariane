@@ -8,6 +8,7 @@ import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
 import '../auth/login_screen.dart';
 import 'location_screen.dart';
+import 'loyalty_screen.dart';
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -37,6 +38,12 @@ class AccountScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         Card(
           child: Column(children: [
+            ListTile(
+              leading: const Icon(Icons.stars_rounded),
+              title: const Text('Mes points'),
+              subtitle: const Text('Parrainage et réductions'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoyaltyScreen())),
+            ),
             ListTile(
               leading: const Icon(Icons.place_outlined),
               title: const Text('Mon adresse à Abidjan'),

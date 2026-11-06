@@ -494,6 +494,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     'min_fee_xof': 'Frais de service minimum (FCFA)',
     'quote_validity_hours': 'Validité du devis (heures)',
     'payment_deadline_days': 'Délai de paiement avant annulation (jours)',
+    'loyalty_points_per_order': 'Points par commande retirée',
+    'loyalty_points_referral_signup': 'Points au parrain quand sa filleule vérifie son numéro',
+    'loyalty_points_referred_order': 'Points au parrain à la 1re commande retirée de sa filleule',
+    'loyalty_redeem_points': 'Points pour une réduction',
+    'loyalty_discount_percent_of_fee': 'Réduction sur les frais de service (%)',
   };
   static const numFields = {
     'customs_rate_percent': 'Douane (% des articles)',

@@ -111,6 +111,16 @@ class AdminApi {
   Future<String> resetCustomerPassword(int customerId) => client.call(
       (d) => d.post('/admin/customers/$customerId/reset-password'), (j) => (j as Map)['temporary_password'] as String);
 
+  /// Same reset, with the wa.me link to send the temporary password from this phone.
+  Future<({String temporaryPassword, String? url})> resetCustomerPasswordLink(int customerId) => client.call(
+      (d) => d.post('/admin/customers/$customerId/reset-password'),
+      (j) => (temporaryPassword: (j as Map)['temporary_password'] as String, url: j['url'] as String?));
+
+  Future<List<Map<String, dynamic>>> passwordResetRequests() => client.call(
+        (d) => d.get('/admin/customers/password-resets'),
+        (j) => (j as List).cast<Map<String, dynamic>>(),
+      );
+
   Future<List<PickupDeskOrder>> pickupDesk({String? query}) => client.call(
         (d) => d.get('/admin/orders/pickup-desk', queryParameters: {if (query != null && query.isNotEmpty) 'q': query}),
         (j) => (j as List).cast<Map<String, dynamic>>().map(PickupDeskOrder.fromJson).toList(),

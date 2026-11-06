@@ -175,6 +175,8 @@ class Quote {
     this.screenshotUrl,
     this.cartSourceAmount,
     this.cartSourceCurrency,
+    this.loyaltyPointsUsed = 0,
+    this.loyaltyDiscountXof = 0,
   });
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -197,6 +199,8 @@ class Quote {
         screenshotUrl: j['screenshot_url'] as String?,
         cartSourceAmount: j['cart_source_amount']?.toString(),
         cartSourceCurrency: j['cart_source_currency'] as String?,
+        loyaltyPointsUsed: j['loyalty_points_used'] as int? ?? 0,
+        loyaltyDiscountXof: _int(j['loyalty_discount_xof']) ?? 0,
       );
 
   final int id;
@@ -218,6 +222,10 @@ class Quote {
   final String? screenshotUrl;
   final String? cartSourceAmount; // e.g. "49.90"
   final String? cartSourceCurrency; // e.g. EUR
+  final int loyaltyPointsUsed; // points the customer redeemed on this quote
+  final int loyaltyDiscountXof; // taken off the service fee: she pays total - this
+
+  int get amountToPayXof => totalXof - loyaltyDiscountXof;
 
   bool get isCartMode => lines.isEmpty;
 

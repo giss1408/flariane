@@ -1,4 +1,5 @@
 import 'package:flariane_admin/core/attention.dart';
+import 'package:flariane_admin/core/format.dart';
 import 'package:flariane_admin/core/secure_store.dart';
 import 'package:flariane_admin/core/session.dart';
 import 'package:flariane_admin/core/theme.dart';
@@ -144,6 +145,27 @@ void main() {
       expect(find.text('Déjà dans « Départ du 15/01/2030 »'), findsOneWidget);
       expect(find.text('Expédition'), findsOneWidget); // section title
       expect(find.text('Départ du 15/01/2030'), findsOneWidget); // the tappable card
+    });
+
+    testWidgets('the quote shows the loyalty points used and the amount to pay', (tester) async {
+      final api = MockApi();
+      final order = purchasedOrder()
+        ..['status'] = 'AWAITING_PAYMENT'
+        ..['quotes'] = [
+          {
+            'id': 1, 'version': 1, 'status': 'ACCEPTED', 'items_xof': 14000, 'freight_xof': 3445, 'customs_xof': 0, 'fee_xof': 2555,
+            'total_xof': 20000, 'admin_note': null, 'expires_at': null, 'sent_at': '2026-10-21T18:00:00Z', 'answered_at': null,
+            'fx_rates': {'EUR': '655.957'}, 'created_by': 1, 'min_fee_xof': 2000, 'fee_below_minimum': false, 'lines': <dynamic>[],
+            'loyalty_points_used': 100, 'loyalty_discount_xof': 255, 'amount_to_pay_xof': 19745,
+          },
+        ];
+      when(() => api.order(42)).thenAnswer((_) async => OrderDetail.fromJson(order));
+      await tester.pumpWidget(host(const OrderScreen(orderId: 42), asOperator(api)));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('À payer'), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Points utilisés (100 pts)'), findsOneWidget);
+      expect(find.text(fcfa(-255)), findsOneWidget);
+      expect(find.text(fcfa(19745)), findsOneWidget);
     });
 
     testWidgets('an order not in an expedition can still be added', (tester) async {

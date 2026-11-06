@@ -409,3 +409,61 @@ async def test_register_rate_limited_per_ip_and_forwarded_header_ignored(client:
         assert r.status_code == 201
     r = await client.post("/auth/register", json={"phone": "0700000009", "password": "bonjour-2026", "consent": True}, headers={"x-forwarded-for": "1.2.3.4, 5.5.5.5"})
     assert r.status_code == 429 and r.json()["detail"] == "register_rate_limited"
+
+
+async def test_password_reset_request_flow(client: AsyncClient, admin: AdminFixture) -> None:
+    from tests.conftest import PHONE
+
+    headers = await login_customer(client)
+    cid = (await client.get("/me", headers=headers)).json()["id"]
+    assert (await client.get("/admin/customers/password-resets", headers=admin.headers)).json() == []
+
+    # Same answer for a known and an unknown number.
+    assert (await client.post("/auth/password-reset-request", json={"phone": PHONE})).status_code == 202
+    assert (await client.post("/auth/password-reset-request", json={"phone": "0109090909"})).status_code == 202
+
+    queue = (await client.get("/admin/customers/password-resets", headers=admin.headers)).json()
+    assert [q["id"] for q in queue] == [cid] and "0" not in queue[0]["phone_masked"][:2]
+
+    r = await client.post(f"/admin/customers/{cid}/reset-password", headers=admin.headers)
+    assert r.json()["url"].startswith("https://wa.me/") and r.json()["temporary_password"] in r.json()["url"]
+    assert (await client.get("/admin/customers/password-resets", headers=admin.headers)).json() == []
+
+
+async def test_password_reset_request_is_rate_limited_per_phone(client: AsyncClient) -> None:
+    from tests.conftest import PHONE
+
+    for _ in range(3):
+        assert (await client.post("/auth/password-reset-request", json={"phone": PHONE})).status_code == 202
+    r = await client.post("/auth/password-reset-request", json={"phone": PHONE})
+    assert r.status_code == 429 and r.json()["detail"] == "reset_rate_limited"
+
+
+async def test_temporary_password_expires_after_24_hours(client: AsyncClient, admin: AdminFixture) -> None:
+    from datetime import timedelta
+
+    from app.models import Customer
+    from tests.conftest import PHONE
+
+    headers = await login_customer(client)
+    cid = (await client.get("/me", headers=headers)).json()["id"]
+    temp = (await client.post(f"/admin/customers/{cid}/reset-password", headers=admin.headers)).json()["temporary_password"]
+
+    async with SessionLocal() as db:
+        c = await db.get(Customer, cid)
+        assert timedelta(hours=23) < c.temp_password_expires_at - utcnow() <= timedelta(hours=24)
+        c.temp_password_expires_at = utcnow() - timedelta(minutes=1)
+        await db.commit()
+
+    r = await client.post("/auth/login", json={"phone": PHONE, "password": temp})
+    assert r.status_code == 401 and r.json()["detail"] == "temp_password_expired"
+    # A wrong password still gets the generic answer: the expiry isn't revealed to guessers.
+    r = await client.post("/auth/login", json={"phone": PHONE, "password": "wrong-password"})
+    assert r.json()["detail"] == "invalid_credentials"
+
+    # A fresh reset works again, and choosing a new password clears the expiry.
+    temp = (await client.post(f"/admin/customers/{cid}/reset-password", headers=admin.headers)).json()["temporary_password"]
+    h = {"Authorization": f"Bearer {(await client.post('/auth/login', json={'phone': PHONE, 'password': temp})).json()['access_token']}"}
+    assert (await client.post("/me/password", headers=h, json={"current_password": temp, "new_password": "nouveau-2026"})).status_code == 204
+    async with SessionLocal() as db:
+        assert (await db.get(Customer, cid)).temp_password_expires_at is None

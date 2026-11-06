@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.enums import OrderStatus as S
 from app.errors import Conflict
 from app.models import Order, OrderStatusHistory
+from app.services import loyalty
 from app.services.audit import audit
 from app.security.tokens import utcnow
 
@@ -58,6 +59,12 @@ async def transition_order(
     order.status = to
     order.status_changed_at = utcnow()
     db.add(OrderStatusHistory(order_id=order.id, from_status=current, to_status=to, actor=actor))
+    # Loyalty, in the same transaction: collecting the parcel earns points; leaving the unpaid state
+    # (change request, cancellation) returns the points redeemed on the accepted quote.
+    if to == S.PICKED_UP:
+        await loyalty.credit_pickup(db, order)
+    elif current == S.AWAITING_PAYMENT and to in (S.QUOTE_REQUESTED, S.CANCELLED):
+        await loyalty.release_for_order(db, order)
     await audit(
         db,
         actor_type=actor_type,

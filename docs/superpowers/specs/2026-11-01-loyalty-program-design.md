@@ -1,6 +1,6 @@
 # Loyalty program (points, referrals, 10 % service-fee reduction)
 
-Status: draft for review. Date: 2026-11-01. Branch: `feat/loyalty-program`.
+Status: implemented (backend, customer app, admin app). Date: 2026-11-01. Branch: `feat/loyalty-program`.
 
 ## Goal
 

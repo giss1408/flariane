@@ -90,6 +90,8 @@ def admin_quote_out(q: Quote, min_fee: int, screenshot_url: str | None = None) -
         screenshot_url=screenshot_url,
         cart_source_amount=q.cart_source_amount,
         cart_source_currency=q.cart_source_currency,
+        loyalty_points_used=q.loyalty_points_used, loyalty_discount_xof=q.loyalty_discount_xof,
+        amount_to_pay_xof=q.total_xof - q.loyalty_discount_xof,
     )
 
 

@@ -57,6 +57,7 @@ ADMIN_EVENTS = {
     "payment_received": ("Paiement reçu", "Commande {ref} à acheter"),
     "payment_held": ("Paiement à vérifier", "Commande {ref} : montant incohérent"),
     "customer_registered": ("Nouvelle inscription", "Un numéro est à vérifier ({ref})"),
+    "password_reset_requested": ("Mot de passe oublié", "Une cliente demande un nouveau mot de passe ({ref})"),
     "payment_declared": ("Paiement Wave déclaré", "Commande {ref} : vérifie ton Wave et confirme"),
 }
 

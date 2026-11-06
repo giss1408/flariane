@@ -45,5 +45,13 @@ def text_for(kind: str, customer: Customer, order: Order, quote: Quote | None, p
     )
 
 
+def temp_password_text(customer: Customer, temp: str) -> str:
+    return (
+        f"Bonjour {first_name(customer)} 👋 Voici ton mot de passe temporaire Flariane : *{temp}*\n\n"
+        "Connecte-toi dans les 24 h avec ce mot de passe : l’app te demandera d’en choisir un nouveau. "
+        "Si tu n’as pas fait cette demande, réponds-nous ici."
+    )
+
+
 def wa_link(phone_e164: str, text: str) -> str:
     return f"https://wa.me/{phone_e164.lstrip('+')}?text={urlquote(text)}"

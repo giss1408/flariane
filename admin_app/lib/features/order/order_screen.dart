@@ -334,7 +334,11 @@ class _QuoteSummary extends StatelessWidget {
             AmountRow('Transport', q.freightXof),
             if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
             if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
-            AmountRow('Total', q.totalXof, bold: true),
+            AmountRow('Total', q.totalXof, bold: q.loyaltyDiscountXof == 0),
+            if (q.loyaltyDiscountXof > 0) ...[
+              AmountRow('Points utilisés (${q.loyaltyPointsUsed} pts)', -q.loyaltyDiscountXof),
+              AmountRow('À payer', q.amountToPayXof, bold: true),
+            ],
             if (q.expiresAt != null && q.status == 'SENT')
               Align(alignment: Alignment.centerLeft, child: Text('Valable jusqu’au ${dateTime(q.expiresAt)}', style: const TextStyle(color: AppColors.muted))),
           ]),
