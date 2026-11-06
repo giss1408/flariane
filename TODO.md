@@ -49,12 +49,15 @@ Goal: keep the database small (Neon free tier, backups) and serve proofs like th
 
 - [x] New proofs are stored through the `storage` layer (`payments.proof_key`); the admin proof endpoint streams
       them from storage (and still reads old blobs).
-- [ ] **Configure object storage (Cloudflare R2 or S3)** on the test and production services: fill
+- [x] **Configure object storage (Cloudflare R2 or S3)** on the test and production services (production done
+      2026-11-06: R2 bucket `flariane-prod`, EU jurisdiction, endpoint `…eu.r2.cloudflarestorage.com`; the test service
+      still needs its own bucket + token): fill
       `FLR_S3_BUCKET`, `FLR_S3_ENDPOINT_URL`, `FLR_S3_ACCESS_KEY`, `FLR_S3_SECRET_KEY` in the Render dashboard, then
       set `FLR_STORAGE_MODE=s3`. Until then cart screenshots are lost at every restart (seen on the test server:
       old orders show "Image indisponible"). Payment proofs stay in the database while storage is local, and the API
       logs an error at start-up in prod.
-- [ ] After S3 is on: run `python -m app.cli migrate-proofs` once (Render shell); it refuses to run without S3.
+- [x] After S3 is on: run `python -m app.cli migrate-proofs` once (Render shell); it refuses to run without S3.
+      Done on production 2026-11-06: moved 4 payment proofs to R2 (`flariane-prod`).
 - [ ] Then add a migration that drops `payments.proof_image` and the fallback in `admin_orders.payment_proof`.
 
 ## 7. Push instead of polling + ETags
@@ -74,10 +77,14 @@ Goal: less battery, data and server load; the apps refresh when something actual
 
 The code is in place in the API and both apps, and does nothing until a DSN is set.
 
-- [ ] Create a Sentry project (or three: API, customer app, admin app) and copy the DSNs.
-- [ ] API: set `FLR_SENTRY_DSN` in the Render environment.
-- [ ] Apps: add `--dart-define=SENTRY_DSN="$SENTRY_DSN"` to the release builds in `codemagic.yaml` (a Codemagic
-      secret variable), for both apps.
+- [x] Create a Sentry project (or three: API, customer app, admin app) and copy the DSNs. Done 2026-11-06 (org
+      `regissecom`, EU region): `python-fastapi` (API) and `flariane-customer`. The admin app has no project yet
+      (no release pipeline).
+- [x] API: set `FLR_SENTRY_DSN` in the Render environment. Done on `flariane-api` 2026-11-06, test event received.
+- [ ] Apps: `--dart-define=SENTRY_DSN="$SENTRY_DSN"` is in the customer iOS release build in `codemagic.yaml` (on
+      `main`) and `SENTRY_DSN` is a secret in the Codemagic group `flariane_signing`. Still to do: run an iOS release
+      and confirm a test crash reaches `flariane-customer`; Android is built locally, so pass
+      `--dart-define=SENTRY_DSN=...` to `flutter build appbundle` (no `flariane_play` group exists in Codemagic).
 - [ ] Mention Sentry in the privacy policy (crash reports, no personal data sent: no request bodies, no IP/user,
       no screenshots) for ARTCI.
 - [ ] Optional: upload Dart debug symbols so stack traces are readable (`sentry_dart_plugin`).
