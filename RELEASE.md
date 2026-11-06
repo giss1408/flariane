@@ -35,3 +35,8 @@ Augmenter `version:` dans `customer_app/pubspec.yaml` (ex. `1.0.1+2` : le nombre
 Apple et Google refusent les apps qui semblent officielles pour une marque tierce. Flariane n'utilise ni logo
 SHEIN/Temu ni leurs noms dans l'icône ou le nom ; la description précise « non affilié ». Si un relecteur bloque,
 retirer « SHEIN/Temu » de l'image de présentation et des mots-clés.
+
+## Certificat : épinglage (customer_app)
+L'app n'accepte que les racines listées dans `customer_app/lib/core/pinned_roots.dart` (Google Trust Services R1–R4,
+Let's Encrypt X1/X2), pas le magasin de certificats du téléphone. Si l'hébergeur change d'autorité de certification,
+les apps déjà installées ne se connectent plus : ajouter la nouvelle racine, publier une version, PUIS changer côté serveur.
