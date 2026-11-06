@@ -44,7 +44,7 @@ workflows:
       vars:
         BUNDLE_ID: com.regisse.flariane
         APP_STORE_APPLE_ID: "6825787211" # App Store Connect → the app → App Information → Apple ID (numeric)
-        API_BASE_URL: https://flariane-api.onrender.com
+        API_BASE_URL: https://flariane-api.regisse.com
     scripts:
       - name: Dependencies
         script: |
@@ -121,7 +121,7 @@ workflows:
       vars:
         PACKAGE_NAME: com.regisse.flariane
         PLAY_TRACK: alpha # closed test "Geschlossener Test – Alpha"
-        API_BASE_URL: https://flariane-api.onrender.com
+        API_BASE_URL: https://flariane-api.regisse.com
     scripts:
       - name: Dependencies
         script: flutter pub get

@@ -25,7 +25,7 @@ import pyotp
 from PIL import Image
 
 API = os.environ.get("E2E_API_URL", "").rstrip("/")
-PROD_HOSTS = {"flariane-api.onrender.com", "api.flariane.ci"}
+PROD_HOSTS = {"flariane-api.onrender.com", "flariane-api.regisse.com", "api.flariane.ci"}
 STATE = Path(__file__).with_name(".state.json")
 PASSWORD = "e2e-Secret-2026"
 CART = "Regarde mon panier SHEIN ! https://onelink.shein.com/57/65rpbi9ni43f?shc=2_RNw3pcqAELu"

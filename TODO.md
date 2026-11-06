@@ -36,12 +36,18 @@ Goal: a stolen admin password + authenticator code is not enough, and the admin 
 
 Goal: block man-in-the-middle proxies (Burp, mitmproxy) on the phone.
 
-- [ ] Fix the production domain and the certificate / CA plan first (pinning to a leaf certificate breaks on renewal).
-- [ ] Pin the public key (SPKI hash) of the issuing CA or the leaf, with at least one backup pin, in the Dio client of
-      both apps (`customer_app/lib/core/api.dart`, and the admin app's API client).
-- [ ] Plan rotation: ship the new pin in an app release before the certificate changes.
-- [ ] Add a remote kill switch or short pin expiry so a bad pin cannot lock every user out.
-- [ ] Test against a proxy with a user-installed CA to confirm requests are refused.
+- [x] Customer app (done 2026-11-06, release 1.0.1+6): trusts only bundled roots (Google Trust Services R1–R4,
+      Let's Encrypt X1/X2) instead of the phone's CA store; `customer_app/lib/core/pinning.dart`. Roots rather than the
+      leaf, because Render renews the `*.onrender.com` leaf every ~60–90 days. Checked live: bundled roots connect,
+      a wrong root set is refused.
+- [x] Admin app: not pinned on purpose (not distributed externally).
+- [x] Production domain `flariane-api.regisse.com` (Cloudflare DNS-only CNAME to Render, Render's Google Trust Services cert,
+      covered by the bundled roots). Apps use it from 1.0.1+7; keep `onrender.com` alive for older builds.
+- [ ] Optional: proxy it through Cloudflare (WAF, rate limiting, Access) — then set `FLR_TRUSTED_PROXY_HOPS=2` at the same time.
+- [ ] Plan rotation: ship the new root in an app release BEFORE the server changes CA (see RELEASE.md).
+- [ ] Remote kill switch or pin expiry so a bad pin cannot lock every user out (none yet: a CA change strands
+      installed apps until they update).
+- [ ] Test against a proxy with a user-installed CA (mitmproxy) on a real phone to confirm requests are refused.
 
 ## 6. Move payment proof images out of Postgres
 

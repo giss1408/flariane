@@ -9,11 +9,11 @@ void main() {
   test('every bundled root parses as a certificate', () {
     expect(pinnedRootsPem, isNotEmpty);
     // The client is built lazily; building it fails if any PEM is invalid.
-    expect(_io(newApiDio('https://flariane-api.onrender.com')).createHttpClient!(), isNotNull);
+    expect(_io(newApiDio('https://flariane-api.regisse.com')).createHttpClient!(), isNotNull);
   });
 
   test('https gets the pinned client, local http keeps the default one', () {
-    expect(_io(newApiDio('https://flariane-api.onrender.com')).createHttpClient, isNotNull);
+    expect(_io(newApiDio('https://flariane-api.regisse.com')).createHttpClient, isNotNull);
     expect(_io(newApiDio('http://10.0.2.2:8000')).createHttpClient, isNull);
   });
 }

@@ -6,7 +6,7 @@ import 'response_cache.dart';
 
 /// flutter run --dart-define=API_BASE_URL=https://api.flariane.ci  (emulator default: host machine)
 /// Production server by default (store builds). Local dev: --dart-define=API_BASE_URL=http://10.0.2.2:8000
-const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://flariane-api.onrender.com');
+const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://flariane-api.regisse.com');
 
 final tokenStoreProvider = Provider<TokenStore>((_) => SecureTokenStore());
 final apiProvider = Provider<CustomerApi>((ref) => CustomerApi(baseUrl: apiBaseUrl, tokens: ref.watch(tokenStoreProvider), cache: PrefsCache()));
