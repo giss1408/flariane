@@ -9,3 +9,4 @@ backend/var/
 
 # Local test accounts and passwords
 TEST_USERS.md
+backend/e2e/.state.json

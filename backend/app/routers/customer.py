@@ -40,13 +40,14 @@ from app.schemas import (
     PaymentOut,
     PickupPointOut,
     QuoteLineOut,
+    LoyaltyOut,
     QuoteOut,
     StatusEventOut,
 )
 from app.security.crypto import decrypt, encrypt, mask_phone, phone_hash
 from app.security.deps import client_ip
 from app.security.tokens import utcnow
-from app.services import customer_auth, idempotency, notify, operations, phone_verification, quotes
+from app.services import customer_auth, idempotency, loyalty, notify, operations, phone_verification, quotes
 from app.services.audit import audit
 from app.services import location as loc
 from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, pick_cart_url, store_of
@@ -97,6 +98,11 @@ async def update_me(data: CustomerUpdateIn, customer: Customer = authed, db: Asy
     return _customer_out(customer)
 
 
+@router.get("/me/loyalty", response_model=LoyaltyOut)
+async def my_loyalty(customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> LoyaltyOut:
+    return await loyalty.summary(db, customer)
+
+
 @router.post("/me/consent", response_model=CustomerOut)
 async def give_consent(request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
     """Existing accounts (or after a policy change) accept once; date and policy version are kept."""
@@ -127,8 +133,11 @@ async def change_phone(data: ChangePhoneIn, request: Request, customer: Customer
 
 @router.post("/me/verify-phone", response_model=CustomerOut)
 async def verify_phone(data: VerifyPhoneIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    was_verified = customer.phone_verified_at is not None
     try:
         phone_verification.check_code(customer, data.code)
+        if not was_verified:
+            await loyalty.credit_signup(db, customer)  # same commit as phone_verified_at
     finally:
         await db.commit()  # keep the failed-attempt counter
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.phone_verified", ip=client_ip(request))
@@ -179,18 +188,7 @@ async def export_me(customer: Customer = authed, db: AsyncSession = Depends(get_
 @router.delete("/me", status_code=204)
 async def delete_me(request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> None:
     """Anonymise the customer. Orders and payments stay for accounting, detached from any identity."""
-    open_statuses = {OrderStatus.PAID, OrderStatus.PURCHASED, OrderStatus.IN_TRANSIT, OrderStatus.ARRIVED,
-                     OrderStatus.READY_FOR_PICKUP, OrderStatus.REFUND_PENDING}
-    if await db.scalar(select(func.count()).select_from(Order).where(Order.customer_id == customer.id, Order.status.in_(open_statuses))):
-        raise Conflict("orders_in_progress")
-    customer.display_name, customer.phone_enc, customer.phone_hash, customer.password_hash = None, None, None, None
-    customer.location_commune, customer.location_enc = None, None
-    customer.anonymised_at = utcnow()
-    for o in (await db.scalars(select(Order).where(Order.customer_id == customer.id))).all():
-        o.source_cart_url, o.submitted_links, o.customer_note = None, [], None
-        o.delivery_commune, o.delivery_location_enc = None, None
-    for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id))).all():
-        t.revoked_at = utcnow()
+    await customer_auth.anonymise(db, customer)
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.anonymised", ip=client_ip(request))
     await db.commit()
 
@@ -252,6 +250,8 @@ def _quote_out(q, screenshot_url: str | None = None) -> QuoteOut:  # type: ignor
         expires_at=q.expires_at, sent_at=q.sent_at,
         lines=[QuoteLineOut.model_validate(line) for line in q.lines],
         screenshot_url=screenshot_url,
+        loyalty_points_used=q.loyalty_points_used, loyalty_discount_xof=q.loyalty_discount_xof,
+        amount_to_pay_xof=q.total_xof - q.loyalty_discount_xof,
         # Customers see FCFA only: the store's euro price stays internal.
     )
 
@@ -291,6 +291,7 @@ async def _detail(db: AsyncSession, order: Order) -> OrderDetailOut:
         can_request_requote=order.status == OrderStatus.QUOTED and expired,
         payment_deadline=await quotes.payment_deadline(db, order),
         pickup_code=await operations.current_pickup_code(db, order.id) if order.status == OrderStatus.READY_FOR_PICKUP else None,
+        loyalty_points_earned=await loyalty.points_earned(db, order.id, order.customer_id),
     )
 
 
@@ -402,7 +403,7 @@ async def upload_attachment(ref: str, file: UploadFile = File(...), customer: Cu
 
 @router.post("/orders/{ref}/quotes/{version}/accept", response_model=PaymentOut)
 async def accept(ref: str, version: int, data: AcceptQuoteIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> PaymentOut:
-    payment = await quotes.accept_quote(db, customer.id, ref, version, data.sizes_confirmed, client_ip(request))
+    payment = await quotes.accept_quote(db, customer.id, ref, version, data.sizes_confirmed, client_ip(request), data.use_points)
     await db.commit()
     return await _start_payment(db, payment, ref)
 

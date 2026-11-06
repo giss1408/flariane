@@ -71,7 +71,10 @@ String? nextStep(String status) => switch (status) {
 const errorMessages = {
   'invalid_phone': 'Numéro ivoirien à 10 chiffres attendu (01, 05 ou 07…).',
   'invalid_credentials': 'Numéro ou mot de passe incorrect.',
+  'account_blocked': 'Ton compte est suspendu. Écris-nous sur WhatsApp pour en savoir plus.',
+  'temp_password_expired': 'Ce mot de passe temporaire a expiré. Touche « Mot de passe oublié ? » pour en recevoir un nouveau.',
   'login_locked': 'Trop d’essais. Réessayez dans 15 minutes.',
+  'reset_rate_limited': 'Trop de demandes. Réessaie dans une heure ou écris-nous sur WhatsApp.',
   'phone_taken': 'Un compte existe déjà avec ce numéro. Connecte-toi.',
   'weak_password': 'Mot de passe trop simple (8 caractères minimum).',
   'no_shein_link': 'Colle le lien de partage de ton panier SHEIN ou Temu.',
@@ -92,5 +95,7 @@ const errorMessages = {
   'wrong_verification_code': 'Code incorrect.',
   'no_verification_code': 'Pas encore de code : tu vas le recevoir sur WhatsApp.',
   'verification_locked': 'Trop d’essais. Écris-nous sur WhatsApp pour recevoir un nouveau code.',
+  'referral_code_invalid': 'Code de parrainage inconnu : vérifie-le ou laisse le champ vide.',
+  'loyalty_not_available': 'Tes points ne peuvent pas être utilisés sur ce devis.',
   'rate_limited': 'Trop de requêtes. Patientez un instant.',
 };

@@ -132,6 +132,8 @@ class Quote {
     required this.expiresAt,
     required this.lines,
     this.screenshotUrl,
+    this.loyaltyPointsUsed = 0,
+    this.loyaltyDiscountXof = 0,
   });
 
   factory Quote.fromJson(Map<String, dynamic> j) => Quote(
@@ -146,6 +148,8 @@ class Quote {
         expiresAt: _date(j['expires_at']),
         lines: ((j['lines'] as List?) ?? []).cast<Map<String, dynamic>>().map(QuoteLine.fromJson).toList(),
         screenshotUrl: j['screenshot_url'] as String?,
+        loyaltyPointsUsed: j['loyalty_points_used'] as int? ?? 0,
+        loyaltyDiscountXof: _int(j['loyalty_discount_xof']) ?? 0,
       );
 
   final int version;
@@ -159,6 +163,9 @@ class Quote {
   final DateTime? expiresAt;
   final List<QuoteLine> lines;
   final String? screenshotUrl;
+  final int loyaltyPointsUsed;
+  final int loyaltyDiscountXof; // taken off the service fee when loyalty points were redeemed
+  int get amountToPayXof => totalXof - loyaltyDiscountXof;
   bool isOpen(DateTime now) => status == 'SENT' && expiresAt != null && expiresAt!.isAfter(now);
 }
 
@@ -201,6 +208,7 @@ class Order {
     required this.canRequestRequote,
     this.paymentDeadline,
     this.pickupCode,
+    this.loyaltyPointsEarned = 0,
   });
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
@@ -218,6 +226,7 @@ class Order {
         canRequestRequote: j['can_request_requote'] as bool? ?? false,
         paymentDeadline: _date(j['payment_deadline']),
         pickupCode: j['pickup_code'] as String?,
+        loyaltyPointsEarned: j['loyalty_points_earned'] as int? ?? 0,
       );
 
   final String ref;
@@ -234,9 +243,117 @@ class Order {
   final bool canRequestRequote;
   final DateTime? paymentDeadline; // cancelled automatically if not paid by then
   final String? pickupCode; // 6 digits, only while the parcel waits at the pickup point
+  final int loyaltyPointsEarned; // credited when the parcel was collected
 
   String get storeName => store == 'TEMU' ? 'Temu' : 'SHEIN';
 
   // Payments are manual (mobile money + screenshot), confirmed by Flariane: nothing to poll.
   bool get paymentPending => false;
+}
+
+class LoyaltyEvent {
+  LoyaltyEvent({required this.kind, required this.points, required this.createdAt, this.orderRef, this.friendName});
+
+  factory LoyaltyEvent.fromJson(Map<String, dynamic> j) => LoyaltyEvent(
+        kind: j['kind'] as String,
+        points: j['points'] as int,
+        createdAt: _date(j['created_at'])!,
+        orderRef: j['order_ref'] as String?,
+        friendName: j['friend_name'] as String?,
+      );
+
+  final String kind; // REFERRAL_SIGNUP | ORDER | REFERRED_ORDER | REDEEM | RELEASE
+  final int points;
+  final DateTime createdAt;
+  final String? orderRef;
+  final String? friendName;
+
+  /// Why the balance changed, in plain words.
+  String get label => switch (kind) {
+        'REFERRAL_SIGNUP' => '${friendName ?? 'Une amie'} a rejoint Flariane',
+        'ORDER' => 'Colis ${orderRef ?? ''} retiré'.trim(),
+        'REFERRED_ORDER' => '${friendName ?? 'Une amie'} a retiré sa première commande',
+        'REDEEM' => 'Points utilisés sur ${orderRef ?? 'une commande'}',
+        'RELEASE' => 'Points rendus (${orderRef ?? 'commande'} non payée)',
+        _ => kind,
+      };
+}
+
+class Loyalty {
+  Loyalty({
+    required this.balance,
+    required this.referralCode,
+    required this.redeemPoints,
+    required this.discountPercent,
+    required this.pointsPerOrder,
+    required this.pointsReferralSignup,
+    required this.pointsReferredOrder,
+    required this.history,
+  });
+
+  factory Loyalty.fromJson(Map<String, dynamic> j) => Loyalty(
+        balance: j['balance'] as int,
+        referralCode: j['referral_code'] as String?,
+        redeemPoints: j['redeem_points'] as int,
+        discountPercent: j['discount_percent'] as int,
+        pointsPerOrder: j['points_per_order'] as int,
+        pointsReferralSignup: j['points_referral_signup'] as int,
+        pointsReferredOrder: j['points_referred_order'] as int,
+        history: ((j['history'] as List?) ?? []).cast<Map<String, dynamic>>().map(LoyaltyEvent.fromJson).toList(),
+      );
+
+  final int balance;
+  final String? referralCode;
+  final int redeemPoints;
+  final int discountPercent;
+  final int pointsPerOrder;
+  final int pointsReferralSignup;
+  final int pointsReferredOrder;
+  final List<LoyaltyEvent> history;
+
+  /// Service-fee reduction the redeem block of points gives on a quote with this fee (rounded down).
+  int discountFor(int feeXof) => feeXof * discountPercent ~/ 100;
+
+  bool canRedeemOn(Quote q) => balance >= redeemPoints && discountFor(q.feeXof) > 0;
+}
+
+/// One legal text (terms, refund policy, privacy…): a plain-language summary, then the full text in sections.
+class LegalDoc {
+  LegalDoc({required this.slug, required this.title, required this.icon, required this.summary, required this.updated, this.sections = const []});
+
+  factory LegalDoc.fromJson(Map<String, dynamic> j) => LegalDoc(
+        slug: j['slug'] as String,
+        title: j['title'] as String,
+        icon: j['icon'] as String? ?? '',
+        summary: ((j['summary'] as List?) ?? []).cast<String>(),
+        updated: j['updated'] as String? ?? '',
+        sections: ((j['sections'] as List?) ?? []).cast<Map<String, dynamic>>().map(LegalSection.fromJson).toList(),
+      );
+
+  final String slug;
+  final String title;
+  final String icon; // route | description | undo | privacy | business
+  final List<String> summary;
+  final String updated; // ISO date
+  final List<LegalSection> sections;
+
+  /// 2026-11-06 → 06/11/2026
+  String get updatedLabel {
+    final p = updated.split('-');
+    return p.length == 3 ? '${p[2]}/${p[1]}/${p[0]}' : updated;
+  }
+}
+
+class LegalSection {
+  LegalSection({required this.heading, this.paragraphs = const [], this.bullets = const []});
+
+  factory LegalSection.fromJson(Map<String, dynamic> j) => LegalSection(
+        heading: j['heading'] as String,
+        paragraphs: ((j['paragraphs'] as List?) ?? []).cast<String>(),
+        bullets: ((j['bullets'] as List?) ?? []).cast<String>(),
+      );
+
+  final String heading;
+  final List<String> paragraphs;
+  final List<String> bullets;
 }

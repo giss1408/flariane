@@ -34,6 +34,7 @@ class RegisterIn(In):
     # Required tick box: privacy policy + WhatsApp contact about orders.
     consent: bool = False
     display_name: Str80 | None = None
+    referral_code: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
     client: Literal["web", "app"] = "app"
 
 
@@ -66,6 +67,42 @@ class UnverifiedCustomerOut(BaseModel):
 
 class TempPasswordOut(BaseModel):
     temporary_password: str  # shown once to the admin
+    url: str | None = None  # wa.me link with the message, to send from the admin's own WhatsApp
+
+
+class CustomerRowOut(BaseModel):
+    id: int
+    display_name: str | None
+    phone_masked: str
+    created_at: datetime
+    phone_verified: bool
+    blocked: bool
+    orders_count: int
+
+
+class CustomerOrderOut(BaseModel):
+    id: int
+    public_ref: str
+    status: str
+    total_xof: int | None
+    created_at: datetime
+
+
+class CustomerDetailOut(CustomerRowOut):
+    referral_code: str | None
+    loyalty_points: int
+    recent_orders: list[CustomerOrderOut]
+
+
+class PasswordResetRequestIn(In):
+    phone: Annotated[str, StringConstraints(max_length=30)]
+
+
+class PasswordResetRequestOut(BaseModel):
+    id: int
+    display_name: str | None
+    phone_masked: str
+    requested_at: datetime
 
 
 class RefreshIn(In):
@@ -193,6 +230,9 @@ class QuoteOut(Out):
     screenshot_url: str | None = None  # SHEIN cart as quoted (cart mode)
     cart_source_amount: Decimal | None = None  # e.g. 49.90
     cart_source_currency: str | None = None  # e.g. EUR
+    loyalty_points_used: int = 0
+    loyalty_discount_xof: int = 0  # taken off the service fee when points were redeemed
+    amount_to_pay_xof: int = 0  # total_xof - loyalty_discount_xof
 
 
 class StatusEventOut(Out):
@@ -240,10 +280,31 @@ class OrderDetailOut(OrderSummaryOut):
     can_request_requote: bool
     payment_deadline: datetime | None = None  # cancelled automatically if not paid by then
     pickup_code: str | None = None  # only while the parcel waits at the pickup point, only for its owner
+    loyalty_points_earned: int = 0  # credited when the parcel was collected
 
 
 class AcceptQuoteIn(In):
     sizes_confirmed: bool
+    use_points: bool = False  # redeem the loyalty points for a service-fee reduction
+
+
+class LoyaltyEventOut(BaseModel):
+    kind: str
+    points: int
+    created_at: datetime
+    order_ref: str | None = None
+    friend_name: str | None = None
+
+
+class LoyaltyOut(BaseModel):
+    balance: int
+    referral_code: str | None
+    redeem_points: int
+    discount_percent: int
+    points_per_order: int
+    points_referral_signup: int
+    points_referred_order: int
+    history: list[LoyaltyEventOut]
 
 
 class LineChangeIn(In):
@@ -481,6 +542,11 @@ class SettingsIn(In):
     wave_phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
     next_departure_date: date | None = None
     next_order_deadline: date | None = None
+    loyalty_points_per_order: Annotated[int, Field(ge=0, le=1000)] | None = None
+    loyalty_points_referral_signup: Annotated[int, Field(ge=0, le=1000)] | None = None
+    loyalty_points_referred_order: Annotated[int, Field(ge=0, le=1000)] | None = None
+    loyalty_redeem_points: Annotated[int, Field(ge=1, le=100000)] | None = None
+    loyalty_discount_percent_of_fee: Annotated[int, Field(ge=0, le=100)] | None = None
 
 
 class PickupPointIn(In):

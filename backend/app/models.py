@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,6 +59,15 @@ class Customer(TimestampMixin, Base):
     location_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     location_updated_at: Mapped[datetime | None] = _ts()
     anonymised_at: Mapped[datetime | None] = _ts()
+    # Loyalty: the code she shares, and the customer who recommended her (set once at registration).
+    referral_code: Mapped[str | None] = mapped_column(String(12), unique=True)
+    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), index=True)
+    # Set when she asks for a new password from the login screen; cleared when an admin resets it.
+    password_reset_requested_at: Mapped[datetime | None] = _ts()
+    # An admin-issued temporary password stops working after this; cleared once she sets her own.
+    temp_password_expires_at: Mapped[datetime | None] = _ts()
+    # A super admin blocked the account: no login, no API access. Orders and data are kept.
+    blocked_at: Mapped[datetime | None] = _ts()
 
 
 class AdminUser(TimestampMixin, Base):
@@ -192,6 +202,10 @@ class Quote(TimestampMixin, Base):
     sent_at: Mapped[datetime | None] = _ts()
     answered_at: Mapped[datetime | None] = _ts()
     sizes_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Loyalty points redeemed on this quote and the service-fee reduction they gave. total_xof is unchanged:
+    # the customer pays total_xof - loyalty_discount_xof.
+    loyalty_points_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    loyalty_discount_xof: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
 
     lines: Mapped[list["QuoteLine"]] = relationship(
         lazy="raise", cascade="all, delete-orphan", order_by="QuoteLine.position"
@@ -247,6 +261,28 @@ class Payment(TimestampMixin, Base):
     # New proofs live in storage (like cart screenshots). `proof_image` only holds proofs from before that
     # change, until `python -m app.cli migrate-proofs` has moved them; then the column can be dropped.
     proof_key: Mapped[str | None] = mapped_column(String(160))
+
+
+class LoyaltyLedger(Base):
+    """Append-only points ledger: a customer's balance is the sum of `points`. The partial unique indexes
+    make every credit and redemption idempotent, so a replayed transition or retry cannot pay twice."""
+
+    __tablename__ = "loyalty_ledger"
+    __table_args__ = (
+        Index("uq_loyalty_signup", "referred_customer_id", unique=True, postgresql_where=text("kind = 'REFERRAL_SIGNUP'")),
+        Index("uq_loyalty_order", "order_id", unique=True, postgresql_where=text("kind = 'ORDER'")),
+        Index("uq_loyalty_referred_order", "referred_customer_id", unique=True, postgresql_where=text("kind = 'REFERRED_ORDER'")),
+        Index("uq_loyalty_redeem", "quote_id", unique=True, postgresql_where=text("kind = 'REDEEM'")),
+        Index("uq_loyalty_release", "quote_id", unique=True, postgresql_where=text("kind = 'RELEASE'")),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    points: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))  # REFERRAL_SIGNUP | ORDER | REFERRED_ORDER | REDEEM | RELEASE
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"))
+    quote_id: Mapped[int | None] = mapped_column(ForeignKey("quotes.id"))
+    referred_customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Refund(TimestampMixin, Base):

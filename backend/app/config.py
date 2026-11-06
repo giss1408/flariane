@@ -18,8 +18,11 @@ class Settings(BaseSettings):
     dev_routes: bool | None = None
     api_base_url: str = "http://localhost:8000"
     # Shown on the public privacy / account-deletion pages required by the app stores.
-    contact_email: str = "contact@flariane.ci"
+    contact_email: str = "flariane@regisse.com"
     company_name: str = "Flariane"
+    # Shown in the legal notice only when filled in (Render: FLR_COMPANY_ADDRESS, FLR_COMPANY_REGISTRATION).
+    company_address: str = ""
+    company_registration: str = ""  # RCCM / CEPICI number
     customer_app_url: str = "http://localhost:3000"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 

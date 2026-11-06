@@ -44,7 +44,7 @@ async def current_customer(
     except jwt.PyJWTError:
         raise _unauthorized() from None
     customer = await db.get(Customer, claims.sub)
-    if customer is None or customer.anonymised_at is not None:
+    if customer is None or customer.anonymised_at is not None or customer.blocked_at is not None:
         raise _unauthorized()
     request.state.rate_key = f"customer:{customer.id}"
     return customer

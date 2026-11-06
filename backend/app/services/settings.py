@@ -33,6 +33,12 @@ DEFAULTS: dict[str, Any] = {
     "next_departure_date": None,
     # Last day customers can order for that departure (ISO date), shown to customers.
     "next_order_deadline": None,
+    # Loyalty program. A change applies to points earned or redeemed afterwards.
+    "loyalty_points_per_order": 5,
+    "loyalty_points_referral_signup": 1,
+    "loyalty_points_referred_order": 3,
+    "loyalty_redeem_points": 100,
+    "loyalty_discount_percent_of_fee": 10,
 }
 
 

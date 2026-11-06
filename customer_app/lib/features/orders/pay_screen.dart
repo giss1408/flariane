@@ -13,6 +13,7 @@ import '../../core/theme.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
+import '../legal/legal_doc_screen.dart';
 
 const methods = {
   'WAVE': ('Wave', Color(0xFF1DC3FF)),
@@ -175,6 +176,12 @@ class _PayScreenState extends ConsumerState<PayScreen> {
                         const Text('Ajouter la capture du paiement', style: TextStyle(fontWeight: FontWeight.w600)),
                       ])
                     : ClipRRect(borderRadius: BorderRadius.circular(17), child: Image.file(File(_proof!.path), fit: BoxFit.cover, width: double.infinity)),
+              ),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalDocScreen(slug: 'remboursement', title: 'Annulation et remboursement'))),
+                child: Text('Annulation et remboursement : voir les conditions', style: TextStyle(color: context.pal.muted)),
               ),
             ),
           ],

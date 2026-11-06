@@ -38,6 +38,7 @@ class AttentionPoller extends WidgetsBindingObserver {
     ref.invalidate(attentionProvider);
     ref.invalidate(inboxProvider);
     ref.invalidate(unverifiedProvider);
+    ref.invalidate(passwordResetsProvider);
   }
 
   @override

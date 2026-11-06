@@ -21,6 +21,7 @@ from app.schemas import ChangeRequestIn, QuoteDraftIn
 from app.security.tokens import utcnow
 from app.services import notify
 from app.services.audit import audit
+from app.services import loyalty
 from app.services.links import NON_EU_MESSAGE, extract_shein_urls, is_non_eu_link, product_id_from_url, store_of
 from app.services.orders import lock_order, transition_order
 from app.services.pricing import LineInput, compute_quote, default_customs, default_freight, to_xof
@@ -273,7 +274,7 @@ async def _active_payment(db: AsyncSession, quote_id: int) -> Payment | None:
 
 
 async def accept_quote(
-    db: AsyncSession, customer_id: int, ref: str, version: int, sizes_confirmed: bool, ip: str | None
+    db: AsyncSession, customer_id: int, ref: str, version: int, sizes_confirmed: bool, ip: str | None, use_points: bool = False
 ) -> Payment:
     """Accept a quote and create the payment row. Payment is manual: the customer pays and sends a screenshot."""
     if not sizes_confirmed:
@@ -294,6 +295,8 @@ async def accept_quote(
         raise Conflict("quote_expired")
 
     quote.status, quote.answered_at, quote.sizes_confirmed = QuoteStatus.ACCEPTED, utcnow(), True
+    if use_points:
+        await loyalty.redeem(db, customer_id, order, quote)
     await transition_order(
         db, order, OrderStatus.AWAITING_PAYMENT, actor=f"customer:{customer_id}", actor_type="customer", actor_id=customer_id, ip=ip
     )
@@ -307,7 +310,7 @@ async def new_payment_attempt(db: AsyncSession, order: Order, quote: Quote) -> P
         order_id=order.id,
         quote_id=quote.id,
         provider="MANUAL",
-        amount_xof=quote.total_xof,  # from the frozen quote, never from the request
+        amount_xof=quote.total_xof - quote.loyalty_discount_xof,  # from the frozen quote, never from the request
         idempotency_key=f"quote-{quote.id}-{attempts + 1}",
         status=PaymentStatus.INITIATED,
     )

@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/config.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
+import '../../widgets/logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -60,9 +61,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 key: _form,
                 child: AutofillGroup(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    const Icon(Icons.storefront_rounded, size: 48, color: AppColors.primary),
-                    const SizedBox(height: 12),
-                    Text(AppConfig.appTitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall),
+                    const Center(child: FlarianeLogo(size: 88, withWordmark: true)),
+                    if (AppConfig.isTest) ...[
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(color: const Color(0xFFF59E0B), borderRadius: BorderRadius.circular(20)),
+                          child: const Text('SERVEUR DE TEST', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1)),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     if (message != null) ...[
                       Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.warning)),

@@ -8,7 +8,7 @@ import pyotp
 from anyio import to_thread
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -28,6 +28,9 @@ from app.schemas import (
     AdminUserCreatedOut,
     AdminUserIn,
     AdminUserOut,
+    CustomerDetailOut,
+    CustomerOrderOut,
+    CustomerRowOut,
     DispatchGroupOut,
     DispatchOrderOut,
     LocationOut,
@@ -40,11 +43,12 @@ from app.schemas import (
     RefundOut,
     ReportSummaryOut,
     SettingsIn,
+    PasswordResetRequestOut,
     TempPasswordOut,
     TotpRequiredIn,
     UnverifiedCustomerOut,
 )
-from app.security.crypto import decrypt, encrypt, hash_password, mask_phone
+from app.security.crypto import decrypt, encrypt, hash_password, mask_phone, phone_hash
 from fastapi import HTTPException
 
 from app.enums import ROLE_RANK
@@ -173,6 +177,19 @@ async def reject_registration(customer_id: int, request: Request, admin: AdminCo
     await db.commit()
 
 
+@router.get("/customers/password-resets", response_model=list[PasswordResetRequestOut])
+async def password_reset_requests(_: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> list[PasswordResetRequestOut]:
+    rows = (await db.scalars(
+        select(Customer).where(Customer.password_reset_requested_at.is_not(None), Customer.anonymised_at.is_(None), Customer.phone_enc.is_not(None))
+        .order_by(Customer.password_reset_requested_at)
+    )).all()
+    return [
+        PasswordResetRequestOut(id=c.id, display_name=c.display_name, phone_masked=mask_phone(decrypt(c.phone_enc)) if c.phone_enc else "",
+                                requested_at=c.password_reset_requested_at)
+        for c in rows
+    ]
+
+
 @router.post("/customers/{customer_id}/reset-password", response_model=TempPasswordOut)
 async def reset_customer_password(customer_id: int, request: Request, admin: AdminContext = operator, db: AsyncSession = Depends(get_session)) -> TempPasswordOut:
     """Forgotten password: issue a one-time temporary password for the admin to pass on (WhatsApp/phone).
@@ -180,13 +197,104 @@ async def reset_customer_password(customer_id: int, request: Request, admin: Adm
     customer = await db.get(Customer, customer_id)
     if customer is None or customer.anonymised_at is not None:
         raise NotFound()
+    from app.services.wa_messages import temp_password_text, wa_link
+
     temp = customer_auth.temporary_password()
     customer.password_hash, customer.must_change_password = await to_thread.run_sync(hash_password, temp), True
+    customer.password_reset_requested_at = None
+    customer.temp_password_expires_at = utcnow() + customer_auth.TEMP_PASSWORD_TTL
     for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id, RefreshToken.revoked_at.is_(None)))).all():
         t.revoked_at = utcnow()
     await audit(db, actor_type="admin", actor_id=admin.id, action="customer.password_reset", entity="customer", entity_id=customer.id, ip=client_ip(request))
     await db.commit()
-    return TempPasswordOut(temporary_password=temp)
+    url = wa_link(decrypt(customer.phone_enc), temp_password_text(customer, temp)) if customer.phone_enc else None
+    return TempPasswordOut(temporary_password=temp, url=url)
+
+
+def _customer_row(c: Customer, orders_count: int) -> dict:
+    return dict(id=c.id, display_name=c.display_name, phone_masked=mask_phone(decrypt(c.phone_enc)) if c.phone_enc else "",
+                created_at=c.created_at, phone_verified=c.phone_verified_at is not None, blocked=c.blocked_at is not None, orders_count=orders_count)
+
+
+@router.get("/customers", response_model=list[CustomerRowOut])
+async def list_customers(
+    q: Annotated[str, StringConstraints(strip_whitespace=True, max_length=40)] = "",
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    _: AdminContext = super_admin,
+    db: AsyncSession = Depends(get_session),
+) -> list[CustomerRowOut]:
+    """Search by first name (contains) or by the full phone number (stored encrypted: exact match on its hash)."""
+    counts = select(Order.customer_id, func.count().label("n")).group_by(Order.customer_id).subquery()
+    stmt = (
+        select(Customer, func.coalesce(counts.c.n, 0))
+        .outerjoin(counts, counts.c.customer_id == Customer.id)
+        .where(Customer.anonymised_at.is_(None))
+        .order_by(Customer.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if q:
+        conds = [Customer.display_name.ilike(f"%{q.replace('%', '').replace('_', '')}%")]
+        try:
+            conds.append(Customer.phone_hash == phone_hash(customer_auth.normalize_ci_phone(q)))
+        except BadRequest:
+            pass
+        stmt = stmt.where(or_(*conds))
+    return [CustomerRowOut(**_customer_row(c, n)) for c, n in (await db.execute(stmt)).all()]
+
+
+@router.get("/customers/{customer_id}", response_model=CustomerDetailOut)
+async def customer_detail(customer_id: int, _: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> CustomerDetailOut:
+    from app.services import loyalty
+
+    c = await db.get(Customer, customer_id)
+    if c is None or c.anonymised_at is not None:
+        raise NotFound()
+    orders = (await db.scalars(select(Order).where(Order.customer_id == c.id).order_by(Order.id.desc()))).all()
+    return CustomerDetailOut(
+        **_customer_row(c, len(orders)),
+        referral_code=c.referral_code,
+        loyalty_points=await loyalty.balance(db, c.id),
+        recent_orders=[CustomerOrderOut(id=o.id, public_ref=o.public_ref, status=o.status, total_xof=o.total_xof, created_at=o.created_at) for o in orders[:10]],
+    )
+
+
+@router.post("/customers/{customer_id}/block", status_code=204)
+async def block_customer(customer_id: int, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> None:
+    """No more login or API access, and every session is signed out. Orders and data stay."""
+    customer = await db.get(Customer, customer_id)
+    if customer is None or customer.anonymised_at is not None:
+        raise NotFound()
+    if customer.blocked_at is None:
+        customer.blocked_at = utcnow()
+        customer.password_reset_requested_at = None
+        await customer_auth.revoke_sessions(db, customer.id)
+        await audit(db, actor_type="admin", actor_id=admin.id, action="customer.blocked", entity="customer", entity_id=customer.id, ip=client_ip(request))
+    await db.commit()
+
+
+@router.post("/customers/{customer_id}/unblock", status_code=204)
+async def unblock_customer(customer_id: int, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> None:
+    customer = await db.get(Customer, customer_id)
+    if customer is None or customer.anonymised_at is not None:
+        raise NotFound()
+    if customer.blocked_at is not None:
+        customer.blocked_at = None
+        await audit(db, actor_type="admin", actor_id=admin.id, action="customer.unblocked", entity="customer", entity_id=customer.id, ip=client_ip(request))
+    await db.commit()
+
+
+@router.delete("/customers/{customer_id}", status_code=204)
+async def delete_customer(customer_id: int, request: Request, admin: AdminContext = super_admin, db: AsyncSession = Depends(get_session)) -> None:
+    """Anonymise the account (law 2013-450): identity erased, orders and payments kept for accounting.
+    Refused while an order is paid or on its way."""
+    customer = await db.get(Customer, customer_id)
+    if customer is None or customer.anonymised_at is not None:
+        raise NotFound()
+    await customer_auth.anonymise(db, customer)
+    await audit(db, actor_type="admin", actor_id=admin.id, action="customer.anonymised", entity="customer", entity_id=customer.id, ip=client_ip(request))
+    await db.commit()
 
 
 # ---------------------------------------------------------------- devices

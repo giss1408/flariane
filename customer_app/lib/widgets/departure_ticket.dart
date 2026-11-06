@@ -75,7 +75,7 @@ class DepartureTicket extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Row(children: [
-                                Icon(Icons.flight_takeoff_rounded,
+                                Icon(Icons.directions_boat_rounded,
                                     size: 18, color: context.pal.accent),
                                 const SizedBox(width: 6),
                                 Flexible(

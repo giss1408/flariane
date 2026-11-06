@@ -99,6 +99,42 @@ void main() {
       expect(find.text('-10 % cette semaine'), findsOneWidget);
     });
 
+    Loyalty points(int balance) => Loyalty.fromJson({
+          'balance': balance, 'referral_code': 'AWA-7K3Q', 'redeem_points': 100, 'discount_percent': 10,
+          'points_per_order': 5, 'points_referral_signup': 1, 'points_referred_order': 3, 'history': <dynamic>[],
+        });
+
+    testWidgets('the points tile invites her to earn points (the green button covers asking a question)', (tester) async {
+      final api = homeApi(orders: [[]]);
+      when(() => api.loyalty()).thenAnswer((_) async => points(0));
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Gagne des points'), findsOneWidget);
+      expect(find.text('Invite une amie'), findsOneWidget);
+      expect(find.text('Poser une question'), findsNothing);
+      expect(find.text('Une question ?'), findsOneWidget);
+    });
+
+    testWidgets('the points tile shows her balance and opens "Mes points"', (tester) async {
+      final api = homeApi(orders: [[]]);
+      when(() => api.loyalty()).thenAnswer((_) async => points(12));
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Mes points : 12'), findsOneWidget);
+      await tester.tap(find.text('Mes points : 12'));
+      await tester.pumpAndSettle();
+      expect(find.text('Comment ça marche'), findsOneWidget);
+      expect(find.text('AWA-7K3Q'), findsOneWidget);
+    });
+
+    testWidgets('the points tile still shows when the points cannot be loaded', (tester) async {
+      final api = homeApi(orders: [[]]);
+      when(() => api.loyalty()).thenThrow(Exception('offline'));
+      await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Gagne des points'), findsOneWidget);
+    });
+
     testWidgets('a first-time customer sees the three steps and a shortcut to SHEIN', (tester) async {
       final api = homeApi(orders: [[]]);
       await tester.pumpWidget(host(const HomeScreen(), overrides: with_(api), disableAnimations: true));

@@ -131,8 +131,17 @@ class CustomerApi {
     }
   }
 
-  Future<void> register(String phone, String password, {String? name}) =>
-      _session('/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true});
+  Future<void> register(String phone, String password, {String? name, String? referralCode}) => _session(
+      '/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true, if (referralCode != null) 'referral_code': referralCode});
+
+  /// Forgotten password: the team is told and sends a temporary password on WhatsApp. Same answer for any number.
+  Future<void> requestPasswordReset(String phone) async {
+    try {
+      await _auth.post('/auth/password-reset-request', data: {'phone': phone});
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
 
   Future<void> login(String phone, String password) => _session('/auth/login', {'phone': phone, 'password': password});
 
@@ -187,6 +196,16 @@ class CustomerApi {
       () => dio.post('/me/password', data: {'current_password': current, 'new_password': next}), (_) {});
 
   Future<void> deleteMe() => _call(() => dio.delete('/me'), (_) {});
+
+  /// Everything we hold about her (law 2013-450): name, phone, orders.
+  Future<Map<String, dynamic>> myData() => _call(() => dio.get('/me/export'), (j) => j as Map<String, dynamic>);
+
+  /// Legal texts: public, kept for offline reading.
+  Future<List<LegalDoc>> legalDocuments() =>
+      _cached('legal.list', '/legal/documents', (j) => (j as List).cast<Map<String, dynamic>>().map(LegalDoc.fromJson).toList());
+
+  Future<LegalDoc> legalDocument(String slug) =>
+      _cached('legal.$slug', '/legal/documents/$slug', (j) => LegalDoc.fromJson(j as Map<String, dynamic>));
 
   /// Public info (no auth): next departure, payment mode, Wave number.
   Future<Map<String, dynamic>> publicInfo() => _call(() => dio.get('/public/info'), (j) => j as Map<String, dynamic>);
@@ -246,8 +265,10 @@ class CustomerApi {
       () async => dio.post('/orders/$ref/attachments', data: FormData.fromMap({'file': await MultipartFile.fromFile(path)})),
       (_) {});
 
-  Future<Payment> acceptQuote(String ref, int version) => _call(
-      () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true}),
+  Future<Loyalty> loyalty() => _cached('loyalty', '/me/loyalty', (j) => Loyalty.fromJson(j as Map<String, dynamic>));
+
+  Future<Payment> acceptQuote(String ref, int version, {bool usePoints = false}) => _call(
+      () => dio.post('/orders/$ref/quotes/$version/accept', data: {'sizes_confirmed': true, 'use_points': usePoints}),
       (j) => Payment.fromJson(j as Map<String, dynamic>));
 
   Future<void> requestChange(String ref, int version, Map<String, dynamic> body) =>

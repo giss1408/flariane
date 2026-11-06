@@ -8,7 +8,7 @@ import 'common.dart';
 import 'store_badge.dart';
 
 /// Opens WhatsApp to Flariane's support number with the order reference pre-filled.
-Future<void> askOnWhatsApp(BuildContext context, WidgetRef ref, {String? orderRef}) async {
+Future<void> askOnWhatsApp(BuildContext context, WidgetRef ref, {String? orderRef, String? message}) async {
   final number = (await ref.read(publicInfoProvider.future))['support_whatsapp'] as String?;
   if (number == null || number.isEmpty) {
     if (context.mounted) showInfo(context, 'Le support WhatsApp n’est pas encore disponible.');
@@ -16,7 +16,7 @@ Future<void> askOnWhatsApp(BuildContext context, WidgetRef ref, {String? orderRe
   }
   var digits = number.replaceAll(RegExp(r'\D'), '');
   if (digits.length == 10 && digits.startsWith('0')) digits = '225$digits';
-  final text = orderRef == null ? 'Bonjour Flariane, j’ai une question : ' : 'Bonjour Flariane, j’ai une question sur ma commande $orderRef : ';
+  final text = message ?? (orderRef == null ? 'Bonjour Flariane, j’ai une question : ' : 'Bonjour Flariane, j’ai une question sur ma commande $orderRef : ');
   await launchUrl(Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(text)}'), mode: LaunchMode.externalApplication);
 }
 
@@ -26,14 +26,6 @@ void showShareHelp(BuildContext context) => showModalBottomSheet<void>(
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => const _ShareHelp(),
-    );
-
-/// How to reach the team, then a button that does it.
-void showAskHelp(BuildContext context) => showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _AskHelp(),
     );
 
 class _ShareHelp extends StatelessWidget {
@@ -100,32 +92,6 @@ class _StepList extends StatelessWidget {
             ]),
           ),
       ]);
-}
-
-class _AskHelp extends ConsumerWidget {
-  const _AskHelp();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Poser une question à l’équipe', style: display(22, weight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            const _StepList([
-              'Touche le bouton vert « Une question ? » en bas de l’écran d’accueil ou d’une commande.',
-              'WhatsApp s’ouvre avec un message déjà commencé (et le numéro de ta commande).',
-              'Écris ta question et envoie : l’équipe Flariane te répond sur WhatsApp.',
-            ]),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, minimumSize: const Size.fromHeight(50)),
-              icon: const Icon(Icons.chat_rounded),
-              label: const Text('Écrire à l’équipe sur WhatsApp'),
-              onPressed: () => askOnWhatsApp(context, ref),
-            ),
-          ]),
-        ),
-      );
 }
 
 /// Always-visible "Une question ?" button, placed above the bottom safe area.

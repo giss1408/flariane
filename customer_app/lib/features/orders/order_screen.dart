@@ -46,6 +46,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
           onRefresh: () => ref.refresh(orderProvider(widget.orderRef).future),
           child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 96), children: [
             _StatusBanner(order: o),
+            _PointsNote(order: o),
             if (o.quote != null && (o.status == 'QUOTED' || o.status == 'AWAITING_PAYMENT'))
               _QuoteCard(order: o, quote: o.quote!)
             else if (o.quote != null)
@@ -97,6 +98,35 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     } catch (e) {
       if (mounted) showError(context, e);
     }
+  }
+}
+
+/// What this order earns: "+5 pts" before the parcel is collected, the points actually credited after.
+class _PointsNote extends ConsumerWidget {
+  const _PointsNote({required this.order});
+
+  final Order order;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final perOrder = ref.watch(loyaltyProvider).valueOrNull?.pointsPerOrder;
+    final String? text;
+    if (order.status == 'PICKED_UP') {
+      text = order.loyaltyPointsEarned > 0 ? '+${order.loyaltyPointsEarned} pts gagnés avec ce colis' : null;
+    } else if (const {'CANCELLED', 'REFUND_PENDING', 'REFUNDED'}.contains(order.status) || perOrder == null || perOrder <= 0) {
+      text = null;
+    } else {
+      text = '+$perOrder pts au retrait du colis';
+    }
+    if (text == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        Icon(Icons.stars_rounded, size: 18, color: context.pal.accent),
+        const SizedBox(width: 6),
+        Text(text, style: TextStyle(color: context.pal.accent, fontWeight: FontWeight.w600)),
+      ]),
+    );
   }
 }
 
@@ -204,12 +234,13 @@ class _QuoteCard extends ConsumerStatefulWidget {
 
 class _QuoteCardState extends ConsumerState<_QuoteCard> {
   bool _sizesChecked = false;
+  bool _usePoints = false;
   bool _busy = false;
 
   Future<void> _accept() async {
     setState(() => _busy = true);
     try {
-      final p = await ref.read(apiProvider).acceptQuote(widget.order.ref, widget.quote.version);
+      final p = await ref.read(apiProvider).acceptQuote(widget.order.ref, widget.quote.version, usePoints: _usePoints);
       // Payment is always manual (number / QR + screenshot); the checkout link, if any, is ignored.
       if (mounted) {
         await Navigator.of(context).push(MaterialPageRoute(
@@ -217,9 +248,11 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
         ));
       }
       ref.invalidate(orderProvider(widget.order.ref));
+      ref.invalidate(loyaltyProvider);
     } on ApiException catch (e) {
       if (!mounted) return;
       showError(context, e);
+      if (e.code == 'loyalty_not_available') ref.invalidate(loyaltyProvider);
       // The quote changed or expired while the screen was open: never pay an outdated version.
       if (e.code == 'quote_outdated' || e.code == 'quote_expired') ref.invalidate(orderProvider(widget.order.ref));
     } finally {
@@ -231,6 +264,10 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
   Widget build(BuildContext context) {
     final q = widget.quote;
     final open = q.isOpen(DateTime.now()) && widget.order.status == 'QUOTED';
+    final loyalty = ref.watch(loyaltyProvider).valueOrNull;
+    final canUsePoints = open && loyalty != null && loyalty.canRedeemOn(q);
+    final discount = q.loyaltyDiscountXof > 0 ? q.loyaltyDiscountXof : (canUsePoints && _usePoints ? loyalty.discountFor(q.feeXof) : 0);
+    final toPay = q.totalXof - discount;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: 16),
       Row(children: [
@@ -246,7 +283,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
           child: Row(children: [
             Text('Total à payer', style: TextStyle(color: context.pal.muted)),
             const Spacer(),
-            Text(fcfa(q.totalXof), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
+            Text(fcfa(toPay), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
           ]),
         ),
       ],
@@ -276,14 +313,26 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
             AmountRow('Transport jusqu’à Abidjan', q.freightXof),
             if (q.customsXof > 0) AmountRow('Douane', q.customsXof),
             if (q.feeXof > 0) AmountRow('Frais de service', q.feeXof),
+            if (discount > 0) AmountRow('Points utilisés (−${loyalty?.discountPercent ?? 10} % sur les frais de service)', -discount),
             const Divider(),
-            AmountRow('Total', q.totalXof, bold: true),
+            AmountRow(discount > 0 ? 'Total à payer' : 'Total', toPay, bold: true),
           ]),
         ),
       ),
       if (q.note != null && q.note!.isNotEmpty) ...[
         const SizedBox(height: 8),
         Text('« ${q.note} »', style: const TextStyle(fontStyle: FontStyle.italic)),
+      ],
+      if (canUsePoints) ...[
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          value: _usePoints,
+          onChanged: (v) => setState(() => _usePoints = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          title: Text('Utiliser ${loyalty.redeemPoints} pts : −${fcfa(loyalty.discountFor(q.feeXof))} sur les frais de service'),
+          subtitle: Text('Tu as ${loyalty.balance} pts.'),
+        ),
       ],
       if (open) ...[
         const SizedBox(height: 8),
@@ -301,7 +350,7 @@ class _QuoteCardState extends ConsumerState<_QuoteCard> {
           onPressed: _sizesChecked && !_busy ? _accept : null,
           child: _busy
               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-              : Text('Accepter et payer ${fcfa(q.totalXof)}'),
+              : Text('Accepter et payer ${fcfa(toPay)}'),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -347,8 +396,9 @@ class _QuoteRecap extends StatelessWidget {
                 AmountRow('Transport jusqu’à Abidjan', quote.freightXof),
                 if (quote.customsXof > 0) AmountRow('Douane', quote.customsXof),
                 if (quote.feeXof > 0) AmountRow('Frais de service', quote.feeXof),
+                if (quote.loyaltyDiscountXof > 0) AmountRow('Points utilisés', -quote.loyaltyDiscountXof),
                 const Divider(),
-                AmountRow(order.status == 'QUOTE_REQUESTED' ? 'Ancien devis' : 'Total', quote.totalXof, bold: true),
+                AmountRow(order.status == 'QUOTE_REQUESTED' ? 'Ancien devis' : 'Total', quote.amountToPayXof, bold: true),
               ]),
             ),
           ),

@@ -39,8 +39,8 @@ class AuthController extends Notifier<AuthStatus> {
     state = AuthStatus.loggedIn;
   }
 
-  Future<void> register(String phone, String password, {String? name}) async {
-    await _api.register(phone, password, name: name);
+  Future<void> register(String phone, String password, {String? name, String? referralCode}) async {
+    await _api.register(phone, password, name: name, referralCode: referralCode);
     state = AuthStatus.loggedIn;
   }
 
@@ -65,6 +65,10 @@ final offersProvider = FutureProvider.autoDispose<List<Offer>>((ref) async {
     return const [];
   }
 });
+final legalDocsProvider = FutureProvider.autoDispose<List<LegalDoc>>((ref) => ref.watch(apiProvider).legalDocuments());
+final legalDocProvider = FutureProvider.autoDispose.family<LegalDoc, String>((ref, slug) => ref.watch(apiProvider).legalDocument(slug));
+final myDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(apiProvider).myData());
+final loyaltyProvider = FutureProvider.autoDispose<Loyalty>((ref) => ref.watch(apiProvider).loyalty());
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 
 /// Text shared into the app from SHEIN (Partager → Flariane), waiting to prefill a new order.

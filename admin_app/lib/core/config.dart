@@ -11,7 +11,8 @@ class AppConfig {
 
   /// Shown in the recents screen and on the login screen; the integration flavor says TEST
   /// so it can't be mistaken for prod.
-  static const appTitle = appFlavor == 'integration' ? 'Flariane Admin TEST' : 'Flariane Admin';
+  static const isTest = appFlavor == 'integration';
+  static const appTitle = isTest ? 'Flariane Admin TEST' : 'Flariane Admin';
 
   /// Lock the app (biometrics / device PIN) after this long in the background.
   static const lockAfter = Duration(minutes: 5);
