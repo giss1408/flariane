@@ -72,6 +72,7 @@ workflows:
           flutter build ipa --release \
             --build-number=$((LATEST + 1)) \
             --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN" \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
@@ -132,7 +133,8 @@ workflows:
           LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" 2>/dev/null || echo 0)
           flutter build appbundle --release \
             --build-number=$((LATEST + 1)) \
-            --dart-define=API_BASE_URL="$API_BASE_URL"
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN"
     artifacts:
       - build/app/outputs/bundle/release/*.aab
       - build/app/outputs/mapping/release/mapping.txt
