@@ -6,6 +6,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../widgets/common.dart';
+import '../../widgets/logo.dart';
 import '../../widgets/store_badge.dart';
 import '../order/order_screen.dart';
 import 'payments_to_confirm.dart';
@@ -56,7 +57,7 @@ class InboxScreen extends ConsumerWidget {
       length: inboxTabs.length,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Commandes'),
+          title: const Row(children: [FlarianeLogo(size: 30), SizedBox(width: 10), Text('Commandes')]),
           actions: [
             PopupMenuButton<String>(
               tooltip: 'Filtrer par magasin',

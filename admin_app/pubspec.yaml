@@ -60,6 +60,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^4.0.0
   mocktail: ^1.0.5
+  flutter_native_splash: ^2.4.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -106,3 +107,14 @@ flutter:
 dependency_overrides:
   # Pulled in by sentry_flutter; 9.x needs a newer Flutter Gradle plugin than 3.24 ships.
   package_info_plus: 8.0.2
+
+# Native launch screen. Regenerate with: dart run flutter_native_splash:create (then check AndroidManifest.xml:
+# the generator reformats it and can drop android:screenOrientation).
+flutter_native_splash:
+  color: "#0F5F5C"
+  image: assets/logo/tile_round.png
+  # Android 12+ crops the splash icon to a circle: a smaller copy keeps the gold star visible.
+  android_12:
+    color: "#0F5F5C"
+    image: assets/logo/splash_android12.png
+  fullscreen: false
