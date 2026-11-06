@@ -267,6 +267,19 @@ class AdminApi {
   Future<List<Map<String, dynamic>>> offers() => _list('/admin/offers');
   Future<void> createOffer(Map<String, dynamic> body) => client.call((d) => d.post('/admin/offers', data: body), (_) {});
   Future<void> updateOffer(int id, Map<String, dynamic> body) => client.call((d) => d.patch('/admin/offers/$id', data: body), (_) {});
+  Future<List<Map<String, dynamic>>> customers({String q = '', int offset = 0}) => client.call(
+        (d) => d.get('/admin/customers', queryParameters: {if (q.isNotEmpty) 'q': q, 'offset': offset}),
+        (j) => (j as List).cast<Map<String, dynamic>>(),
+      );
+
+  Future<Map<String, dynamic>> customerDetail(int id) =>
+      client.call((d) => d.get('/admin/customers/$id'), (j) => j as Map<String, dynamic>);
+
+  Future<void> blockCustomer(int id, {required bool block}) =>
+      client.call((d) => d.post('/admin/customers/$id/${block ? 'block' : 'unblock'}'), (_) {});
+
+  Future<void> deleteCustomer(int id) => client.call((d) => d.delete('/admin/customers/$id'), (_) {});
+
   Future<void> deleteOffer(int id) => client.call((d) => d.delete('/admin/offers/$id'), (_) {});
 
   Future<void> savePickupPoint(Map<String, dynamic> body, {int? id}) => client.call(

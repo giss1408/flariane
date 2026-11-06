@@ -5,11 +5,12 @@ from datetime import timedelta
 
 from anyio import to_thread
 from limits import parse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.enums import OrderStatus
 from app.errors import BadRequest, Conflict, DomainError, TooManyRequests
-from app.models import Customer
+from app.models import Customer, Order, RefreshToken
 from app.ratelimit import limiter
 from app.services import loyalty
 from app.security.tokens import utcnow
@@ -97,6 +98,8 @@ async def login(db: AsyncSession, raw_phone: str, password: str) -> Customer:
     if customer is None or customer.anonymised_at is not None or not customer.password_hash or not ok:
         limiter().hit(FAILED_LOGIN_LIMIT, key)
         raise InvalidCredentials("invalid_credentials")
+    if customer.blocked_at is not None:
+        raise InvalidCredentials("account_blocked")
     if customer.must_change_password and customer.temp_password_expires_at and customer.temp_password_expires_at < utcnow():
         raise InvalidCredentials("temp_password_expired")  # only said once the password itself was right
     return customer
@@ -111,6 +114,27 @@ async def change_password(customer: Customer, current: str, new: str) -> None:
     customer.password_reset_requested_at = customer.temp_password_expires_at = None
 
 
+async def revoke_sessions(db: AsyncSession, customer_id: int) -> None:
+    for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer_id, RefreshToken.revoked_at.is_(None)))).all():
+        t.revoked_at = utcnow()
+
+
+async def anonymise(db: AsyncSession, customer: Customer) -> None:
+    """Erase the identity. Orders and payments stay for accounting, detached from any identity."""
+    open_statuses = {OrderStatus.PAID, OrderStatus.PURCHASED, OrderStatus.IN_TRANSIT, OrderStatus.ARRIVED,
+                     OrderStatus.READY_FOR_PICKUP, OrderStatus.REFUND_PENDING}
+    if await db.scalar(select(func.count()).select_from(Order).where(Order.customer_id == customer.id, Order.status.in_(open_statuses))):
+        raise Conflict("orders_in_progress")
+    customer.display_name, customer.phone_enc, customer.phone_hash, customer.password_hash = None, None, None, None
+    customer.location_commune, customer.location_enc = None, None
+    customer.password_reset_requested_at = customer.temp_password_expires_at = None
+    customer.anonymised_at = utcnow()
+    for o in (await db.scalars(select(Order).where(Order.customer_id == customer.id))).all():
+        o.source_cart_url, o.submitted_links, o.customer_note = None, [], None
+        o.delivery_commune, o.delivery_location_enc = None, None
+    await revoke_sessions(db, customer.id)
+
+
 RESET_REQUEST_COOLDOWN = timedelta(hours=1)
 TEMP_PASSWORD_TTL = timedelta(hours=24)
 
@@ -119,7 +143,7 @@ async def request_password_reset(db: AsyncSession, phone: str) -> Customer | Non
     """Marks the account as waiting for an admin. Returns the customer only when the admins should be notified
     (not for unknown numbers, nor for a repeated request within the hour)."""
     customer = await db.scalar(select(Customer).where(Customer.phone_hash == phone_hash(phone)))
-    if customer is None or customer.anonymised_at is not None or not customer.password_hash:
+    if customer is None or customer.anonymised_at is not None or customer.blocked_at is not None or not customer.password_hash:
         return None
     now = utcnow()
     if customer.password_reset_requested_at and now - customer.password_reset_requested_at < RESET_REQUEST_COOLDOWN:

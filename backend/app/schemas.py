@@ -70,6 +70,30 @@ class TempPasswordOut(BaseModel):
     url: str | None = None  # wa.me link with the message, to send from the admin's own WhatsApp
 
 
+class CustomerRowOut(BaseModel):
+    id: int
+    display_name: str | None
+    phone_masked: str
+    created_at: datetime
+    phone_verified: bool
+    blocked: bool
+    orders_count: int
+
+
+class CustomerOrderOut(BaseModel):
+    id: int
+    public_ref: str
+    status: str
+    total_xof: int | None
+    created_at: datetime
+
+
+class CustomerDetailOut(CustomerRowOut):
+    referral_code: str | None
+    loyalty_points: int
+    recent_orders: list[CustomerOrderOut]
+
+
 class PasswordResetRequestIn(In):
     phone: Annotated[str, StringConstraints(max_length=30)]
 

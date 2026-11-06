@@ -50,6 +50,7 @@ const quoteStatusLabels = {
 
 /// Server error codes -> French messages for the admin.
 const errorMessages = {
+  'orders_in_progress': 'Une commande est payée ou en cours : suppression impossible tant qu’elle n’est pas terminée.',
   'invalid_credentials': 'Email, mot de passe ou code incorrect.',
   'rate_limited': 'Trop de tentatives. Réessayez dans quelques minutes.',
   'unknown_device': 'Appareil inconnu. Reconnectez-vous pour l’enregistrer.',

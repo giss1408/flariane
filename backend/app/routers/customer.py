@@ -188,18 +188,7 @@ async def export_me(customer: Customer = authed, db: AsyncSession = Depends(get_
 @router.delete("/me", status_code=204)
 async def delete_me(request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> None:
     """Anonymise the customer. Orders and payments stay for accounting, detached from any identity."""
-    open_statuses = {OrderStatus.PAID, OrderStatus.PURCHASED, OrderStatus.IN_TRANSIT, OrderStatus.ARRIVED,
-                     OrderStatus.READY_FOR_PICKUP, OrderStatus.REFUND_PENDING}
-    if await db.scalar(select(func.count()).select_from(Order).where(Order.customer_id == customer.id, Order.status.in_(open_statuses))):
-        raise Conflict("orders_in_progress")
-    customer.display_name, customer.phone_enc, customer.phone_hash, customer.password_hash = None, None, None, None
-    customer.location_commune, customer.location_enc = None, None
-    customer.anonymised_at = utcnow()
-    for o in (await db.scalars(select(Order).where(Order.customer_id == customer.id))).all():
-        o.source_cart_url, o.submitted_links, o.customer_note = None, [], None
-        o.delivery_commune, o.delivery_location_enc = None, None
-    for t in (await db.scalars(select(RefreshToken).where(RefreshToken.subject_type == "customer", RefreshToken.subject_id == customer.id))).all():
-        t.revoked_at = utcnow()
+    await customer_auth.anonymise(db, customer)
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.anonymised", ip=client_ip(request))
     await db.commit()
 

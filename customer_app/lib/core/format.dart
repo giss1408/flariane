@@ -71,6 +71,7 @@ String? nextStep(String status) => switch (status) {
 const errorMessages = {
   'invalid_phone': 'Numéro ivoirien à 10 chiffres attendu (01, 05 ou 07…).',
   'invalid_credentials': 'Numéro ou mot de passe incorrect.',
+  'account_blocked': 'Ton compte est suspendu. Écris-nous sur WhatsApp pour en savoir plus.',
   'temp_password_expired': 'Ce mot de passe temporaire a expiré. Touche « Mot de passe oublié ? » pour en recevoir un nouveau.',
   'login_locked': 'Trop d’essais. Réessayez dans 15 minutes.',
   'reset_rate_limited': 'Trop de demandes. Réessaie dans une heure ou écris-nous sur WhatsApp.',

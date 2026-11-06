@@ -66,6 +66,8 @@ class Customer(TimestampMixin, Base):
     password_reset_requested_at: Mapped[datetime | None] = _ts()
     # An admin-issued temporary password stops working after this; cleared once she sets her own.
     temp_password_expires_at: Mapped[datetime | None] = _ts()
+    # A super admin blocked the account: no login, no API access. Orders and data are kept.
+    blocked_at: Mapped[datetime | None] = _ts()
 
 
 class AdminUser(TimestampMixin, Base):
