@@ -19,7 +19,7 @@ from app.security.crypto import encrypt, hash_password, phone_hash, random_token
 # Ivorian mobile numbers since 2021: 10 digits, 01 (Moov), 05 (MTN), 07 (Orange).
 _LOCAL_CI = re.compile(r"^0[157]\d{8}$")
 # Bump when the privacy policy or the consent wording changes: customers are asked again.
-CONSENT_VERSION = "2026-10-22"
+CONSENT_VERSION = "2026-11-06"
 FAILED_LOGIN_LIMIT = parse("5/15minutes")  # per phone number: CGNAT makes IP limits useless
 _DUMMY_HASH = hash_password(random_token())
 

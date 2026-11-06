@@ -197,6 +197,16 @@ class CustomerApi {
 
   Future<void> deleteMe() => _call(() => dio.delete('/me'), (_) {});
 
+  /// Everything we hold about her (law 2013-450): name, phone, orders.
+  Future<Map<String, dynamic>> myData() => _call(() => dio.get('/me/export'), (j) => j as Map<String, dynamic>);
+
+  /// Legal texts: public, kept for offline reading.
+  Future<List<LegalDoc>> legalDocuments() =>
+      _cached('legal.list', '/legal/documents', (j) => (j as List).cast<Map<String, dynamic>>().map(LegalDoc.fromJson).toList());
+
+  Future<LegalDoc> legalDocument(String slug) =>
+      _cached('legal.$slug', '/legal/documents/$slug', (j) => LegalDoc.fromJson(j as Map<String, dynamic>));
+
   /// Public info (no auth): next departure, payment mode, Wave number.
   Future<Map<String, dynamic>> publicInfo() => _call(() => dio.get('/public/info'), (j) => j as Map<String, dynamic>);
 

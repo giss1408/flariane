@@ -28,14 +28,6 @@ void showShareHelp(BuildContext context) => showModalBottomSheet<void>(
       builder: (_) => const _ShareHelp(),
     );
 
-/// How to reach the team, then a button that does it.
-void showAskHelp(BuildContext context) => showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _AskHelp(),
-    );
-
 class _ShareHelp extends StatelessWidget {
   const _ShareHelp();
 
@@ -80,15 +72,12 @@ class _ShareHelp extends StatelessWidget {
 }
 
 class _StepList extends StatelessWidget {
-  const _StepList(this.steps, {this.shrinkWrap = false});
+  const _StepList(this.steps);
 
   final List<String> steps;
 
-  /// True when placed in a content-sized parent (no bounded height).
-  final bool shrinkWrap;
-
   @override
-  Widget build(BuildContext context) => ListView(shrinkWrap: shrinkWrap, physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null, padding: const EdgeInsets.all(16), children: [
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(16), children: [
         for (final (i, s) in steps.indexed)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
@@ -103,32 +92,6 @@ class _StepList extends StatelessWidget {
             ]),
           ),
       ]);
-}
-
-class _AskHelp extends ConsumerWidget {
-  const _AskHelp();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Poser une question à l’équipe', style: display(22, weight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            const _StepList(shrinkWrap: true, [
-              'Touche le bouton vert « Une question ? » en bas de l’écran d’accueil ou d’une commande.',
-              'WhatsApp s’ouvre avec un message déjà commencé (et le numéro de ta commande).',
-              'Écris ta question et envoie : l’équipe Flariane te répond sur WhatsApp.',
-            ]),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, minimumSize: const Size.fromHeight(50)),
-              icon: const Icon(Icons.chat_rounded),
-              label: const Text('Écrire à l’équipe sur WhatsApp'),
-              onPressed: () => askOnWhatsApp(context, ref),
-            ),
-          ]),
-        ),
-      );
 }
 
 /// Always-visible "Une question ?" button, placed above the bottom safe area.

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/providers.dart';
@@ -9,6 +8,7 @@ import '../../core/theme.dart';
 import '../../widgets/consent_tick.dart';
 import '../../widgets/help.dart';
 import '../../widgets/logo.dart';
+import '../legal/legal_doc_screen.dart';
 
 /// Sign in or create an account with an Ivorian phone number and a password.
 class LoginScreen extends ConsumerStatefulWidget {
@@ -150,10 +150,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: () => showDialog<void>(context: context, builder: (_) => _ForgotPasswordDialog(phone: _phone.text.trim())),
                         child: const Text('Mot de passe oublié ?'),
                       ),
-                    TextButton(
-                      onPressed: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
-                      child: Text('Confidentialité', style: TextStyle(color: context.pal.muted)),
-                    ),
+                    Wrap(alignment: WrapAlignment.center, children: [
+                      for (final (slug, label) in const [('conditions', 'Conditions'), ('confidentialite', 'Confidentialité'), ('mentions-legales', 'Mentions légales')])
+                        TextButton(
+                          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LegalDocScreen(slug: slug, title: label))),
+                          child: Text(label, style: TextStyle(color: context.pal.muted)),
+                        ),
+                    ]),
                   ]),
                 ),
               ),

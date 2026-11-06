@@ -119,7 +119,8 @@ dependency_overrides:
 flutter_native_splash:
   color: "#B5164F"
   image: assets/splash/logo.png
+  # Android 12+ crops the splash icon to a circle (middle 2/3): a smaller copy keeps the gold star visible.
   android_12:
     color: "#B5164F"
-    image: assets/splash/logo.png
+    image: assets/splash/logo_android12.png
   fullscreen: false

@@ -16,6 +16,7 @@ import '../../widgets/offer_banner.dart';
 import '../../widgets/wax.dart';
 import '../account/account_screen.dart';
 import '../account/location_screen.dart';
+import '../account/loyalty_screen.dart';
 import 'new_order_screen.dart';
 import 'order_screen.dart';
 
@@ -90,6 +91,7 @@ class HomeScreen extends ConsumerWidget {
         ref.invalidate(ordersProvider);
         ref.invalidate(nextDepartureProvider);
         ref.invalidate(publicInfoProvider); // offers come with it
+        ref.invalidate(loyaltyProvider);
       },
       child: Scaffold(
       appBar: FlarianeHeader(
@@ -107,6 +109,7 @@ class HomeScreen extends ConsumerWidget {
         onRefresh: () {
           ref.invalidate(nextDepartureProvider);
           ref.invalidate(publicInfoProvider); // offers come with it
+          ref.invalidate(loyaltyProvider);
           return ref.refresh(ordersProvider.future);
         },
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
@@ -178,12 +181,14 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// First-timers often don't know where SHEIN/Temu hide "share", or how to reach us.
-class _HelpRow extends StatelessWidget {
+/// First-timers often don't know where SHEIN/Temu hide "share"; the second card leads to the points (the green
+/// "Une question ?" button already covers contacting us).
+class _HelpRow extends ConsumerWidget {
   const _HelpRow();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balance = ref.watch(loyaltyProvider).valueOrNull?.balance ?? 0;
     Widget tile(IconData icon, String title, String sub, VoidCallback onTap) => Expanded(
           child: Material(
             color: context.pal.card,
@@ -208,7 +213,8 @@ class _HelpRow extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         tile(Icons.ios_share_rounded, 'Comment partager mon panier', 'SHEIN ou Temu, pas à pas', () => showShareHelp(context)),
         const SizedBox(width: 10),
-        tile(Icons.help_outline_rounded, 'Poser une question', 'Comment joindre l’équipe', () => showAskHelp(context)),
+        tile(Icons.stars_rounded, balance > 0 ? 'Mes points : $balance' : 'Gagne des points', 'Invite une amie',
+            () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoyaltyScreen()))),
       ]),
     );
   }

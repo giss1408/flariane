@@ -65,6 +65,9 @@ final offersProvider = FutureProvider.autoDispose<List<Offer>>((ref) async {
     return const [];
   }
 });
+final legalDocsProvider = FutureProvider.autoDispose<List<LegalDoc>>((ref) => ref.watch(apiProvider).legalDocuments());
+final legalDocProvider = FutureProvider.autoDispose.family<LegalDoc, String>((ref, slug) => ref.watch(apiProvider).legalDocument(slug));
+final myDataProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(apiProvider).myData());
 final loyaltyProvider = FutureProvider.autoDispose<Loyalty>((ref) => ref.watch(apiProvider).loyalty());
 final meProvider = FutureProvider.autoDispose<Me>((ref) => ref.watch(apiProvider).me());
 

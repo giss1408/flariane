@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/logo.dart';
 import '../auth/login_screen.dart';
+import '../legal/legal_hub_screen.dart';
 import 'location_screen.dart';
 import 'loyalty_screen.dart';
 
@@ -66,9 +66,10 @@ class AccountScreen extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('Confidentialité'),
-              onTap: () => launchUrl(Uri.parse('$apiBaseUrl/legal/confidentialite'), mode: LaunchMode.externalApplication),
+              leading: const Icon(Icons.gavel_rounded),
+              title: const Text('Infos et légal'),
+              subtitle: const Text('Conditions, remboursement, confidentialité, mes données'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LegalHubScreen())),
             ),
             ListTile(
               leading: Icon(Icons.delete_outline_rounded, color: context.pal.danger),

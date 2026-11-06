@@ -316,3 +316,44 @@ class Loyalty {
 
   bool canRedeemOn(Quote q) => balance >= redeemPoints && discountFor(q.feeXof) > 0;
 }
+
+/// One legal text (terms, refund policy, privacy…): a plain-language summary, then the full text in sections.
+class LegalDoc {
+  LegalDoc({required this.slug, required this.title, required this.icon, required this.summary, required this.updated, this.sections = const []});
+
+  factory LegalDoc.fromJson(Map<String, dynamic> j) => LegalDoc(
+        slug: j['slug'] as String,
+        title: j['title'] as String,
+        icon: j['icon'] as String? ?? '',
+        summary: ((j['summary'] as List?) ?? []).cast<String>(),
+        updated: j['updated'] as String? ?? '',
+        sections: ((j['sections'] as List?) ?? []).cast<Map<String, dynamic>>().map(LegalSection.fromJson).toList(),
+      );
+
+  final String slug;
+  final String title;
+  final String icon; // route | description | undo | privacy | business
+  final List<String> summary;
+  final String updated; // ISO date
+  final List<LegalSection> sections;
+
+  /// 2026-11-06 → 06/11/2026
+  String get updatedLabel {
+    final p = updated.split('-');
+    return p.length == 3 ? '${p[2]}/${p[1]}/${p[0]}' : updated;
+  }
+}
+
+class LegalSection {
+  LegalSection({required this.heading, this.paragraphs = const [], this.bullets = const []});
+
+  factory LegalSection.fromJson(Map<String, dynamic> j) => LegalSection(
+        heading: j['heading'] as String,
+        paragraphs: ((j['paragraphs'] as List?) ?? []).cast<String>(),
+        bullets: ((j['bullets'] as List?) ?? []).cast<String>(),
+      );
+
+  final String heading;
+  final List<String> paragraphs;
+  final List<String> bullets;
+}
