@@ -128,7 +128,7 @@ class _Rules extends StatelessWidget {
             const Text('Comment ça marche', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text('• +${l.pointsPerOrder} pts par commande retirée'),
-            Text('• +${l.pointsReferralSignup} pt par amie parrainée'),
+            Text('• +${l.pointsReferralSignup} ${l.pointsReferralSignup > 1 ? 'pts' : 'pt'} par amie parrainée'),
             Text('• +${l.pointsReferredOrder} pts quand elle retire sa première commande'),
             Text('• ${l.redeemPoints} pts = −${l.discountPercent} % sur les frais de service d’une commande'),
           ]),
