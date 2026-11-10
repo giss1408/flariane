@@ -110,19 +110,22 @@ def _local_sig(key: str, exp: int) -> str:
 
 
 def signed_url(key: str) -> str:
+    """Short-lived link to a stored file, always served by this API (see routers/files.py).
+
+    In S3/R2 mode the API reads the object itself instead of handing phones a direct bucket link: a
+    presigned R2 URL could not be loaded by the apps in production, and the screenshots are small."""
     s = get_settings()
-    if s.storage_mode == "s3":
-        return _s3().generate_presigned_url(
-            "get_object", Params={"Bucket": s.s3_bucket, "Key": key}, ExpiresIn=SIGNED_URL_SECONDS
-        )
     # Expiry rounded to the hour: the URL stays identical within the hour, so phones reuse cached copies.
     exp = (int(time.time()) // 3600 + 2) * 3600
     return f"{s.api_base_url}/files/{key}?exp={exp}&sig={_local_sig(key, exp)}"
 
 
-def read_local_signed(key: str, exp: int, sig: str) -> bytes | None:
+def read_signed(key: str, exp: int, sig: str) -> bytes | None:
+    """File bytes if the signature is valid and not expired; None otherwise (unknown file included)."""
     if exp < time.time() or not hmac.compare_digest(_local_sig(key, exp), sig):
         return None
+    if get_settings().storage_mode == "s3":
+        return get(key)
     base = Path(get_settings().storage_local_dir).resolve()
     path = (base / key).resolve()
     if base not in path.parents or not path.is_file():
