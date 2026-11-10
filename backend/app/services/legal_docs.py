@@ -9,7 +9,7 @@ from typing import Any
 
 from app.config import Settings
 
-UPDATED = "2026-11-06"
+UPDATED = "2026-11-10"
 
 
 @dataclass
@@ -178,6 +178,9 @@ def documents(cfg: Settings, biz: dict[str, Any]) -> dict[str, Doc]:
                 "Paiement : moyen choisi (Wave, Orange Money, Moov) et la capture d’écran du paiement. Nous ne recevons jamais tes codes ni tes identifiants de paiement.",
                 "Adresse à Abidjan : commune, quartier, repère et, si tu l’acceptes, ta position GPS.",
                 "Fidélité : tes points et ton code de parrainage.",
+                "Rapports de plantage : si l’application plante, un rapport technique est envoyé à notre prestataire Sentry "
+                "(modèle de téléphone, version du système et de l’app, détail technique de l’erreur). Il ne contient ni ton nom, "
+                "ni ton numéro, ni de capture d’écran, et il n’est pas lié à ton compte.",
             ]),
             Section("Utilisation", paragraphs=[
                 "Ces données servent uniquement à vérifier ton numéro, établir tes devis, passer tes commandes, organiser la livraison "
@@ -187,7 +190,8 @@ def documents(cfg: Settings, biz: dict[str, Any]) -> dict[str, Doc]:
             Section("Partage", paragraphs=[
                 "Nous communiquons au transitaire et au point de retrait uniquement ce qui est nécessaire à la livraison "
                 "(référence de commande, prénom). Les données sont hébergées chez nos prestataires techniques (hébergement du serveur "
-                "et de la base de données) dans l’Union européenne.",
+                "et de la base de données) dans l’Union européenne. Les rapports de plantage sont traités par Sentry, également dans "
+                "l’Union européenne.",
             ]),
             Section("Sécurité", paragraphs=[
                 "Ton numéro de téléphone et ton adresse sont chiffrés dans notre base de données. Les échanges avec l’application "
