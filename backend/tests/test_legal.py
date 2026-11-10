@@ -35,6 +35,12 @@ async def test_web_pages_share_the_same_text(client: AsyncClient) -> None:
     assert (await client.get("/legal/nope")).status_code == 404
 
 
+async def test_support_page_for_the_stores(client: AsyncClient) -> None:
+    r = await client.get("/legal/support")
+    assert r.status_code == 200
+    assert 'href="mailto:flariane@regisse.com"' in r.text and "Aide et contact" in r.text
+
+
 async def test_contact_email_is_the_configured_one(client: AsyncClient) -> None:
     assert get_settings().contact_email == "flariane@regisse.com"
     page = (await client.get("/legal/confidentialite")).text
