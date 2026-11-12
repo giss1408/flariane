@@ -1,9 +1,10 @@
 # Fiche magasin — Flariane (application cliente)
 
-Identifiant : `com.regisse.flariane` (Android et iOS) · Version : 1.0.0 (1) · Catégorie : **Shopping**
+Identifiant : `com.regisse.flariane` (Android et iOS) · Version : 1.0.1 (7) · Catégorie : **Shopping**
 Pays : Côte d'Ivoire (+ France si tu veux tester depuis l'Europe) · Langue principale : **Français**
-Confidentialité : https://flariane-api.onrender.com/legal/confidentialite
-Suppression de compte : https://flariane-api.onrender.com/legal/suppression-compte
+Confidentialité : https://flariane-api.regisse.com/legal/confidentialite
+Suppression de compte : https://flariane-api.regisse.com/legal/suppression-compte
+Support : https://flariane-api.regisse.com/legal/support · Copyright : 2026 Regisse · E-mail de contact : flariane@regisse.com
 
 ## Textes
 
@@ -12,18 +13,18 @@ Suppression de compte : https://flariane-api.onrender.com/legal/suppression-comp
 **Sous-titre App Store** (30) : `Tes paniers livrés à Abidjan`
 
 **Description courte Google Play** (80) :
-`Envoie ton panier SHEIN ou Temu, reçois ton devis en FCFA, retire à Abidjan.`
+`Envoie ton panier en ligne, reçois ton devis en FCFA, retire à Abidjan.`
 
 **Texte promotionnel App Store** (170) :
-`Remplis ton panier dans l'app, partage-le avec Flariane, reçois ton prix en FCFA et paie avec Wave, Orange Money ou Moov Money.`
+`Remplis ton panier, envoie le lien à Flariane, reçois ton prix en FCFA et paie avec Wave, Orange Money ou Moov Money.`
 
 **Description complète** (Play 4000 / App Store 4000) :
 ```
-Flariane, c'est le moyen simple de recevoir à Abidjan tes paniers SHEIN et Temu.
+Flariane, c'est le moyen simple de recevoir à Abidjan tes paniers de boutiques en ligne.
 
 COMMENT ÇA MARCHE
-1. Remplis ton panier dans l'app SHEIN ou Temu, comme d'habitude.
-2. Partage-le avec Flariane (Panier → Partager) ou colle le lien.
+1. Remplis ton panier dans l'app de ta boutique en ligne, comme d'habitude.
+2. Copie le lien de ton panier et colle-le dans Flariane. (Android : tu peux aussi utiliser Partager → Flariane.)
 3. Reçois ton devis en FCFA, avec la capture de ton panier : tu sais exactement ce que nous commandons.
 4. Paie avec Wave, Orange Money ou Moov Money et envoie la capture de ton paiement.
 5. Suis ta commande étape par étape et retire ton colis à Abidjan avec ton code de retrait.
@@ -36,14 +37,17 @@ POURQUOI FLARIANE
 • Une question ? Écris-nous sur WhatsApp depuis l'app.
 • Retrait sécurisé avec un code à 6 chiffres.
 
-Flariane est un service indépendant d'achat et de livraison. Flariane n'est ni affilié à SHEIN ni à Temu,
-ni approuvé par ces marques.
+Flariane est un service indépendant d'achat et de livraison. Flariane n'est affilié à aucune boutique en ligne
+et n'est approuvé par aucune marque.
 ```
 
 **Mots-clés App Store** (100) :
-`shein,temu,abidjan,côte d'ivoire,livraison,colis,mode,wave,orange money,moov,achat,panier`
+`abidjan,côte d'ivoire,livraison,colis,mode,wave,orange money,moov,achat,panier,commande,transport`
 
-**Nouveautés 1.0.0** : `Première version de Flariane.`
+Pas de nom de marque tierce (SHEIN, Temu…) dans les mots-clés, le sous-titre ou la description : règle 2.3.7 d'Apple
+et `CLAUDE.md`. Les noms peuvent apparaître dans les notes de revue, pas dans les textes publics.
+
+**Nouveautés 1.0.1** : `Première version de Flariane.`
 
 ## Classification
 - Google Play : questionnaire IARC → pas de violence, pas de contenu sensible, achats de biens physiques → **Tout public / 3+**.
@@ -58,18 +62,20 @@ ni approuvé par ces marques.
 | Position approximative / précise | Oui | Non | Fonctionnalités de l'app (livraison) | Oui |
 | Photos (captures panier / paiement) | Oui | Non | Fonctionnalités de l'app | Oui |
 | Historique d'achats (commandes) | Oui | Non | Fonctionnalités de l'app | Non |
+| Journaux de plantage et diagnostics (Sentry) | Oui | Non | Analyse / stabilité de l'app | Non |
 
 Chiffrées en transit : **Oui**. L'utilisateur peut demander la suppression : **Oui** (dans l'app + URL ci-dessus).
-Pas de publicité, pas de suivi, pas de SDK d'analyse.
+Pas de publicité, pas de suivi. Rapports de plantage via Sentry (UE), sans corps de requête, IP ni capture d'écran.
 
 ## App Store — Confidentialité de l'app
 Données liées à l'identité, **non utilisées pour le suivi** : Coordonnées (téléphone, nom, adresse),
-Position (précise, facultative), Contenu utilisateur (photos), Achats (historique).
+Position (précise, facultative), Contenu utilisateur (photos), Achats (historique),
+Diagnostics (données de plantage, non liées à l'identité).
 Suivi (ATT) : **Non**.
 
 ## Compte de démonstration pour les testeurs Apple / Google (obligatoire)
 Crée une cliente de test **avec numéro vérifié** (Admin → Inscriptions à vérifier → envoyer le code) puis indique :
-- Numéro : `07 00 00 00 01` (exemple) · Mot de passe : `<à définir>`
+- Numéro : `0700000099` · Mot de passe : saisi dans App Store Connect et Play Console (jamais versionné ici)
 - Note : « Pour tester, envoyez un lien de panier SHEIN (ex. https://onelink.shein.com/…).
   Le devis est établi manuellement par notre équipe sous 2 h en journée (heure d'Abidjan). »
 
