@@ -399,11 +399,13 @@ async def archive_order(order_id: int, request: Request, admin: AdminContext = o
 
 @router.delete("/{order_id}")
 async def delete_order(
-    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid", "payment_problem"] = Query(), admin: AdminContext = operator,
+    order_id: int, request: Request, reason: Literal["wrong_link", "unpaid", "payment_problem", "force"] = Query(), admin: AdminContext = operator,
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str | None]:
     """Permanent deletion (see operations.delete_order). For a wrong link, returns the WhatsApp
     message telling the customer to send her cart again: written before the order is gone."""
+    if reason == "force" and admin.role != AdminRole.SUPER_ADMIN:
+        raise Forbidden("forbidden")
     order = await db.get(Order, order_id)
     customer = await db.get(Customer, order.customer_id) if order else None
     if order is None or customer is None:

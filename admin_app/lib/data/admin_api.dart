@@ -175,7 +175,7 @@ class AdminApi {
         (j) => (j as Map)['url'] as String,
       );
 
-  /// Permanent deletion. [reason]: `wrong_link` | `unpaid` | `payment_problem`. Returns the wa.me link for a wrong link.
+  /// Permanent deletion. [reason]: `wrong_link` | `unpaid` | `payment_problem` | `force` (super admin). Returns the wa.me link for a wrong link.
   Future<String?> deleteOrder(int orderId, String reason) => client.call(
         (d) => d.delete('/admin/orders/$orderId', queryParameters: {'reason': reason}),
         (j) => (j as Map)['url'] as String?,

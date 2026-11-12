@@ -500,6 +500,7 @@ class AdminMe {
 
   bool get canOperate => role == 'OPERATOR' || role == 'SUPER_ADMIN';
   bool get isPickupAgent => role == 'PICKUP';
+  bool get isSuperAdmin => role == 'SUPER_ADMIN';
 }
 
 class PickupDeskOrder {
