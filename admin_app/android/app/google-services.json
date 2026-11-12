@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "414886596307",
+    "project_id": "flariane",
+    "storage_bucket": "flariane.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414886596307:android:e8bdf5b15af8b965ad8e26",
+        "android_client_info": {
+          "package_name": "com.regisse.flariane.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCaXGTVEhqhCSbPe1q6LFk9XR6vdj4wjI4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414886596307:android:72653d03c09cc764ad8e26",
+        "android_client_info": {
+          "package_name": "com.regisse.flariane.admin.integration"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCaXGTVEhqhCSbPe1q6LFk9XR6vdj4wjI4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
