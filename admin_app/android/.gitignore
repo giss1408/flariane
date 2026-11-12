@@ -11,3 +11,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase client config contains a Google API key (GitHub secret scanning flags it); keep local, see README
+app/google-services.json
+**/GoogleService-Info.plist
