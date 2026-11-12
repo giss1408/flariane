@@ -45,8 +45,10 @@ class OrderScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(order.valueOrNull?.publicRef ?? 'Commande'),
         actions: [
-          if ((me?.canOperate ?? false) && order.valueOrNull != null && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid || order.value!.canDeletePaymentProblem))
-            _DeleteMenu(order: order.value!),
+          if (order.valueOrNull != null &&
+              ((me?.isSuperAdmin ?? false) ||
+                  ((me?.canOperate ?? false) && (order.value!.canDeleteWrongLink || order.value!.canDeleteUnpaid || order.value!.canDeletePaymentProblem))))
+            _DeleteMenu(order: order.value!, superAdmin: me?.isSuperAdmin ?? false),
         ],
       ),
       body: order.when(
@@ -792,9 +794,10 @@ class _RefundSection extends ConsumerWidget {
 }
 
 class _DeleteMenu extends ConsumerWidget {
-  const _DeleteMenu({required this.order});
+  const _DeleteMenu({required this.order, required this.superAdmin});
 
   final OrderDetail order;
+  final bool superAdmin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => PopupMenuButton<String>(
@@ -806,6 +809,8 @@ class _DeleteMenu extends ConsumerWidget {
             const PopupMenuItem(value: 'unpaid', child: Text('Supprimer (non payée)')),
           if (order.canDeletePaymentProblem)
             const PopupMenuItem(value: 'payment_problem', child: Text('Problème de paiement · supprimer')),
+          if (superAdmin)
+            const PopupMenuItem(value: 'force', child: Text('Forcer la suppression (admin)')),
         ],
       );
 
@@ -817,7 +822,11 @@ class _DeleteMenu extends ConsumerWidget {
       body: wrongLink
           ? 'Le lien ne mène pas à un panier ${order.storeName} valide. La commande est supprimée définitivement, '
               'puis WhatsApp s’ouvre avec un message demandant à la cliente de renvoyer son panier.'
-          : reason == 'payment_problem'
+          : reason == 'force'
+              ? 'Suppression forcée, quel que soit l’état : la commande, ses devis, articles, captures, paiements, '
+                  'remboursements et achats sont effacés définitivement, y compris pour la cliente. '
+                  'Si de l’argent a été reçu, rembourse d’abord : cette action ne rend rien. Seule une trace d’audit reste.'
+              : reason == 'payment_problem'
               ? 'Problème de paiement (preuve fausse, illisible ou jamais confirmée). Aucun paiement n’est confirmé : '
                   'la commande est supprimée définitivement (devis, captures, articles) et disparaît aussi de l’app de la cliente.'
               : 'Commande non payée depuis plus de 3 jours. Elle est supprimée définitivement '

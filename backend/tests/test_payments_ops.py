@@ -348,3 +348,15 @@ async def test_payment_problem_delete_refused_once_paid(client: AsyncClient, cus
     ref, oid, _ = await _paid(client, customer, admin, pickup_point)
     r = await client.delete(f"/admin/orders/{oid}", params={"reason": "payment_problem"}, headers=admin.headers)
     assert r.status_code == 409
+
+
+async def test_force_delete_paid_order_super_admin_only(client: AsyncClient, customer: dict, admin: AdminFixture, pickup_point) -> None:  # type: ignore[no-untyped-def]
+    from tests.conftest import make_admin
+
+    ref, oid, _ = await _paid(client, customer, admin, pickup_point)
+    operator = await make_admin("OPERATOR", "op@flariane.ci")
+    assert (await client.delete(f"/admin/orders/{oid}", params={"reason": "force"}, headers=operator.headers)).status_code == 403
+    assert (await client.delete(f"/admin/orders/{oid}", params={"reason": "payment_problem"}, headers=admin.headers)).status_code == 409
+    r = await client.delete(f"/admin/orders/{oid}", params={"reason": "force"}, headers=admin.headers)
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/orders/{ref}", headers=customer)).status_code == 404
