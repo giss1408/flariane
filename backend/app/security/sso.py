@@ -1,7 +1,7 @@
 """Accept tokens from the platform `auth` service next to flariane's own (dual-accept, customers only).
 
-A token is mapped to a flariane Customer by the `ph` claim (`tel:+225...`) through the same keyed phone hash flariane
-already uses, so existing customers keep their orders and points. A phone unknown to flariane gets a customer row on
+A token is mapped to a flariane Customer by the `lid` claim (the customer's flariane id, set by auth for migrated accounts), else by
+the `ph` claim (`tel:+225...`) through the same keyed phone hash flariane already uses, so existing customers keep their orders and points. A phone unknown to flariane gets a customer row on
 first use (auth already verified the number and recorded consent at registration). Verification is local with the
 JWKS (algorithm pinned to EdDSA by regisse_kit.sso): an auth outage does not stop customers who hold a valid token.
 """
@@ -46,18 +46,28 @@ async def customer_from_token(db: AsyncSession, token: str) -> Customer | None:
     # customer app only, a real customer session, and not in the middle of a forced password change
     if p.app != "customer" or p.role != "customer" or p.must_change_password or not p.phone_key.startswith("tel:+"):
         return None
-    e164 = p.phone_key[4:]
-    ph = phone_hash(e164)
-    customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
-    if customer is None:
-        customer = Customer(phone_enc=encrypt(e164), phone_hash=ph, phone_verified_at=utcnow(), consent_at=utcnow(), consent_version=SSO_CONSENT_VERSION)
-        await loyalty.assign_referral_code(db, customer)
-        db.add(customer)
+    if p.legacy_id is not None:
+        # A migrated account: auth says which flariane customer this is. Trust the id, never the phone, so a number change in
+        # flariane (or in auth) cannot split her into two customers. An id that does not exist is refused, never re-created.
         try:
-            await db.commit()
-        except IntegrityError:  # two first requests at once: the other one created it
-            await db.rollback()
-            customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
+            customer = await db.get(Customer, int(p.legacy_id))
+        except ValueError:
+            return None
+        if customer is None:
+            return None
+    else:
+        e164 = p.phone_key[4:]
+        ph = phone_hash(e164)
+        customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
+        if customer is None:
+            customer = Customer(phone_enc=encrypt(e164), phone_hash=ph, phone_verified_at=utcnow(), consent_at=utcnow(), consent_version=SSO_CONSENT_VERSION)
+            await loyalty.assign_referral_code(db, customer)
+            db.add(customer)
+            try:
+                await db.commit()
+            except IntegrityError:  # two first requests at once: the other one created it
+                await db.rollback()
+                customer = await db.scalar(select(Customer).where(Customer.phone_hash == ph))
     if customer is None or customer.anonymised_at is not None or customer.blocked_at is not None:
         return None
     return customer

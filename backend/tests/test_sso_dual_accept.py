@@ -120,3 +120,29 @@ async def test_auth_outage_gives_401_not_500(client, monkeypatch, sso_on):
 
     monkeypatch.setattr(sso, "verifier", lambda: SsoVerifier(issuer=ISS, audience="flariane", jwks_fetch=down))
     assert (await client.get("/me", headers=bearer(token()))).status_code == 401
+
+
+async def test_legacy_id_wins_over_the_phone_so_a_number_change_cannot_split_a_customer(client, sso_on):
+    own = await login_customer(client)  # registered with E164
+    cid = (await client.get("/me", headers=own)).json()["id"]
+    # the token carries an OLD/other number but the right legacy id (she changed her number in flariane or auth)
+    r = await client.get("/me", headers=bearer(token(ph="tel:+2250701999999", lid=str(cid))))
+    assert r.status_code == 200 and r.json()["id"] == cid
+    assert len(await customers()) == 1  # nobody was created for the other number
+
+
+async def test_unknown_or_malformed_legacy_id_is_refused_and_never_provisioned(client, sso_on):
+    assert (await client.get("/me", headers=bearer(token(lid="999999")))).status_code == 401
+    assert (await client.get("/me", headers=bearer(token(lid="abc")))).status_code == 401
+    assert await customers() == []
+
+
+async def test_legacy_id_does_not_bypass_blocking_or_scope_checks(client, sso_on):
+    own = await login_customer(client)
+    cid = (await client.get("/me", headers=own)).json()["id"]
+    assert (await client.get("/me", headers=bearer(token(lid=str(cid), role="operator", app="admin")))).status_code == 401
+    assert (await client.get("/me", headers=bearer(token(lid=str(cid), mcp=True)))).status_code == 401
+    async with SessionLocal() as db:
+        await db.execute(update(Customer).values(blocked_at=func.now()))
+        await db.commit()
+    assert (await client.get("/me", headers=bearer(token(lid=str(cid))))).status_code == 401
