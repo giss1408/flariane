@@ -5,7 +5,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 # Shared platform kit (build context `kit` is declared in compose.platform.yaml). Pin by git tag once the kit has a remote.
 COPY --from=kit . /kit
-RUN pip install /kit
+RUN pip install "/kit[sso]"
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app

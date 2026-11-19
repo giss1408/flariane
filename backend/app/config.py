@@ -77,6 +77,14 @@ class Settings(BaseSettings):
     register_per_ip_hour: int = 5
     register_global_hour: int = 300
 
+    # SSO dual-accept (platform `auth` service). Off by default: flariane's own tokens keep working either way.
+    # When on, customer routes ALSO accept tokens issued by `auth` for audience "flariane" (customer app only;
+    # admin routes are unchanged for now). `sso_jwks_url` is fetched server-side and cached.
+    sso_enabled: bool = False
+    sso_issuer: str = ""
+    sso_jwks_url: str = ""
+    sso_audience: str = "flariane"
+
     # One-time creation of the first super admin over HTTP (hosts without a shell). Empty = disabled.
     setup_token: str = ""
 

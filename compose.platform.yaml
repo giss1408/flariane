@@ -28,7 +28,8 @@ services:
   worker:
     <<: *common
     container_name: flariane-worker
-    command: ["celery", "-A", "app.worker", "worker", "-B", "-l", "info", "--concurrency", "2"]
+    # beat schedule file in /tmp: the app dir is not writable by the non-root user (beat crashed silently without this)
+    command: ["celery", "-A", "app.worker", "worker", "-B", "-s", "/tmp/celerybeat-schedule", "-l", "info", "--concurrency", "2"]
     mem_limit: 384m
     cpus: 0.5
     depends_on:

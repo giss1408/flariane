@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.enums import ROLE_RANK, AdminRole
 from app.models import AdminDevice, AdminUser, Customer
+from app.security import sso
 from app.security.tokens import decode_access_token, utcnow
 
 bearer = HTTPBearer(auto_error=False)
@@ -41,9 +42,12 @@ async def current_customer(
         raise _unauthorized()
     try:
         claims = decode_access_token(creds.credentials, "customer")
+        customer = await db.get(Customer, claims.sub)
     except jwt.PyJWTError:
-        raise _unauthorized() from None
-    customer = await db.get(Customer, claims.sub)
+        # Not one of ours: dual-accept a platform `auth` token (no-op unless FLR_SSO_ENABLED).
+        customer = await sso.customer_from_token(db, creds.credentials)
+        if customer is None:
+            raise _unauthorized() from None
     if customer is None or customer.anonymised_at is not None or customer.blocked_at is not None:
         raise _unauthorized()
     request.state.rate_key = f"customer:{customer.id}"
