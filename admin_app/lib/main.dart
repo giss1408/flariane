@@ -76,6 +76,7 @@ class AuthGate extends ConsumerWidget {
       SessionStatus.loading => const Scaffold(body: Center(child: CircularProgressIndicator())),
       SessionStatus.loggedOut => const LoginScreen(),
       SessionStatus.devicePending => const DevicePendingScreen(),
+      SessionStatus.passwordChange => const NewPasswordScreen(),
       SessionStatus.locked => const LockScreen(),
       SessionStatus.loggedIn => const HomeShell(),
     };

@@ -5,13 +5,19 @@ import '../core/api_client.dart';
 import 'models.dart';
 
 class LoginResult {
-  LoginResult({required this.status, required this.deviceId, this.deviceSecret, this.accessToken, this.refreshToken});
+  LoginResult({required this.status, required this.deviceId, this.deviceSecret, this.accessToken, this.refreshToken, this.authAccessToken, this.authRefreshToken});
 
-  final String status; // ok | device_pending
+  /// ok | device_pending | password_change (auth only: a temporary password must be replaced before anything else)
+  final String status;
   final int deviceId;
   final String? deviceSecret;
   final String? accessToken;
   final String? refreshToken;
+
+  /// auth only: the auth session this login came from (the refresh token is kept to END it at logout; the access token
+  /// is only needed for the forced password change).
+  final String? authAccessToken;
+  final String? authRefreshToken;
 }
 
 class Tokens {
@@ -23,7 +29,7 @@ class Tokens {
 
 /// One method per backend route used by the app. Throws [ApiException].
 class AdminApi {
-  AdminApi(this.client, {Dio? authDio})
+  AdminApi(this.client, {Dio? authDio, this.authBaseUrl = '', Dio? authSvcDio})
       // Refresh goes through a bare Dio: refreshing inside the main client's queued error
       // interceptor would deadlock if the refresh itself failed.
       : _authDio = authDio ??
@@ -32,11 +38,25 @@ class AdminApi {
               contentType: 'application/json',
               connectTimeout: const Duration(seconds: 60),
               receiveTimeout: const Duration(seconds: 60),
-            ));
+            )),
+        _authSvc = authSvcDio ??
+            (authBaseUrl.isEmpty
+                ? null
+                : Dio(BaseOptions(
+                    baseUrl: authBaseUrl,
+                    contentType: 'application/json',
+                    connectTimeout: const Duration(seconds: 60),
+                    receiveTimeout: const Duration(seconds: 60),
+                  )));
 
   final ApiClient client;
   final Dio _authDio;
+  final String authBaseUrl;
+  final Dio? _authSvc;
+  bool get authMode => _authSvc != null;
 
+  /// With auth: sign in at auth first (password + authenticator code), then flariane exchanges the auth token for its own
+  /// device-bound session ([completeAuthLogin]). Without: the legacy flariane login.
   Future<LoginResult> login({
     required String email,
     required String password,
@@ -46,6 +66,30 @@ class AdminApi {
     int? deviceId,
     String? deviceSecret,
   }) async {
+    if (authMode) {
+      try {
+        final res = await _authSvc!.post('/v1/login', data: {
+          'email': email,
+          'password': password,
+          'product': 'flariane',
+          'app': 'admin',
+          if (totp.isNotEmpty) 'totp': totp,
+        });
+        final j = res.data as Map<String, dynamic>;
+        if (j['must_change_password'] == true) {
+          return LoginResult(status: 'password_change', deviceId: 0, authAccessToken: j['access_token'] as String, authRefreshToken: j['refresh_token'] as String);
+        }
+        return completeAuthLogin(
+            authAccessToken: j['access_token'] as String,
+            authRefreshToken: j['refresh_token'] as String,
+            deviceName: deviceName,
+            platform: platform,
+            deviceId: deviceId,
+            deviceSecret: deviceSecret);
+      } catch (e) {
+        throw toApiException(e);
+      }
+    }
     try {
       final res = await _authDio.post('/admin/auth/login', data: {
         'email': email,
@@ -70,6 +114,59 @@ class AdminApi {
     } catch (e) {
       throw toApiException(e);
     }
+  }
+
+  /// Exchanges an auth token for a flariane back-office session on this device. An unknown device is NOT approved by signing in
+  /// at auth: the answer is `device_pending` until a super admin approves it. A pending device leaves no auth session behind.
+  Future<LoginResult> completeAuthLogin({
+    required String authAccessToken,
+    required String authRefreshToken,
+    required String deviceName,
+    required String platform,
+    int? deviceId,
+    String? deviceSecret,
+  }) async {
+    try {
+      final res = await _authDio.post('/admin/auth/sso-login',
+          data: {
+            'device': {'device_id': deviceId, 'device_secret': deviceSecret, 'name': deviceName, 'platform': platform},
+          },
+          options: Options(headers: {'Authorization': 'Bearer $authAccessToken'}));
+      final j = res.data as Map<String, dynamic>;
+      final tokens = j['tokens'] as Map<String, dynamic>?;
+      final status = j['status'] as String;
+      if (status != 'ok') await authLogout(authRefreshToken);
+      return LoginResult(
+        status: status,
+        deviceId: j['device_id'] as int,
+        deviceSecret: j['device_secret'] as String?,
+        accessToken: tokens?['access_token'] as String?,
+        refreshToken: tokens?['refresh_token'] as String?,
+        authRefreshToken: status == 'ok' ? authRefreshToken : null,
+      );
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
+
+  /// Forced change of a temporary password at auth; returns a fresh auth session without the "must change" mark.
+  Future<({String access, String refresh})> changeAuthPassword({required String authAccessToken, required String authRefreshToken, required String current, required String next}) async {
+    try {
+      await _authSvc!.post('/v1/password/change',
+          data: {'current_password': current, 'new_password': next}, options: Options(headers: {'Authorization': 'Bearer $authAccessToken'}));
+      final res = await _authSvc.post('/v1/refresh', data: {'refresh_token': authRefreshToken});
+      return (access: res.data['access_token'] as String, refresh: res.data['refresh_token'] as String);
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
+
+  /// Ends the auth session (best effort): flariane then ends its own back-office session at the next refresh.
+  Future<void> authLogout(String authRefreshToken) async {
+    if (!authMode) return;
+    try {
+      await _authSvc!.post('/v1/logout', data: {'refresh_token': authRefreshToken});
+    } catch (_) {}
   }
 
   Future<Tokens> refresh({required String refreshToken, required int deviceId, required String deviceSecret}) async {

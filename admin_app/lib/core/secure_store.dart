@@ -11,6 +11,8 @@ class Keys {
   static const deviceId = 'device_id';
   static const deviceSecret = 'device_secret';
   static const refreshToken = 'refresh_token';
+  /// auth session refresh token, kept only to END the auth session at logout (flariane keeps its own device-bound session).
+  static const authRefreshToken = 'auth_refresh_token';
   static const email = 'email';
 }
 
@@ -26,7 +28,10 @@ class PlatformSecureStore implements SecureStore {
 
   /// Logout keeps the device registration (id + secret) so the device stays approved.
   @override
-  Future<void> clearSession() => _storage.delete(key: Keys.refreshToken);
+  Future<void> clearSession() async {
+    await _storage.delete(key: Keys.refreshToken);
+    await _storage.delete(key: Keys.authRefreshToken);
+  }
 }
 
 class MemorySecureStore implements SecureStore {
@@ -40,5 +45,8 @@ class MemorySecureStore implements SecureStore {
       value == null ? values.remove(key) : values[key] = value;
 
   @override
-  Future<void> clearSession() async => values.remove(Keys.refreshToken);
+  Future<void> clearSession() async {
+    values.remove(Keys.refreshToken);
+    values.remove(Keys.authRefreshToken);
+  }
 }

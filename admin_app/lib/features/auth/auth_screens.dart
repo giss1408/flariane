@@ -207,3 +207,97 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     );
   }
 }
+
+
+/// auth: the back-office account signed in with a temporary password. A new one is chosen here, then the sign-in goes on.
+class NewPasswordScreen extends ConsumerStatefulWidget {
+  const NewPasswordScreen({super.key});
+
+  @override
+  ConsumerState<NewPasswordScreen> createState() => _NewPasswordScreenState();
+}
+
+class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
+  final _form = GlobalKey<FormState>();
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_form.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(sessionProvider.notifier).setNewPassword(current: _current.text, next: _next.text);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.code == 'invalid_credentials' ? 'Mot de passe temporaire incorrect.' : e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Form(
+                  key: _form,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Icon(Icons.password_rounded, size: 56, color: AppColors.primary),
+                    const SizedBox(height: 16),
+                    Text('Nouveau mot de passe', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    const Text('Remplacez le mot de passe temporaire pour continuer.', textAlign: TextAlign.center),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _current,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Mot de passe temporaire'),
+                      validator: (v) => (v ?? '').isEmpty ? 'Requis' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _next,
+                      obscureText: true,
+                      autofillHints: const [AutofillHints.newPassword],
+                      decoration: const InputDecoration(labelText: 'Nouveau mot de passe', helperText: '8 caractères minimum'),
+                      validator: (v) => (v ?? '').length < 8 ? '8 caractères minimum' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _confirm,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Confirmer'),
+                      validator: (v) => v != _next.text ? 'Les mots de passe diffèrent' : null,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                    ],
+                    const SizedBox(height: 24),
+                    FilledButton(onPressed: _busy ? null : _submit, child: const Text('Enregistrer')),
+                    TextButton(onPressed: () => ref.read(sessionProvider.notifier).cancelPasswordChange(), child: const Text('Annuler')),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}

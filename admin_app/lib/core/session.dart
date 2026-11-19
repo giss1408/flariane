@@ -11,7 +11,8 @@ import 'api_client.dart';
 import 'config.dart';
 import 'secure_store.dart';
 
-enum SessionStatus { loading, loggedOut, devicePending, locked, loggedIn }
+/// passwordChange = signed in at auth with a temporary password: a new one must be chosen before anything else.
+enum SessionStatus { loading, loggedOut, devicePending, passwordChange, locked, loggedIn }
 
 @immutable
 class SessionState {
@@ -49,7 +50,7 @@ class LocalAuthUnlocker implements DeviceUnlocker {
 final secureStoreProvider = Provider<SecureStore>((_) => PlatformSecureStore());
 final unlockerProvider = Provider<DeviceUnlocker>((_) => LocalAuthUnlocker());
 final apiClientProvider = Provider<ApiClient>((_) => ApiClient(baseUrl: AppConfig.apiBaseUrl));
-final adminApiProvider = Provider<AdminApi>((ref) => AdminApi(ref.watch(apiClientProvider)));
+final adminApiProvider = Provider<AdminApi>((ref) => AdminApi(ref.watch(apiClientProvider), authBaseUrl: AppConfig.authBaseUrl));
 
 final sessionProvider = NotifierProvider<SessionController, SessionState>(SessionController.new);
 
@@ -94,19 +95,64 @@ class SessionController extends Notifier<SessionState> {
     return Platform.isIOS ? 'ios' : 'android';
   }
 
+  /// auth only: the auth session of a login waiting for a new password (memory only).
+  ({String access, String refresh, String email, int? deviceId, String? deviceSecret})? _pendingPassword;
+
   Future<void> login({required String email, required String password, required String totp}) async {
     final deviceIdRaw = await _store.read(Keys.deviceId);
     final deviceSecret = await _store.read(Keys.deviceSecret);
+    final cleanEmail = email.trim().toLowerCase();
     final result = await _api.login(
-      email: email.trim().toLowerCase(),
+      email: cleanEmail,
       password: password,
       totp: totp,
-      deviceName: _platform == 'ios' ? 'iPhone' : 'Téléphone Android',
+      deviceName: _deviceName,
       platform: _platform,
       deviceId: deviceSecret == null ? null : int.tryParse(deviceIdRaw ?? ''),
       deviceSecret: deviceSecret,
     );
-    await _store.write(Keys.email, email.trim().toLowerCase());
+    if (result.status == 'password_change') {
+      _pendingPassword = (
+        access: result.authAccessToken!,
+        refresh: result.authRefreshToken!,
+        email: cleanEmail,
+        deviceId: deviceSecret == null ? null : int.tryParse(deviceIdRaw ?? ''),
+        deviceSecret: deviceSecret,
+      );
+      state = SessionState(SessionStatus.passwordChange, email: cleanEmail);
+      return;
+    }
+    await _finishLogin(result, cleanEmail);
+  }
+
+  /// auth only: the temporary password is replaced, then the login goes on with a clean auth session.
+  Future<void> setNewPassword({required String current, required String next}) async {
+    final p = _pendingPassword;
+    if (p == null) return;
+    final fresh = await _api.changeAuthPassword(authAccessToken: p.access, authRefreshToken: p.refresh, current: current, next: next);
+    final result = await _api.completeAuthLogin(
+      authAccessToken: fresh.access,
+      authRefreshToken: fresh.refresh,
+      deviceName: _deviceName,
+      platform: _platform,
+      deviceId: p.deviceId,
+      deviceSecret: p.deviceSecret,
+    );
+    _pendingPassword = null;
+    await _finishLogin(result, p.email);
+  }
+
+  void cancelPasswordChange() {
+    final p = _pendingPassword;
+    _pendingPassword = null;
+    if (p != null) _api.authLogout(p.refresh);
+    state = SessionState(SessionStatus.loggedOut, email: p?.email);
+  }
+
+  String get _deviceName => _platform == 'ios' ? 'iPhone' : 'Téléphone Android';
+
+  Future<void> _finishLogin(LoginResult result, String email) async {
+    await _store.write(Keys.email, email);
     if (result.deviceSecret != null) {
       await _store.write(Keys.deviceId, '${result.deviceId}');
       await _store.write(Keys.deviceSecret, result.deviceSecret);
@@ -117,6 +163,7 @@ class SessionController extends Notifier<SessionState> {
     }
     _client.accessToken = result.accessToken;
     await _store.write(Keys.refreshToken, result.refreshToken);
+    if (result.authRefreshToken != null) await _store.write(Keys.authRefreshToken, result.authRefreshToken);
     await _loadMe();
   }
 
@@ -160,6 +207,8 @@ class SessionController extends Notifier<SessionState> {
     if (refreshToken != null && deviceId != null && secret != null) {
       await _api.logout(refreshToken: refreshToken, deviceId: deviceId, deviceSecret: secret);
     }
+    final authRefresh = await _store.read(Keys.authRefreshToken);
+    if (authRefresh != null) await _api.authLogout(authRefresh); // end the auth session too
     await _expire(null);
   }
 

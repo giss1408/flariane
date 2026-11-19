@@ -50,6 +50,15 @@ const quoteStatusLabels = {
 
 /// Server error codes -> French messages for the admin.
 const errorMessages = {
+  'invalid_totp': 'Code de l’application d’authentification incorrect ou déjà utilisé.',
+  'login_locked': 'Trop d’essais. Réessayez dans 15 minutes.',
+  'account_blocked': 'Ce compte est suspendu.',
+  'no_access_to_app': 'Ce compte n’a pas accès au back-office Flariane.',
+  'totp_not_set_up': 'Ce compte n’a pas encore d’application d’authentification : voir un super administrateur.',
+  'temp_password_expired': 'Le mot de passe temporaire a expiré : demandez-en un nouveau à un super administrateur.',
+  'sso_session_ended': 'Votre session a été fermée. Reconnectez-vous.',
+  'invalid_token': 'Session expirée. Reconnectez-vous.',
+  'weak_password': 'Mot de passe trop simple (8 caractères minimum).',
   'orders_in_progress': 'Une commande est payée ou en cours : suppression impossible tant qu’elle n’est pas terminée.',
   'invalid_credentials': 'Email, mot de passe ou code incorrect.',
   'rate_limited': 'Trop de tentatives. Réessayez dans quelques minutes.',
