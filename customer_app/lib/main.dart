@@ -14,6 +14,7 @@ import 'widgets/connection_banner.dart';
 import 'core/monitoring.dart';
 import 'core/theme.dart';
 import 'features/auth/consent_screen.dart';
+import 'features/auth/activation_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/verify_phone_screen.dart';
 import 'features/orders/home_screen.dart';
@@ -114,6 +115,8 @@ class _FlarianeAppState extends ConsumerState<FlarianeApp> with WidgetsBindingOb
       home: switch (auth) {
         AuthStatus.loading => const Scaffold(body: Center(child: CircularProgressIndicator())),
         AuthStatus.loggedOut => const LoginScreen(),
+        AuthStatus.activating => const ActivationScreen(),
+        AuthStatus.passwordChange => const ChangePasswordScreen(forced: true),
         AuthStatus.loggedIn => const _PasswordGate(),
       },
     );

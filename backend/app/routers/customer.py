@@ -32,6 +32,7 @@ from app.schemas import (
     ChangePhoneIn,
     CustomerUpdateIn,
     VerifyPhoneIn,
+    ReferralIn,
     LocationIn,
     LocationOut,
     OrderCreateIn,
@@ -141,6 +142,25 @@ async def verify_phone(data: VerifyPhoneIn, request: Request, customer: Customer
     finally:
         await db.commit()  # keep the failed-attempt counter
     await audit(db, actor_type="customer", actor_id=customer.id, action="customer.phone_verified", ip=client_ip(request))
+    await db.commit()
+    return _customer_out(customer)
+
+
+@router.post("/me/referral", response_model=CustomerOut)
+async def set_referral(data: ReferralIn, request: Request, customer: Customer = authed, db: AsyncSession = Depends(get_session)) -> CustomerOut:
+    """For accounts created through `auth` (the app cannot pass the code at sign-up any more): the friend's code is applied
+    here, once, before her first order. The signup point is credited at once when her number is already verified."""
+    if customer.referred_by_id is not None:
+        raise Conflict("referral_already_set")
+    if await db.scalar(select(func.count()).select_from(Order).where(Order.customer_id == customer.id)):
+        raise Conflict("referral_too_late")
+    referrer = await loyalty.referrer_for_code(db, data.code)  # 400 referral_code_invalid for an unknown code
+    if referrer.id == customer.id:
+        raise BadRequest("referral_code_invalid")
+    customer.referred_by_id = referrer.id
+    if customer.phone_verified_at is not None:
+        await loyalty.credit_signup(db, customer)
+    await audit(db, actor_type="customer", actor_id=customer.id, action="customer.referral_set", ip=client_ip(request))
     await db.commit()
     return _customer_out(customer)
 

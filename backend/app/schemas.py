@@ -57,6 +57,10 @@ class VerifyPhoneIn(In):
     code: Annotated[str, StringConstraints(pattern=r"^\d{6}$")]
 
 
+class ReferralIn(In):
+    code: Annotated[str, StringConstraints(min_length=3, max_length=12)]
+
+
 class UnverifiedCustomerOut(BaseModel):
     id: int
     display_name: str | None

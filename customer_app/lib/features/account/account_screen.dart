@@ -118,12 +118,33 @@ class AccountScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
+    String? password;
+    if (ref.read(apiProvider).authMode) {
+      if (!context.mounted) return;
+      password = await _askPassword(context);
+      if (password == null) return;
+    }
     try {
-      await ref.read(apiProvider).deleteMe();
+      await ref.read(apiProvider).deleteMe(password: password);
       await ref.read(authProvider.notifier).logout();
       if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       if (context.mounted) showError(context, e);
     }
+  }
+
+  Future<String?> _askPassword(BuildContext context) {
+    final c = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirme avec ton mot de passe'),
+        content: TextField(controller: c, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text('Supprimer', style: TextStyle(color: context.pal.danger))),
+        ],
+      ),
+    );
   }
 }

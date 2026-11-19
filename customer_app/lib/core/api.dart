@@ -67,10 +67,11 @@ enum RefreshOutcome { ok, expired, offline }
 
 /// Customer API. Access token in memory; refresh token in Keychain/Keystore, rotated on use.
 class CustomerApi {
-  CustomerApi({required String baseUrl, required this.tokens, this.cache = const NoCache(), Dio? dio, Dio? authDio})
+  CustomerApi({required String baseUrl, this.authBaseUrl = '', required this.tokens, this.cache = const NoCache(), Dio? dio, Dio? authDio, Dio? authSvcDio})
       // Free hosting sleeps when idle and can take ~1 min to wake up (timeouts are set in newApiDio).
       : dio = dio ?? newApiDio(baseUrl),
-        _auth = authDio ?? newApiDio(baseUrl) {
+        _auth = authDio ?? newApiDio(baseUrl),
+        _authSvc = authSvcDio ?? (authBaseUrl.isEmpty ? null : newApiDio(authBaseUrl)) {
     this.dio.interceptors.add(QueuedInterceptorsWrapper(
           onRequest: (o, h) {
             if (accessToken != null) o.headers['Authorization'] = 'Bearer $accessToken';
@@ -90,8 +91,12 @@ class CustomerApi {
                 req.extra['retried'] = true;
                 req.headers['Authorization'] = 'Bearer $accessToken';
                 try {
-                  return h.resolve(await this.dio.fetch(req));
+                  // A client WITHOUT the queued interceptors: retrying through `this.dio` from inside this queued error
+                  // handler deadlocks when the retry fails with 401 again (the second error waits for the first to finish).
+                  return h.resolve(await _retryClient.fetch(req));
                 } on DioException catch (e) {
+                  // A fresh token that flariane still refuses (customer blocked, account gone): stuck otherwise, so sign out.
+                  if (authMode && e.response?.statusCode == 401) onSessionExpired?.call();
                   return h.next(e);
                 }
               }
@@ -105,7 +110,19 @@ class CustomerApi {
   /// False after a request got no answer, true again after the next one that does. Drives the offline banner.
   final ValueNotifier<bool> online = ValueNotifier(true);
   final Dio dio;
+  late final Dio _retryClient = Dio(dio.options)..httpClientAdapter = dio.httpClientAdapter;
   final Dio _auth; // no interceptors: refresh must not recurse into the queued error handler
+  /// Platform `auth` service (SSO). When set, sign-up, activation, login, refresh, logout, password reset and password
+  /// change go to auth instead of flariane's own endpoints; everything else (orders, /me...) still goes to flariane with the
+  /// same access token. Empty = the legacy flariane login (store builds until the cutover).
+  final String authBaseUrl;
+  final Dio? _authSvc;
+  bool get authMode => _authSvc != null;
+  static const authProduct = 'flariane';
+  static const _pendingReferralKey = 'pending_referral';
+
+  /// True when the last login/refresh said the account must set a new password before anything else (temporary password).
+  bool mustChangePassword = false;
   final TokenStore tokens;
   final ResponseCache cache;
   String? accessToken;
@@ -122,29 +139,77 @@ class CustomerApi {
 
   // ---- auth
 
-  Future<void> _session(String path, Map<String, dynamic> body) async {
+  /// POST a login-like call and keep the tokens. Returns true when the account must set a new password first.
+  Future<bool> _session(Dio client, String path, Map<String, dynamic> body) async {
     try {
-      final res = await _auth.post(path, data: {...body, 'client': 'app'});
+      final res = await client.post(path, data: body);
       accessToken = res.data['access_token'] as String;
       await tokens.write(res.data['refresh_token'] as String);
+      mustChangePassword = res.data['must_change_password'] == true;
+      return mustChangePassword;
     } catch (e) {
       throw toApiException(e);
     }
   }
 
-  Future<void> register(String phone, String password, {String? name, String? referralCode}) => _session(
-      '/auth/register', {'phone': phone, 'password': password, 'display_name': name, 'consent': true, if (referralCode != null) 'referral_code': referralCode});
+  /// Creates the account. With auth: no session yet, the number must be activated with the code the team sends on WhatsApp
+  /// (then [login]). The referral code is kept and applied after the first login ([applyPendingReferral]).
+  Future<void> register(String phone, String password, {String? name, String? referralCode}) async {
+    if (authMode) {
+      try {
+        await _authSvc!.post('/v1/register', data: {'phone': phone, 'password': password, 'display_name': name, 'product': authProduct, 'consent': true});
+      } catch (e) {
+        throw toApiException(e);
+      }
+      if (referralCode != null) await cache.write(_pendingReferralKey, referralCode);
+      return;
+    }
+    await _session(_auth, '/auth/register', {
+      'phone': phone, 'password': password, 'display_name': name, 'consent': true, 'client': 'app',
+      if (referralCode != null) 'referral_code': referralCode,
+    });
+  }
+
+  /// auth only: proves the number with the 6-digit code the team sent on WhatsApp.
+  Future<void> activate(String phone, String code) async {
+    try {
+      await _authSvc!.post('/v1/activate', data: {'phone': phone, 'code': code});
+    } catch (e) {
+      throw toApiException(e);
+    }
+  }
+
+  /// Applies the referral code typed at sign-up, once, after the first login (flariane cannot receive it at registration
+  /// any more). Never blocks login: an unknown, late or already-set code is dropped silently.
+  Future<void> applyPendingReferral() async {
+    if (!authMode) return;
+    final code = await cache.read(_pendingReferralKey);
+    if (code is! String) return;
+    try {
+      await dio.post('/me/referral', data: {'code': code});
+    } on DioException catch (_) {
+      // dropped on purpose
+    }
+    await cache.write(_pendingReferralKey, null);
+  }
 
   /// Forgotten password: the team is told and sends a temporary password on WhatsApp. Same answer for any number.
   Future<void> requestPasswordReset(String phone) async {
     try {
-      await _auth.post('/auth/password-reset-request', data: {'phone': phone});
+      if (authMode) {
+        await _authSvc!.post('/v1/password/reset-request', data: {'phone': phone, 'product': authProduct});
+      } else {
+        await _auth.post('/auth/password-reset-request', data: {'phone': phone});
+      }
     } catch (e) {
       throw toApiException(e);
     }
   }
 
-  Future<void> login(String phone, String password) => _session('/auth/login', {'phone': phone, 'password': password});
+  /// Returns true when she must choose a new password first (she signed in with a temporary one).
+  Future<bool> login(String phone, String password) => authMode
+      ? _session(_authSvc!, '/v1/login', {'phone': phone, 'password': password, 'product': authProduct, 'app': 'customer'})
+      : _session(_auth, '/auth/login', {'phone': phone, 'password': password, 'client': 'app'});
 
   Future<RefreshOutcome> refresh() => _inflight ??= _doRefresh().whenComplete(() => _inflight = null);
 
@@ -152,9 +217,12 @@ class CustomerApi {
     final token = await tokens.read();
     if (token == null) return RefreshOutcome.expired;
     try {
-      final res = await _auth.post('/auth/refresh', data: {'refresh_token': token, 'client': 'app'});
+      final res = authMode
+          ? await _authSvc!.post('/v1/refresh', data: {'refresh_token': token})
+          : await _auth.post('/auth/refresh', data: {'refresh_token': token, 'client': 'app'});
       accessToken = res.data['access_token'] as String;
       await tokens.write(res.data['refresh_token'] as String);
+      mustChangePassword = res.data['must_change_password'] == true;
       return RefreshOutcome.ok;
     } catch (e) {
       final ex = toApiException(e);
@@ -165,10 +233,29 @@ class CustomerApi {
     }
   }
 
+  /// A call to the auth service with the access token; one silent refresh when the token has just expired.
+  Future<T> _authed<T>(Future<Response<dynamic>> Function(Options) req, T Function(dynamic) parse) async {
+    Options opts() => Options(headers: {'Authorization': 'Bearer $accessToken'});
+    try {
+      return await _call(() => req(opts()), parse);
+    } on ApiException catch (e) {
+      if (e.status == 401 && (e.code == 'invalid_token' || e.code == 'missing_token') && await refresh() == RefreshOutcome.ok) {
+        return _call(() => req(opts()), parse);
+      }
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     final token = await tokens.read();
     try {
-      if (token != null) await _auth.post('/auth/logout', data: {'refresh_token': token, 'client': 'app'});
+      if (token != null) {
+        if (authMode) {
+          await _authSvc!.post('/v1/logout', data: {'refresh_token': token});
+        } else {
+          await _auth.post('/auth/logout', data: {'refresh_token': token, 'client': 'app'});
+        }
+      }
     } catch (_) {}
     accessToken = null;
     await tokens.write(null);
@@ -184,8 +271,11 @@ class CustomerApi {
 
   Future<Me> giveConsent() => _call(() => dio.post('/me/consent'), (j) => Me.fromJson(j as Map<String, dynamic>));
 
-  Future<Me> changePhone(String phone) =>
-      _call(() => dio.put('/me/phone', data: {'phone': phone}), (j) => Me.fromJson(j as Map<String, dynamic>));
+  /// Not available with auth yet (a number change must also move her login in auth): she writes to the team.
+  Future<Me> changePhone(String phone) {
+    if (authMode) throw ApiException(null, 'phone_change_unavailable');
+    return _call(() => dio.put('/me/phone', data: {'phone': phone}), (j) => Me.fromJson(j as Map<String, dynamic>));
+  }
 
   Future<Me> verifyPhone(String code) =>
       _call(() => dio.post('/me/verify-phone', data: {'code': code}), (j) => Me.fromJson(j as Map<String, dynamic>));
@@ -193,10 +283,25 @@ class CustomerApi {
   Future<Me> setLocation(Location l) =>
       _call(() => dio.put('/me/location', data: l.toJson()), (j) => Me.fromJson(j as Map<String, dynamic>));
 
-  Future<void> changePassword(String current, String next) => _call(
-      () => dio.post('/me/password', data: {'current_password': current, 'new_password': next}), (_) {});
+  Future<void> changePassword(String current, String next) async {
+    if (!authMode) {
+      return _call(() => dio.post('/me/password', data: {'current_password': current, 'new_password': next}), (_) {});
+    }
+    await _authed((o) => _authSvc!.post('/v1/password/change', data: {'current_password': current, 'new_password': next}, options: o), (_) {});
+    await refresh(); // a fresh token without the "must change password" mark
+  }
 
-  Future<void> deleteMe() => _call(() => dio.delete('/me'), (_) {});
+  /// With auth the password is asked first and checked BEFORE anything is deleted, so a typo cannot leave a half-deleted account:
+  /// check password (auth) -> anonymise (flariane, refused while orders are in progress) -> erase identity (auth).
+  Future<void> deleteMe({String? password}) async {
+    if (authMode) {
+      await _authed((o) => _authSvc!.post('/v1/me/delete', data: {'current_password': password ?? '', 'check_only': true}, options: o), (_) {});
+    }
+    await _call(() => dio.delete('/me'), (_) {});
+    if (authMode) {
+      await _authed((o) => _authSvc!.post('/v1/me/delete', data: {'current_password': password ?? ''}, options: o), (_) {});
+    }
+  }
 
   /// Everything we hold about her (law 2013-450): name, phone, orders.
   Future<Map<String, dynamic>> myData() => _call(() => dio.get('/me/export'), (j) => j as Map<String, dynamic>);

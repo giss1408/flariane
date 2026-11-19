@@ -192,6 +192,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     });
     try {
       await ref.read(apiProvider).changePassword(_current.text, _next.text);
+      if (widget.forced && ref.read(apiProvider).authMode) {
+        await ref.read(authProvider.notifier).passwordChanged(); // leaves this screen: the session is clean now
+        return;
+      }
       ref.invalidate(meProvider);
       if (mounted && !widget.forced) Navigator.pop(context);
     } on ApiException catch (e) {

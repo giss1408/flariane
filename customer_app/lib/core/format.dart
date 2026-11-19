@@ -98,4 +98,12 @@ const errorMessages = {
   'referral_code_invalid': 'Code de parrainage inconnu : vérifie-le ou laisse le champ vide.',
   'loyalty_not_available': 'Tes points ne peuvent pas être utilisés sur ce devis.',
   'rate_limited': 'Trop de requêtes. Patientez un instant.',
+  'not_activated': 'Ton compte n’est pas encore activé : saisis le code reçu sur WhatsApp.',
+  'wrong_activation_code': 'Code incorrect ou expiré.',
+  'no_activation_code': 'Pas encore de code : tu vas le recevoir sur WhatsApp.',
+  'activation_locked': 'Trop d’essais. Écris-nous sur WhatsApp pour recevoir un nouveau code.',
+  'no_access_to_app': 'Ce compte n’a pas accès à Flariane.',
+  'consent_required': 'Accepte la politique de confidentialité pour créer ton compte.',
+  'invalid_token': 'Session expirée. Reconnecte-toi.',
+  'phone_change_unavailable': 'Pour changer de numéro, écris-nous sur WhatsApp.',
 };
