@@ -12,6 +12,7 @@ pyotp==2.9.0
 limits==5.8.0
 redis==5.2.1
 celery==5.4.0
+kombu==5.4.2  # newer kombu requires redis-py >= 6.1; pinned with redis==5.2.1
 httpx==0.28.1
 python-multipart==0.0.20
 pillow==11.0.0

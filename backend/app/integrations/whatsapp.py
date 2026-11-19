@@ -1,11 +1,10 @@
 """WhatsApp Cloud API (Meta). Templates must be approved in Business Manager with these names, in `fr`."""
 
-import hashlib
-import hmac
 import logging
 from typing import Any
 
 import httpx
+from regisse_kit.webhooks import verify_hmac_sha256
 
 from app.config import get_settings
 
@@ -57,8 +56,4 @@ async def send_template(to_e164: str, template: str, params: list[str], lang: st
 
 def verify_signature(header: str | None, body: bytes, app_secret: str) -> bool:
     """X-Hub-Signature-256: sha256=<hex HMAC of the raw body with the app secret>."""
-    if not header or not header.startswith("sha256=") or not app_secret:
-        return False
-    expected = hmac.new(app_secret.encode(), body, hashlib.sha256).hexdigest()
-    given = header.removeprefix("sha256=")
-    return given.isascii() and hmac.compare_digest(expected.encode(), given.encode())
+    return verify_hmac_sha256(header, body, app_secret)

@@ -109,6 +109,7 @@ def create_app() -> FastAPI:
         app.include_router(module.router)
 
     @app.get("/health", include_in_schema=False)
+    @app.get("/healthz", include_in_schema=False)  # platform standard (Caddy and container health checks)
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 

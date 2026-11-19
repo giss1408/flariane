@@ -45,6 +45,21 @@ def need(name: str, r: httpx.Response, status: int | tuple[int, ...] = 200) -> h
     return r
 
 
+def ensure_settings(admin: "Admin") -> None:
+    """A fresh test database has no support/Wave numbers: the admin app sets them in real life.
+    Fill only what is EMPTY, with obvious placeholders, never overwrite a value an admin entered.
+    (Safe: this script refuses to run against production hosts.)"""
+    current = admin.get("/admin/settings").json()
+    patch: dict = {}
+    if not current.get("support_whatsapp"):
+        patch["support_whatsapp"] = "+2250000000000"
+    if not any((current.get("payment_accounts") or {}).values()):  # defaults are {"WAVE": None, ...}, truthy but empty
+        patch["payment_accounts"] = {"WAVE": "+2250000000000"}
+    if patch:
+        r = admin.put("/admin/settings", json=patch)
+        check("e2e precondition: placeholder settings filled (support WhatsApp, Wave)", r.status_code == 200, f"PUT /admin/settings -> {r.status_code} {r.text[:200]}")
+
+
 def section(title: str) -> None:
     print(f"\n== {title}", flush=True)
 
@@ -163,13 +178,14 @@ def main() -> int:
     t = time.time()
     need("health (may wake the Render instance)", http.get("/health"))
     print(f"      answered in {time.time() - t:.0f}s")
-    info = http.get("/public/info").json()
-    check("public info: support WhatsApp number is set", bool(info.get("support_whatsapp")), "Set 'support_whatsapp' in the admin settings")
-    check("public info: payment accounts offered", bool(info.get("payment_accounts")), "No Wave number in settings")
     check("legal page: confidentialité reachable", http.get("/legal/confidentialite").status_code == 200)
     check("API docs are hidden when ENV=prod (informational, expected open on test)", True)
     check("admin routes refuse anonymous callers", http.get("/admin/orders").status_code == 401)
     admin.login()
+    ensure_settings(admin)
+    info = http.get("/public/info").json()
+    check("public info: support WhatsApp number is set", bool(info.get("support_whatsapp")), "Set 'support_whatsapp' in the admin settings")
+    check("public info: payment accounts offered", bool(info.get("payment_accounts")), "No Wave number in settings")
     check("admin: logged in", bool(admin.h))
     me = admin.get("/admin/auth/me").json()
     check("admin: e2e account is SUPER_ADMIN", me.get("role") == "SUPER_ADMIN", str(me.get("role")))

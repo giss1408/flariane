@@ -1,77 +1,54 @@
-import base64
-import hashlib
-import hmac
-import os
-import secrets
+"""Crypto helpers. Implementation lives in regisse_kit (shared across products); this module keeps
+flariane's API and reads the keys from settings."""
 
-from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import base64
+from functools import lru_cache
+
+from regisse_kit import crypto as kit
+from regisse_kit.crypto import (  # noqa: F401  (re-exported: same behaviour, same wire formats)
+    constant_time_equals,
+    hash_password,
+    random_digits,
+    random_token,
+    token_hash,
+    verify_password,
+)
+from regisse_kit.phone import mask_phone  # noqa: F401
 
 from app.config import get_settings
 
-_ph = PasswordHasher()
-
 
 def _key(name: str) -> bytes:
+    """Raw 32-byte key from settings (used by file URL signing in integrations/storage.py)."""
     raw = base64.b64decode(getattr(get_settings(), name))
     if len(raw) != 32:
         raise RuntimeError(f"{name} must be 32 bytes, base64-encoded")
     return raw
 
 
+@lru_cache
+def _cipher(key_b64: str) -> kit.FieldCipher:
+    return kit.FieldCipher(key_b64)
+
+
+@lru_cache
+def _hasher(key_b64: str) -> kit.KeyedHasher:
+    return kit.KeyedHasher(key_b64)
+
+
 def encrypt(plaintext: str) -> bytes:
     """AES-256-GCM field-level encryption. Output = 12-byte nonce || ciphertext+tag."""
-    nonce = os.urandom(12)
-    return nonce + AESGCM(_key("field_encryption_key")).encrypt(nonce, plaintext.encode(), None)
+    return _cipher(get_settings().field_encryption_key).encrypt(plaintext)
 
 
 def decrypt(blob: bytes) -> str:
-    return AESGCM(_key("field_encryption_key")).decrypt(blob[:12], blob[12:], None).decode()
+    return _cipher(get_settings().field_encryption_key).decrypt(blob)
 
 
 def keyed_hash(value: str, purpose: str) -> str:
-    """Deterministic HMAC-SHA256 for lookups (phone numbers) and short secrets (OTP, pickup codes).
-
-    `purpose` separates domains so a hash from one use can't be replayed in another.
-    """
-    return hmac.new(_key("hash_key"), f"{purpose}:{value}".encode(), hashlib.sha256).hexdigest()
+    """Deterministic HMAC-SHA256 for lookups (phone numbers) and short secrets (OTP, pickup codes)."""
+    return _hasher(get_settings().hash_key).hash(value, purpose)
 
 
 def phone_hash(phone_e164: str) -> str:
-    return keyed_hash(phone_e164, "phone")
-
-
-def token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def random_token(nbytes: int = 32) -> str:
-    return secrets.token_urlsafe(nbytes)
-
-
-def random_digits(n: int) -> str:
-    return "".join(secrets.choice("0123456789") for _ in range(n))
-
-
-def constant_time_equals(a: str, b: str) -> bool:
-    return hmac.compare_digest(a.encode(), b.encode())
-
-
-def hash_password(password: str) -> str:
-    return _ph.hash(password)
-
-
-def verify_password(password_hash: str, password: str) -> bool:
-    try:
-        return _ph.verify(password_hash, password)
-    except (VerifyMismatchError, InvalidHashError):
-        return False
-
-
-def mask_phone(phone_e164: str) -> str:
-    """+2250701020345 -> +225 07 •• •• 45"""
-    if phone_e164.startswith("+225") and len(phone_e164) == 14:
-        local = phone_e164[4:]
-        return f"+225 {local[:2]} •• •• {local[-2:]}"
-    return phone_e164[:4] + " •• " + phone_e164[-2:]
+    return _hasher(get_settings().hash_key).phone(phone_e164)

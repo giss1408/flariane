@@ -1,0 +1,48 @@
+# flariane on the shared platform. Postgres/Redis/Caddy come from platform/infra; this file runs only the app.
+name: flariane
+
+x-common: &common
+  build:
+    context: ./backend
+    additional_contexts:
+      kit: ../platform/kit
+  image: flariane-backend:local
+  env_file: .env.platform
+  restart: unless-stopped
+  networks: [infra_net]
+
+services:
+  web:
+    <<: *common
+    container_name: flariane-web
+    mem_limit: 512m
+    cpus: 1.0
+    volumes: [uploads:/app/var/uploads]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/healthz', headers={'Host': os.environ['PUBLIC_HOST'], 'X-Forwarded-Proto': 'https'}), timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  worker:
+    <<: *common
+    container_name: flariane-worker
+    command: ["celery", "-A", "app.worker", "worker", "-B", "-l", "info", "--concurrency", "2"]
+    mem_limit: 384m
+    cpus: 0.5
+    depends_on:
+      web: {condition: service_healthy}   # web applies migrations first
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker inspect ping -d celery@$$HOSTNAME -t 5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  uploads:
+
+networks:
+  infra_net:
+    external: true

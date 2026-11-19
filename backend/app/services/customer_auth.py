@@ -4,6 +4,8 @@ import re
 from datetime import timedelta
 
 from anyio import to_thread
+from regisse_kit import passwords as kit_passwords
+from regisse_kit import phone as kit_phone
 from limits import parse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,6 @@ from app.security.tokens import utcnow
 from app.security.crypto import encrypt, hash_password, phone_hash, random_token, verify_password
 
 # Ivorian mobile numbers since 2021: 10 digits, 01 (Moov), 05 (MTN), 07 (Orange).
-_LOCAL_CI = re.compile(r"^0[157]\d{8}$")
 # Bump when the privacy policy or the consent wording changes: customers are asked again.
 CONSENT_VERSION = "2026-11-06"
 FAILED_LOGIN_LIMIT = parse("5/15minutes")  # per phone number: CGNAT makes IP limits useless
@@ -28,46 +29,23 @@ class InvalidCredentials(DomainError):
     status_code = 401
 
 
-# German mobiles (+49 15x/16x/17x), accepted outside production (and in production when FLR_ALLOW_GERMAN_NUMBERS
-# is set) so the team can test from Germany.
-_DE_MOBILE = re.compile(r"^1[5-7]\d{8,9}$")
-
-
-def _test_phone(digits: str) -> str | None:
-    from app.config import get_settings
-
-    s = get_settings()
-    if s.env == "prod" and not s.allow_german_numbers:
-        return None
-    for prefix in ("+49", "0049"):
-        if digits.startswith(prefix) and _DE_MOBILE.match(digits[len(prefix):].lstrip("0")):
-            return "+49" + digits[len(prefix):].lstrip("0")
-    return None
-
-
 def normalize_ci_phone(raw: str) -> str:
     """Accept 0701020304, 07 01 02 03 04, +225 07…, 00225 07…; return E.164.
     German mobiles in international format are accepted too outside production, or when allowed by the setting."""
-    digits = re.sub(r"[\s.\-()/]", "", raw or "")
-    test = _test_phone(digits)
-    if test:
-        return test
-    if digits.startswith("00225"):
-        digits = digits[5:]
-    elif digits.startswith("+225"):
-        digits = digits[4:]
-    elif digits.startswith("225") and len(digits) == 13:
-        digits = digits[3:]
-    if not _LOCAL_CI.match(digits):
-        raise BadRequest("invalid_phone", "Numéro ivoirien à 10 chiffres attendu")
-    return "+225" + digits
+    from app.config import get_settings
+
+    s = get_settings()
+    try:
+        return kit_phone.normalize_ci_phone(raw, allow_test_numbers=not (s.env == "prod" and not s.allow_german_numbers))
+    except kit_phone.InvalidPhone:
+        raise BadRequest("invalid_phone", "Numéro ivoirien à 10 chiffres attendu") from None
 
 
 def check_password_strength(password: str) -> None:
-    if len(password) < 8:
-        raise BadRequest("weak_password", "8 caractères minimum")
-    if password.isdigit() and len(set(password)) <= 2:
-        raise BadRequest("weak_password", "Mot de passe trop simple")
+    try:
+        kit_passwords.check_password_strength(password)
+    except kit_passwords.WeakPassword as exc:
+        raise BadRequest("weak_password", str(exc)) from None
 
 
 async def register(db: AsyncSession, raw_phone: str, password: str, display_name: str | None, referral_code: str | None = None) -> Customer:

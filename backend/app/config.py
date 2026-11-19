@@ -1,9 +1,9 @@
 from functools import lru_cache
 from typing import Literal
 
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, field_validator
+from regisse_kit.db_url import to_asyncpg_url
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -88,14 +88,7 @@ class Settings(BaseSettings):
     def _asyncpg_url(cls, v: str) -> str:
         """Render/Neon give postgres://…?sslmode=require[&channel_binding=require]; SQLAlchemy+asyncpg
         wants postgresql+asyncpg://…?ssl=require and rejects channel_binding."""
-        parts = urlsplit(v)
-        scheme = "postgresql+asyncpg" if parts.scheme in ("postgres", "postgresql") else parts.scheme
-        query = [
-            ("ssl", val) if key == "sslmode" else (key, val)
-            for key, val in parse_qsl(parts.query)
-            if key != "channel_binding"
-        ]
-        return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+        return to_asyncpg_url(v)
 
     @property
     def dev_routes_enabled(self) -> bool:
