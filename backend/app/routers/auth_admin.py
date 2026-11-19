@@ -11,23 +11,27 @@ import time
 import pyotp
 from anyio import to_thread
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from limits import parse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
+from app.enums import AdminRole
 from app.models import AdminDevice, AdminUser
 from app.ratelimit import admin_limited, ip_limited, limiter
-from app.schemas import AdminLoginIn, AdminLoginOut, AdminMeOut, AdminRefreshIn, PushTokenIn, TokenOut
+from app.schemas import AdminLoginIn, AdminLoginOut, AdminMeOut, AdminRefreshIn, AdminSsoLoginIn, DeviceIn, PushTokenIn, TokenOut
 from app.security.crypto import constant_time_equals, decrypt, hash_password, random_token, token_hash, verify_password
-from app.security.deps import AdminContext, client_ip
+from app.security import sso
+from app.security.deps import AdminContext, bearer, client_ip
 from app.security.tokens import (
     AccessClaims,
     RefreshError,
     create_access_token,
     issue_refresh_token,
     revoke_device_tokens,
+    revoke_family,
     revoke_token,
     rotate_refresh_token,
     utcnow,
@@ -103,6 +107,8 @@ async def _retire_reinstalled(db: AsyncSession, user: AdminUser, platform: str, 
 
 @router.post("/login", response_model=AdminLoginOut, dependencies=[Depends(ip_limited)])
 async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends(get_session)) -> AdminLoginOut:
+    if get_settings().sso_admin_only:
+        raise HTTPException(status_code=403, detail="use_sso")  # after the cutover the back office signs in through auth
     ip = client_ip(request)
     if not limiter().hit(LOGIN_LIMIT, f"admin-login:{data.email}") or not limiter().hit(LOGIN_LIMIT, f"admin-login-ip:{ip}"):
         raise HTTPException(status_code=429, detail="rate_limited")
@@ -117,10 +123,16 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         await db.commit()
         raise _bad_login()
 
-    if data.device.device_id is None:
+    return await _complete_login(db, user, data.device, ip, None)
+
+
+async def _complete_login(db: AsyncSession, user: AdminUser, device_in: DeviceIn, ip: str | None, sso_sid: str | None) -> AdminLoginOut:
+    """The device half of an admin login (shared by the password login and the auth-token exchange): register or check the
+    device, auto-approve only in the bootstrap cases, then open the flariane session."""
+    if device_in.device_id is None:
         secret = random_token()
         device = AdminDevice(
-            admin_user_id=user.id, name=data.device.name, platform=data.device.platform, secret_hash=token_hash(secret)
+            admin_user_id=user.id, name=device_in.name, platform=device_in.platform, secret_hash=token_hash(secret)
         )
         db.add(device)
         await db.flush()
@@ -131,16 +143,16 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         device.approved_at, device.approved_by = utcnow(), user.id
         await audit(db, actor_type="admin", actor_id=user.id, action="device.auto_approved_bootstrap", entity="admin_device", entity_id=device.id, ip=ip)
         user.last_login_at = device.last_seen_at = utcnow()
-        refresh = await issue_refresh_token(db, "admin", user.id, device.id)
+        refresh = await issue_refresh_token(db, "admin", user.id, device.id, sso_sid)
         await db.commit()
         return AdminLoginOut(status="ok", device_id=device.id, device_secret=secret, tokens=_tokens(user, device, refresh))
 
-    device = await db.get(AdminDevice, data.device.device_id)
+    device = await db.get(AdminDevice, device_in.device_id)
     if (
         device is None
         or device.admin_user_id != user.id
-        or not data.device.device_secret
-        or not constant_time_equals(device.secret_hash, token_hash(data.device.device_secret))
+        or not device_in.device_secret
+        or not constant_time_equals(device.secret_hash, token_hash(device_in.device_secret))
     ):
         await db.commit()  # keeps totp_last_step
         raise HTTPException(status_code=403, detail="unknown_device")
@@ -157,10 +169,35 @@ async def login(data: AdminLoginIn, request: Request, db: AsyncSession = Depends
         await audit(db, actor_type="admin", actor_id=user.id, action="device.auto_approved_bootstrap", entity="admin_device", entity_id=device.id, ip=ip)
 
     user.last_login_at = device.last_seen_at = utcnow()
-    refresh = await issue_refresh_token(db, "admin", user.id, device.id)
+    refresh = await issue_refresh_token(db, "admin", user.id, device.id, sso_sid)
     await audit(db, actor_type="admin", actor_id=user.id, action="auth.login", entity="admin_device", entity_id=device.id, ip=ip)
     await db.commit()
     return AdminLoginOut(status="ok", device_id=device.id, tokens=_tokens(user, device, refresh))
+
+
+@router.post("/sso-login", response_model=AdminLoginOut, dependencies=[Depends(ip_limited)])
+async def sso_login(data: AdminSsoLoginIn, request: Request, creds: HTTPAuthorizationCredentials | None = Depends(bearer), db: AsyncSession = Depends(get_session)) -> AdminLoginOut:
+    """Back office through the platform `auth` service: password and authenticator code were checked THERE; flariane keeps what
+    is its own, device approval and its session. Same answers and device flow as /admin/auth/login."""
+    ip = client_ip(request)
+    found = await sso.admin_from_token(db, creds.credentials) if creds else None
+    if found is None:
+        await audit(db, actor_type="admin", actor_id=None, action="auth.sso_login_failed", ip=ip)
+        await db.commit()
+        raise _bad_login()
+    user, principal = found
+    if not limiter().hit(LOGIN_LIMIT, f"admin-login:{user.email}") or not limiter().hit(LOGIN_LIMIT, f"admin-login-ip:{ip}"):
+        raise HTTPException(status_code=429, detail="rate_limited")
+    # A second factor is required unless this account never had one (flariane `totp_required=false`), and never for a super admin.
+    if "totp" not in principal.amr and (user.totp_required or user.role == AdminRole.SUPER_ADMIN.value):
+        await audit(db, actor_type="admin", actor_id=user.id, action="auth.sso_login_failed", ip=ip)
+        await db.commit()
+        raise _bad_login()
+    role = principal.role.upper()
+    if user.role != role:  # auth is the authority for roles once an admin is migrated
+        await audit(db, actor_type="admin", actor_id=user.id, action="admin.role_synced_from_auth", entity="admin", entity_id=user.id, ip=ip)
+        user.role = role
+    return await _complete_login(db, user, data.device, ip, principal.sid)
 
 
 @router.post("/refresh", response_model=TokenOut, dependencies=[Depends(ip_limited)])
@@ -182,6 +219,13 @@ async def refresh(data: AdminRefreshIn, db: AsyncSession = Depends(get_session))
     user = await db.get(AdminUser, row.subject_id)
     if user is None or not user.active:
         raise HTTPException(status_code=401, detail="inactive")
+    if row.sso_sid and get_settings().sso_enabled:
+        # Opened through auth: ended there (logout, disabled, role removed) means ended here too, at the latest at this refresh.
+        alive = await sso.session_active(row.sso_sid)
+        if alive is False or (alive is None and not get_settings().sso_admin_fail_open):
+            await revoke_family(db, row.family_id)
+            await db.commit()
+            raise HTTPException(status_code=401, detail="sso_session_ended")
     await db.commit()
     return _tokens(user, device, new_token)
 

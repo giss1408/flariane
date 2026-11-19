@@ -135,6 +135,10 @@ class AdminLoginIn(In):
     device: DeviceIn
 
 
+class AdminSsoLoginIn(In):
+    device: DeviceIn
+
+
 class AdminRefreshIn(In):
     refresh_token: str
     device_id: int

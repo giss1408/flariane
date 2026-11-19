@@ -107,6 +107,8 @@ class RefreshToken(TimestampMixin, Base):
     device_id: Mapped[int | None] = mapped_column(ForeignKey("admin_devices.id"))
     family_id: Mapped[str] = mapped_column(String(36), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # Back-office sessions opened through the platform `auth` service: the auth session id, re-checked at every refresh.
+    sso_sid: Mapped[str | None] = mapped_column(String(36))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     family_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     rotated_at: Mapped[datetime | None] = _ts()

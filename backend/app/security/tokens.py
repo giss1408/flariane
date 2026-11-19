@@ -66,7 +66,7 @@ def _refresh_lifetime(typ: SubjectType) -> timedelta:
 
 
 async def issue_refresh_token(
-    db: AsyncSession, typ: SubjectType, subject_id: int, device_id: int | None = None
+    db: AsyncSession, typ: SubjectType, subject_id: int, device_id: int | None = None, sso_sid: str | None = None
 ) -> str:
     """Start a new token family (on login)."""
     token = random_token()
@@ -81,6 +81,7 @@ async def issue_refresh_token(
             token_hash=token_hash(token),
             expires_at=now + life,
             family_expires_at=now + life,
+            sso_sid=sso_sid,
         )
     )
     return token
@@ -123,6 +124,7 @@ async def rotate_refresh_token(db: AsyncSession, typ: SubjectType, token: str) -
             token_hash=token_hash(new_token),
             expires_at=expires,
             family_expires_at=expires,
+            sso_sid=row.sso_sid,
         )
     )
     return row, new_token

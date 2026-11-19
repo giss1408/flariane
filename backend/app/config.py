@@ -84,6 +84,14 @@ class Settings(BaseSettings):
     sso_issuer: str = ""
     sso_jwks_url: str = ""
     sso_audience: str = "flariane"
+    # Back office (admins): after signing in through auth, the admin app exchanges the auth token for a flariane session
+    # (POST /admin/auth/sso-login) so device approval stays in flariane. These let flariane ask auth if the session is alive.
+    sso_auth_url: str = ""  # base URL of auth reachable from flariane, e.g. http://auth-web:8000
+    sso_service_key: str = ""
+    # Auth unreachable at an admin refresh: True keeps the session (availability), False ends it (strictness).
+    sso_admin_fail_open: bool = True
+    # After the admin cutover: refuse flariane's own email/password admin login.
+    sso_admin_only: bool = False
 
     # One-time creation of the first super admin over HTTP (hosts without a shell). Empty = disabled.
     setup_token: str = ""

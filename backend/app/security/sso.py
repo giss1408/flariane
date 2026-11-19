@@ -16,7 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models import Customer
+from app.enums import AdminRole
+from app.models import AdminUser, Customer
 from app.security.crypto import encrypt, phone_hash
 from app.security.tokens import utcnow
 from app.services import loyalty
@@ -71,3 +72,38 @@ async def customer_from_token(db: AsyncSession, token: str) -> Customer | None:
     if customer is None or customer.anonymised_at is not None or customer.blocked_at is not None:
         return None
     return customer
+
+
+async def admin_from_token(db: AsyncSession, token: str):
+    """(AdminUser, Principal) for an `auth` back-office token, or None. Migrated admins only: the token carries the admin's
+    flariane id (`lid`); a back-office user unknown to flariane is refused, never created on the fly."""
+    s = get_settings()
+    if not s.sso_enabled or not s.sso_issuer or not s.sso_jwks_url:
+        return None
+    try:
+        p = await to_thread.run_sync(verifier().verify, token)
+    except (SsoError, httpx.HTTPError, ValueError):
+        return None
+    if p.app != "admin" or p.must_change_password or p.legacy_id is None or p.role.upper() not in {r.value for r in AdminRole}:
+        return None
+    try:
+        user = await db.get(AdminUser, int(p.legacy_id))
+    except ValueError:
+        return None
+    if user is None or not user.active:
+        return None
+    return user, p
+
+
+async def session_active(sid: str) -> bool | None:
+    """Is the auth session behind a back-office login still alive? None = auth unreachable (the caller decides)."""
+    s = get_settings()
+    if not s.sso_auth_url or not s.sso_service_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.post(f"{s.sso_auth_url.rstrip('/')}/v1/sessions/check", json={"sid": sid}, headers={"X-Service-Key": s.sso_service_key})
+        r.raise_for_status()
+        return bool(r.json().get("active"))
+    except (httpx.HTTPError, ValueError):
+        return None
