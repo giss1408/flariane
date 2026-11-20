@@ -18,6 +18,7 @@ from app.routers import (
     auth_customer,
     customer,
     files,
+    internal,
     legal,
     setup,
     webhooks,
@@ -105,7 +106,7 @@ def create_app() -> FastAPI:
         return response
 
     install_error_handlers(app)
-    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, setup, legal):
+    for module in (auth_customer, auth_admin, customer, admin_orders, admin_shipments, admin_backoffice, webhooks, files, setup, legal, internal):
         app.include_router(module.router)
 
     @app.get("/health", include_in_schema=False)

@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     sso_audience: str = "flariane"
     # Back office (admins): after signing in through auth, the admin app exchanges the auth token for a flariane session
     # (POST /admin/auth/sso-login) so device approval stays in flariane. These let flariane ask auth if the session is alive.
+    # The auth service calls POST /internal/phone-changed BEFORE it changes a person's number, so her customer row follows the new number
+    # (same shared key on both sides: AUTH_PRODUCT_HOOKS_JSON in auth, FLR_AUTH_HOOK_KEY here; off while empty or shorter than 16 characters).
+    auth_hook_key: str = ""
     sso_auth_url: str = ""  # base URL of auth reachable from flariane, e.g. http://auth-web:8000
     sso_service_key: str = ""
     # Auth unreachable at an admin refresh: True keeps the session (availability), False ends it (strictness).
